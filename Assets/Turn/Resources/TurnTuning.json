@@ -1,0 +1,140 @@
+{
+    "version": 1,
+    "useTuning": true,
+    "values": {
+        "player": {
+            "moveSpeed": 5.0,
+            "maxHp": 100.0,
+            "radius": 0.3499999940395355
+        },
+        "roll": {
+            "cooldown": 3.0,
+            "minCooldown": 0.800000011920929,
+            "invincibleTime": 0.5,
+            "duration": 0.3499999940395355,
+            "distance": 2.5
+        },
+        "weapon": {
+            "magazineSize": 6,
+            "ammoPerShot": 1,
+            "initialAmmo": -1,
+            "fireInterval": 0.6000000238418579,
+            "targetRange": 8.0,
+            "attackRange": 11.0
+        },
+        "fireball": {
+            "projectileSpeed": 9.0,
+            "damage": 12.0,
+            "radius": 0.25,
+            "pierce": 1
+        },
+        "harpoon": {
+            "projectileSpeed": 13.0,
+            "damage": 15.0,
+            "radius": 0.20000000298023224,
+            "pierce": 2
+        },
+        "monster": {
+            "maxHp": 30.0,
+            "moveSpeed": 2.0,
+            "contactDamage": 8.0,
+            "contactInterval": 0.6000000238418579,
+            "radius": 0.4000000059604645,
+            "lavaHitDamage": 20.0,
+            "xp": 1
+        },
+        "shark": {
+            "moveSpeed": 3.0,
+            "contactDamage": 7.5,
+            "attackInterval": 0.800000011920929,
+            "radius": 0.550000011920929,
+            "spawnCount": 1,
+            "minSpawnDistance": 7.0
+        },
+        "spawn": {
+            "initialCount": 6,
+            "interval": 2.5,
+            "countPerSpawn": 2,
+            "rampInterval": 30.0,
+            "rampAmount": 1,
+            "maxAlive": 120,
+            "minDistance": 7.0,
+            "maxDistance": 11.0
+        },
+        "penalty": {
+            "countPerRoll": 3,
+            "area": 0,
+            "minDistance": 4.0,
+            "maxDistance": 8.0
+        },
+        "shallowRegenPerSecond": 3.0
+    },
+    "defaults": {
+        "player": {
+            "moveSpeed": 5.0,
+            "maxHp": 100.0,
+            "radius": 0.3499999940395355
+        },
+        "roll": {
+            "cooldown": 3.0,
+            "minCooldown": 0.800000011920929,
+            "invincibleTime": 0.5,
+            "duration": 0.3499999940395355,
+            "distance": 2.5
+        },
+        "weapon": {
+            "magazineSize": 6,
+            "ammoPerShot": 1,
+            "initialAmmo": -1,
+            "fireInterval": 0.6000000238418579,
+            "targetRange": 8.0,
+            "attackRange": 11.0
+        },
+        "fireball": {
+            "projectileSpeed": 9.0,
+            "damage": 12.0,
+            "radius": 0.25,
+            "pierce": 1
+        },
+        "harpoon": {
+            "projectileSpeed": 13.0,
+            "damage": 15.0,
+            "radius": 0.20000000298023224,
+            "pierce": 2
+        },
+        "monster": {
+            "maxHp": 30.0,
+            "moveSpeed": 2.0,
+            "contactDamage": 8.0,
+            "contactInterval": 0.6000000238418579,
+            "radius": 0.4000000059604645,
+            "lavaHitDamage": 20.0,
+            "xp": 1
+        },
+        "shark": {
+            "moveSpeed": 3.0,
+            "contactDamage": 7.5,
+            "attackInterval": 0.800000011920929,
+            "radius": 0.550000011920929,
+            "spawnCount": 1,
+            "minSpawnDistance": 7.0
+        },
+        "spawn": {
+            "initialCount": 6,
+            "interval": 2.5,
+            "countPerSpawn": 2,
+            "rampInterval": 30.0,
+            "rampAmount": 1,
+            "maxAlive": 120,
+            "minDistance": 7.0,
+            "maxDistance": 11.0
+        },
+        "penalty": {
+            "countPerRoll": 3,
+            "area": 0,
+            "minDistance": 4.0,
+            "maxDistance": 8.0
+        },
+        "shallowRegenPerSecond": 3.0
+    }
+}

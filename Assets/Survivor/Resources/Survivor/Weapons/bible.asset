@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f8334348b20a0240a26d6ba7c4ca94d, type: 3}
+  m_Name: bible
+  m_EditorClassIdentifier: Assembly-CSharp::Survivor.Data.WeaponAsset
+  id: bible
+  displayName: "\u5723\u7ECF"
+  kind: 4
+  artKey: icon_book
+  visualKey: fx_book
+  levels:
+  - damage: 9
+    cooldown: 6
+    amount: 1
+    area: 1
+    speed: 1
+    duration: 3
+    pierce: 0
+    knockback: 0.8
+    description: "\u5723\u7ECF\u73AF\u7ED5\u8EAB\u8FB9\u65CB\u8F6C 3 \u79D2\u3002"
+  - damage: 9
+    cooldown: 6
+    amount: 2
+    area: 1
+    speed: 1
+    duration: 3
+    pierce: 0
+    knockback: 0.8
+    description: "\u591A 1 \u672C\u3002"
+  - damage: 12
+    cooldown: 6
+    amount: 2
+    area: 1.1
+    speed: 1.3
+    duration: 3.5
+    pierce: 0
+    knockback: 0.8
+    description: "\u4F24\u5BB3 +3\uFF0C\u8F6C\u901F\u4E0E\u8303\u56F4\u63D0\u9AD8\uFF0C\u6301\u7EED +0.5 \u79D2\u3002"
+  - damage: 12
+    cooldown: 6
+    amount: 3
+    area: 1.1
+    speed: 1.3
+    duration: 3.5
+    pierce: 0
+    knockback: 0.8
+    description: "\u591A 1 \u672C\u3002"
+  - damage: 16
+    cooldown: 5.5
+    amount: 4
+    area: 1.25
+    speed: 1.4
+    duration: 4
+    pierce: 0
+    knockback: 1
+    description: "\u591A 1 \u672C\uFF0C\u4F24\u5BB3 +4\uFF0C\u6301\u7EED 4 \u79D2\u3002"

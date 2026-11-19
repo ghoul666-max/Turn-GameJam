@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f8334348b20a0240a26d6ba7c4ca94d, type: 3}
+  m_Name: garlic
+  m_EditorClassIdentifier: Assembly-CSharp::Survivor.Data.WeaponAsset
+  id: garlic
+  displayName: "\u5927\u849C"
+  kind: 3
+  artKey: icon_garlic
+  visualKey: fx_aura
+  levels:
+  - damage: 5
+    cooldown: 0.75
+    amount: 1
+    area: 1
+    speed: 1
+    duration: 1
+    pierce: 0
+    knockback: 0.6
+    description: "\u6301\u7EED\u4F24\u5BB3\u8EAB\u8FB9\u7684\u654C\u4EBA\uFF0C\u5E76\u628A\u5B83\u4EEC\u63A8\u5F00\u3002"
+  - damage: 6
+    cooldown: 0.75
+    amount: 1
+    area: 1.2
+    speed: 1
+    duration: 1
+    pierce: 0
+    knockback: 0.6
+    description: "\u8303\u56F4 +20%\uFF0C\u4F24\u5BB3 +1\u3002"
+  - damage: 8
+    cooldown: 0.75
+    amount: 1
+    area: 1.2
+    speed: 1
+    duration: 1
+    pierce: 0
+    knockback: 0.7
+    description: "\u4F24\u5BB3 +2\u3002"
+  - damage: 8
+    cooldown: 0.65
+    amount: 1
+    area: 1.4
+    speed: 1
+    duration: 1
+    pierce: 0
+    knockback: 0.7
+    description: "\u8303\u56F4\u518D +20%\uFF0C\u51B7\u5374\u7F29\u77ED\u3002"
+  - damage: 11
+    cooldown: 0.65
+    amount: 1
+    area: 1.6
+    speed: 1
+    duration: 1
+    pierce: 0
+    knockback: 0.8
+    description: "\u4F24\u5BB3 +3\uFF0C\u8303\u56F4\u518D +20%\u3002"
