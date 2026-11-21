@@ -4,7 +4,7 @@ namespace Turn.Systems
 {
     /// <summary>
     /// 一局的流程编排。每个模拟步的固定顺序：
-    /// 定时刷怪 → 玩家移动/环境 → 翻滚计时（落地冲击波）→ 怪物 → 鲨鱼 → 武器 → 子弹 → 经验球。
+    /// 定时刷怪 → 玩家移动/环境 → 位面环境 → 翻滚计时（落地冲击波）→ 怪物 → 鲨鱼 → 武器 → 子弹 → 经验球。
     /// 之后依次检查：失败 → 是否有待处理的升级。
     /// 翻滚不在这里：它由输入层直接调用 IRollSystem.TryRoll，在一次调用里原子完成。
     /// </summary>
@@ -29,9 +29,10 @@ namespace Turn.Systems
             _started = true;
 
             _ctx.Spawner.SpawnInitial();
-            _ctx.Sharks.SyncWithMap(); // 起始地图是海洋时立刻生成鲨鱼
-            _ctx.Lava.SyncWithMap();   // 起始地图是火山时岩浆喷发一次后消失
-            _ctx.Events.Publish(new RunStartedEvent { Map = _ctx.Map.Active });
+            PlaneId start = _ctx.Plane.Active;
+            _ctx.Environment.OnPlaneEntered(start); // 起始位面的进入结算（火山：岩浆喷发一次后消失）
+            _ctx.Sharks.SyncWithPlane();            // 起始位面是海洋时立刻生成鲨鱼
+            _ctx.Events.Publish(new RunStartedEvent { Plane = start, Pair = _ctx.Plane.ActivePair });
             _ctx.Events.Publish(new PhaseChangedEvent { Phase = Phase });
         }
 
@@ -42,6 +43,7 @@ namespace Turn.Systems
             Time += dt;
             _ctx.Spawner.Tick(dt, Time);
             _ctx.Player.Tick(dt);
+            _ctx.Environment.Tick(dt);
             _ctx.Roll.Tick(dt);
             _ctx.Monsters.Tick(dt);
             _ctx.Sharks.Tick(dt);

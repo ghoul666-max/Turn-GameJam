@@ -27,9 +27,9 @@ namespace Turn.Systems
             _config = config;
         }
 
-        public void SyncWithMap()
+        public void SyncWithPlane()
         {
-            if (_ctx.Map.Active == MapId.Ocean)
+            if (_ctx.Plane.Active == PlaneId.Ocean)
             {
                 if (_active.Count == 0) SpawnAll();
             }
@@ -44,7 +44,7 @@ namespace Turn.Systems
 
         public void Tick(float dt)
         {
-            SyncWithMap(); // 保险：任何时候都保证“只有海洋地图有鲨鱼”
+            SyncWithPlane(); // 保险：任何时候都保证“只有海洋地图有鲨鱼”
             if (_active.Count == 0) return;
 
             PlayerState player = _ctx.Player.State;
@@ -100,7 +100,7 @@ namespace Turn.Systems
             Vec2 player = _ctx.Player.State.Position;
             float minSq = _config.MinSpawnDistance * _config.MinSpawnDistance;
 
-            List<Vec2> points = _ctx.Config.SpawnPoints[(int)MapId.Ocean];
+            List<Vec2> points = _ctx.Config.SpawnPoints[(int)PlaneId.Ocean];
             _candidates.Clear();
             for (int i = 0; i < points.Count; i++)
             {

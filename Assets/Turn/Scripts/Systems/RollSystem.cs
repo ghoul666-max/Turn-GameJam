@@ -5,10 +5,9 @@ using Turn.Core;
 namespace Turn.Systems
 {
     /// <summary>
-    /// 翻滚（Turn）。整个游戏的核心操作，四项效果只在 TryRoll 这一个方法里、按固定顺序原子执行：
-    ///   ① 翻滚位移 + 无敌帧   ② 切换地图（+ 鲨鱼同步 + 切到火山时岩浆喷发一次）   ③ 装满当前弹匣   ④ 翻滚惩罚刷怪
-    /// 任何一项都不会单独发生：切图、装填、惩罚刷怪的唯一调用方就是这里。
-    /// 冷却中（或翻滚中、非 Playing 阶段、玩家已死亡）调用 TryRoll 直接返回 false，四项都不执行。
+    /// 翻滚（Turn）。整个游戏的核心操作：一次成功的 TryRoll 在这一个方法里按策划书「翻滚时序」原子执行全部效果，
+    /// 切位面、怪物偏移换皮、弹幕保留、装填、惩罚刷怪、位面进入结算的唯一调用方就是这里（程序A 编排，部分步骤由程序B 实现）。
+    /// 冷却中（或翻滚中、非 Playing 阶段、玩家已死亡）调用 TryRoll 直接返回 false，什么都不执行。
     /// 写 PlayerState 的 IsRolling / RollTimer / RollDirection / RollSpeed / RollCooldownLeft / InvincibleLeft。
     /// </summary>
     public sealed class RollSystem : IRollSystem
@@ -67,39 +66,57 @@ namespace Turn.Systems
                 return false;
             }
 
-            // ① 翻滚位移 + 无敌帧 + 全局冷却
+            // 策划书「翻滚时序」。步骤编号与策划书一致；第 4 步（惩罚刷怪）暂定挪到第 6b 步之后，
+            // 让惩罚怪直接按新位面生成（待策划确认）。第 7 步策划书缺失。
+
+            // 1) 无敌帧
+            float invincible = EffectiveInvincibleTime;
+            s.InvincibleLeft = MathF.Max(s.InvincibleLeft, invincible);
+
+            // 2) 传送门 VFX：表现层收到本方法末尾的 RollPerformedEvent 后在 Position 生成（同一帧）。
+
+            // 3) 翻滚位移（PlayerSystem 在之后的 Tick 里按 RollDirection × RollSpeed 推进）
             Vec2 dir = s.MoveDir.SqrMagnitude > 0.01f ? s.MoveDir.Normalized : s.Facing.Normalized;
             if (dir.SqrMagnitude < 0.5f) dir = Vec2.Right;
             float duration = MathF.Max(0.05f, _config.Duration);
-            float invincible = EffectiveInvincibleTime;
-
             s.IsRolling = true;
             s.RollTimer = duration;
             s.RollDirection = dir;
             s.RollSpeed = _config.Distance / duration;
-            s.RollCooldownLeft = EffectiveCooldown;
-            s.InvincibleLeft = MathF.Max(s.InvincibleLeft, invincible);
             RollCount++;
 
-            // ② 切换地图：只改激活地图；玩家与怪物的世界坐标、血量、Buff 都不动。鲨鱼按新地图生成 / 销毁。
-            MapId from = _ctx.Map.Active;
-            _ctx.Map.Switch();
-            _ctx.Sharks.SyncWithMap();
-            _ctx.Lava.SyncWithMap(); // 切到火山：岩浆范围内的怪物受一次伤害，然后岩浆消失（惩罚怪在这之后生成，不吃这一下）
+            // 5) 位面 Root 显隐互换：只改激活位面并发布 PlaneSwitchedEvent（表现层据此显隐）。
+            PlaneId from = _ctx.Plane.Active;
+            _ctx.Plane.Switch();
+            PlaneId to = _ctx.Plane.Active;
 
-            // ③ 装满当前弹匣（形态已随地图切换）。这是整个游戏里唯一的装填入口。
+            // 6) 所有怪物：位置 += 总偏移量（= 本次翻滚的总位移，保持与玩家的相对位置）；换 Skin / AI；重置冲锋态。（程序B 实现）
+            _ctx.Monsters.ShiftAll(dir * _config.Distance);
+            _ctx.Monsters.SwapPlane(from, to);
+
+            // 6b) 已飞出的弹幕保留、寿命 ×1.6、只对同层生效。（程序B 实现）
+            _ctx.Projectiles.OnPlaneSwitched(from, to);
+
+            // 4) 翻滚惩罚：在玩家周围为新位面刷一批怪（B17 惩罚减免在 M3 接入：在这里算好 count 再传）。（程序B 实现刷怪）
+            int penalty = _ctx.Spawner.SpawnPenalty(_ctx.Config.Penalty.Count);
+
+            // 8) 武器装填 / 充能补满（武器已随位面切换）。这是整个游戏里唯一的装填入口。（程序B 实现）
             int ammoBefore = _ctx.Weapons.Ammo;
             _ctx.Weapons.Reload();
 
-            // ④ 翻滚惩罚：固定一批新怪物加入现有管理体系，不影响原有怪物。
-            int penalty = _ctx.Spawner.SpawnPenalty();
+            // 9) 位面进入事件：环境结算（清减速 / 困意归零 / 火山岩浆喷发等）+ 鲨鱼生成 / 销毁。
+            _ctx.Environment.OnPlaneEntered(to);
+            _ctx.Sharks.SyncWithPlane();
+
+            // 10) 开启 CD
+            s.RollCooldownLeft = EffectiveCooldown;
 
             _ctx.Events.Publish(new RollPerformedEvent
             {
                 Position = s.Position,
                 Direction = dir,
-                FromMap = from,
-                ToMap = _ctx.Map.Active,
+                FromPlane = from,
+                ToPlane = to,
                 AmmoBefore = ammoBefore,
                 AmmoAfter = _ctx.Weapons.Ammo,
                 PenaltySpawned = penalty,

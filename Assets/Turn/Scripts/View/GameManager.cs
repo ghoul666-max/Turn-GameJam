@@ -45,7 +45,7 @@ namespace Turn.View
 
         [Header("运行时只读")]
         [SerializeField] private RunPhase phase;
-        [SerializeField] private MapId activeMap;
+        [SerializeField] private PlaneId activeMap;
         [SerializeField] private int monsterCount;
         [SerializeField] private int sharkCount;
 
@@ -120,8 +120,8 @@ namespace Turn.View
             {
                 MonsterPrefab = spawnManager != null ? spawnManager.MonsterPrefab : null,
                 SharkPrefab = spawnManager != null ? spawnManager.SharkPrefab : null,
-                FireballPrefab = weapon != null ? weapon.GetPrefab(MapId.Volcano) : null,
-                HarpoonPrefab = weapon != null ? weapon.GetPrefab(MapId.Ocean) : null,
+                FireballPrefab = weapon != null ? weapon.GetPrefab(PlaneId.Volcano) : null,
+                HarpoonPrefab = weapon != null ? weapon.GetPrefab(PlaneId.Ocean) : null,
                 OrbPrefab = upgradeManager != null ? upgradeManager.ExperienceOrbPrefab : null,
                 MonsterContainer = monsterContainer,
                 SharkContainer = sharkContainer,
@@ -208,7 +208,7 @@ namespace Turn.View
             if (_ctx == null) return;
             if (_views != null) _views.Sync();
             phase = _ctx.Session.Phase;
-            activeMap = _ctx.Map.Active;
+            activeMap = _ctx.Plane.Active;
             monsterCount = _ctx.Monsters.AliveCount;
             sharkCount = _ctx.Sharks.Active.Count;
         }

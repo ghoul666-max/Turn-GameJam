@@ -9,8 +9,8 @@ namespace Turn.View
     [Serializable]
     public sealed class EnvironmentSettings
     {
-        [Tooltip("开局激活的地图")]
-        public MapId startMap = MapId.Volcano;
+        [Tooltip("开局激活的位面（目前只有火山 / 海洋搭好了场景）")]
+        public PlaneId startMap = PlaneId.Volcano;
         [Tooltip("地形网格尺寸：每格边长（世界单位）。两张地图共用。")]
         [Min(0.25f)] public float terrainCellSize = 1f;
         [Tooltip("岩浆 / 浅水 / 灼烧的结算间隔（秒）。按间隔结算，与帧率无关。")]
@@ -25,7 +25,7 @@ namespace Turn.View
         {
             return new EnvironmentConfig
             {
-                StartMap = startMap,
+                StartPlane = startMap,
                 DotTickInterval = dotTickInterval,
                 PlayerLavaDps = playerLavaDps,
                 ShallowRegenPerSecond = shallowRegenPerSecond,
@@ -33,11 +33,21 @@ namespace Turn.View
         }
     }
 
+    /// <summary>一个位面在场景里的部件（火山 / 海洋之外的位面用它，M1 起在场景里建好后拖进来）。</summary>
+    [Serializable]
+    public sealed class PlaneSceneSlot
+    {
+        public GameObject root;
+        public SpriteRenderer ground;
+        public TerrainGrid terrain;
+        public Transform spawnPoints;
+    }
+
     /// <summary>
-    /// 双地图管理（节点 MapManager）。
+    /// 位面管理（节点 MapManager）。火山 / 海洋沿用原来的字段；工位 / 梦境 / 原始 / 未来用 PlaneSceneSlot，没拖的为空，安全跳过。
     /// VolcanoRoot 与 OceanRoot 在同一个 Scene、同一个世界坐标空间：两个根节点都固定在原点、不旋转、不缩放，
     /// 两张地面都按 WorldBounds 铺满，两张地形网格都覆盖 WorldBounds —— 尺寸与坐标范围完全一致。
-    /// 切换：收到 MapSwitchedEvent 后用 SetActive 互斥显隐（同一时刻只有一个 Root 激活）。
+    /// 切换：收到 PlaneSwitchedEvent 后用 SetActive 互斥显隐（同一时刻只有一个 Root 激活）。
     /// 水池与岩浆池一一对应：ShallowWaterGrid 的形状总是从 LavaGrid 复制（shareTerrainShape）。
     /// 岩浆：收到 LavaEruptedEvent 后亮一下再淡出（数据层面岩浆已经消失）；浅水一直显示。
     /// 不加载 Scene、不叠 Tilemap、不移动任何单位。
@@ -55,6 +65,12 @@ namespace Turn.View
         [SerializeField] private Transform oceanSpawnPoints;
         [SerializeField] private WorldBounds worldBounds;
 
+        [Header("其他位面（场景搭好后拖进来；为空时该位面没有画面 / 地形 / 刷怪点）")]
+        [SerializeField] private PlaneSceneSlot office = new PlaneSceneSlot();
+        [SerializeField] private PlaneSceneSlot dream = new PlaneSceneSlot();
+        [SerializeField] private PlaneSceneSlot primal = new PlaneSceneSlot();
+        [SerializeField] private PlaneSceneSlot future = new PlaneSceneSlot();
+
         [Header("环境参数")]
         [SerializeField] private EnvironmentSettings environment = new EnvironmentSettings();
 
@@ -67,7 +83,7 @@ namespace Turn.View
         [SerializeField] private float lavaFadeTime = 0.5f;
 
         [Header("运行时只读")]
-        [SerializeField] private MapId activeMap;
+        [SerializeField] private PlaneId activeMap;
 
         private ITurnContext _ctx;
         private float _lavaShowTimer = -1f;
@@ -76,17 +92,51 @@ namespace Turn.View
         public float TerrainCellSize { get { return environment.terrainCellSize; } }
         public WorldBounds Bounds { get { return worldBounds; } }
 
-        public TerrainGrid GetTerrain(MapId map)
+        private PlaneSceneSlot Slot(PlaneId plane)
         {
-            return map == MapId.Volcano ? lavaGrid : shallowWaterGrid;
+            switch (plane)
+            {
+                case PlaneId.Office: return office;
+                case PlaneId.Dream: return dream;
+                case PlaneId.Primal: return primal;
+                case PlaneId.Future: return future;
+                default: return null;
+            }
         }
 
-        public Transform GetSpawnPointRoot(MapId map)
+        public GameObject GetRoot(PlaneId plane)
         {
-            return map == MapId.Volcano ? volcanoSpawnPoints : oceanSpawnPoints;
+            if (plane == PlaneId.Volcano) return volcanoRoot;
+            if (plane == PlaneId.Ocean) return oceanRoot;
+            PlaneSceneSlot slot = Slot(plane);
+            return slot != null ? slot.root : null;
         }
 
-        public void CollectSpawnPoints(MapId map, List<Vec2> results)
+        public SpriteRenderer GetGround(PlaneId plane)
+        {
+            if (plane == PlaneId.Volcano) return volcanoGround;
+            if (plane == PlaneId.Ocean) return oceanGround;
+            PlaneSceneSlot slot = Slot(plane);
+            return slot != null ? slot.ground : null;
+        }
+
+        public TerrainGrid GetTerrain(PlaneId plane)
+        {
+            if (plane == PlaneId.Volcano) return lavaGrid;
+            if (plane == PlaneId.Ocean) return shallowWaterGrid;
+            PlaneSceneSlot slot = Slot(plane);
+            return slot != null ? slot.terrain : null;
+        }
+
+        public Transform GetSpawnPointRoot(PlaneId plane)
+        {
+            if (plane == PlaneId.Volcano) return volcanoSpawnPoints;
+            if (plane == PlaneId.Ocean) return oceanSpawnPoints;
+            PlaneSceneSlot slot = Slot(plane);
+            return slot != null ? slot.spawnPoints : null;
+        }
+
+        public void CollectSpawnPoints(PlaneId map, List<Vec2> results)
         {
             results.Clear();
             Transform root = GetSpawnPointRoot(map);
@@ -137,17 +187,17 @@ namespace Turn.View
             Unbind();
             _ctx = ctx;
             AlignRoots();
-            ctx.Events.Subscribe<MapSwitchedEvent>(OnMapSwitched);
+            ctx.Events.Subscribe<PlaneSwitchedEvent>(OnMapSwitched);
             ctx.Events.Subscribe<LavaEruptedEvent>(OnLavaErupted);
             _lavaShowTimer = -1f;
             if (lavaGrid != null) lavaGrid.SetAlpha(0f); // 岩浆平时不存在，只在喷发时亮一下
-            Apply(ctx.Map.Active);
+            Apply(ctx.Plane.Active);
         }
 
         public void Unbind()
         {
             if (_ctx == null) return;
-            _ctx.Events.Unsubscribe<MapSwitchedEvent>(OnMapSwitched);
+            _ctx.Events.Unsubscribe<PlaneSwitchedEvent>(OnMapSwitched);
             _ctx.Events.Unsubscribe<LavaEruptedEvent>(OnLavaErupted);
             _ctx = null;
         }
@@ -177,30 +227,27 @@ namespace Turn.View
             Unbind();
         }
 
-        private void OnMapSwitched(MapSwitchedEvent evt)
+        private void OnMapSwitched(PlaneSwitchedEvent evt)
         {
             Apply(evt.To);
-            if (evt.To != MapId.Volcano && lavaGrid != null)
+            if (evt.To != PlaneId.Volcano && lavaGrid != null)
             {
                 _lavaShowTimer = -1f;
                 lavaGrid.SetAlpha(0f); // 离开火山时岩浆已经消失
             }
         }
 
-        /// <summary>互斥显隐：先关旧的再开新的，任何时刻都不会两张同时激活。</summary>
-        public void Apply(MapId map)
+        /// <summary>互斥显隐：先关掉其他所有位面再开目标位面，任何时刻都不会两张同时激活。</summary>
+        public void Apply(PlaneId map)
         {
             activeMap = map;
-            if (map == MapId.Volcano)
+            GameObject target = GetRoot(map);
+            for (int i = 0; i < PlaneIds.Count; i++)
             {
-                if (oceanRoot != null) oceanRoot.SetActive(false);
-                if (volcanoRoot != null) volcanoRoot.SetActive(true);
+                GameObject root = GetRoot((PlaneId)i);
+                if (root != null && root != target) root.SetActive(false);
             }
-            else
-            {
-                if (volcanoRoot != null) volcanoRoot.SetActive(false);
-                if (oceanRoot != null) oceanRoot.SetActive(true);
-            }
+            if (target != null) target.SetActive(true);
         }
 
         // ---------------- 同空间对齐 ----------------
@@ -208,11 +255,9 @@ namespace Turn.View
         /// <summary>两个根节点固定在原点；两张地面按边界铺满。保证“同一空间、同一尺寸”。</summary>
         public void AlignRoots()
         {
-            ResetTransform(volcanoRoot);
-            ResetTransform(oceanRoot);
+            for (int i = 0; i < PlaneIds.Count; i++) ResetTransform(GetRoot((PlaneId)i));
             if (worldBounds == null) return;
-            FitGround(volcanoGround, worldBounds);
-            FitGround(oceanGround, worldBounds);
+            for (int i = 0; i < PlaneIds.Count; i++) FitGround(GetGround((PlaneId)i), worldBounds);
         }
 
         private static void ResetTransform(GameObject root)

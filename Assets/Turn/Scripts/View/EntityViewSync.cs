@@ -40,14 +40,14 @@ namespace Turn.View
             _refs = refs;
             ctx.Events.Subscribe<MonsterDamagedEvent>(OnMonsterDamaged);
             ctx.Events.Subscribe<MonsterDiedEvent>(OnMonsterDied);
-            ctx.Events.Subscribe<MapSwitchedEvent>(OnMapSwitched);
+            ctx.Events.Subscribe<PlaneSwitchedEvent>(OnMapSwitched);
         }
 
         public void Dispose()
         {
             _ctx.Events.Unsubscribe<MonsterDamagedEvent>(OnMonsterDamaged);
             _ctx.Events.Unsubscribe<MonsterDiedEvent>(OnMonsterDied);
-            _ctx.Events.Unsubscribe<MapSwitchedEvent>(OnMapSwitched);
+            _ctx.Events.Unsubscribe<PlaneSwitchedEvent>(OnMapSwitched);
             ClearContainer(_refs.MonsterContainer);
             ClearContainer(_refs.SharkContainer);
             ClearContainer(_refs.ProjectileContainer);
@@ -89,7 +89,7 @@ namespace Turn.View
                     if (_refs.MonsterPrefab == null) continue;
                     view = Object.Instantiate(_refs.MonsterPrefab, ViewMath.ToWorld(e.Position), Quaternion.identity, _refs.MonsterContainer);
                     view.name = "Monster_" + e.Id;
-                    view.Init(e.Id, _ctx.Map.Active); // 新怪物使用当前地图对应的皮肤
+                    view.Init(e.Id, _ctx.Plane.Active); // 新怪物使用当前地图对应的皮肤
                     _monsters.Add(e.Id, view);
                 }
                 view.Sync(e);
@@ -154,10 +154,10 @@ namespace Turn.View
                 Projectile view;
                 if (!_projectiles.TryGetValue(e.Id, out view))
                 {
-                    Projectile prefab = e.Form == MapId.Volcano ? _refs.FireballPrefab : _refs.HarpoonPrefab;
+                    Projectile prefab = e.Form == PlaneId.Volcano ? _refs.FireballPrefab : _refs.HarpoonPrefab;
                     if (prefab == null) continue;
                     view = Object.Instantiate(prefab, ViewMath.ToWorld(e.Position), Quaternion.identity, _refs.ProjectileContainer);
-                    view.name = (e.Form == MapId.Volcano ? "Fireball_" : "Harpoon_") + e.Id;
+                    view.name = (e.Form == PlaneId.Volcano ? "Fireball_" : "Harpoon_") + e.Id;
                     view.Init(e);
                     _projectiles.Add(e.Id, view);
                 }
@@ -232,7 +232,7 @@ namespace Turn.View
         }
 
         /// <summary>地图切换：现存的每一只怪物原地换皮，实例 / 坐标 / 血量 / Buff 全部保留。</summary>
-        private void OnMapSwitched(MapSwitchedEvent evt)
+        private void OnMapSwitched(PlaneSwitchedEvent evt)
         {
             foreach (KeyValuePair<int, MonsterController> pair in _monsters)
             {

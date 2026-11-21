@@ -6,6 +6,7 @@ namespace Turn.Core
     // ------------------------------------------------------------------
     // 系统接口。命名范式：I<名词>System；实现类为 <名词>System，一个系统一个文件。
     // 系统之间只允许通过 ITurnContext 上的这些接口 + IEventBus 交互。
+    // 本文件归程序A维护；程序B只能新增成员，不能修改 / 删除已有签名（见仓库根目录 CLAUDE.md）。
     // ------------------------------------------------------------------
 
     public interface IEventBus
@@ -15,22 +16,23 @@ namespace Turn.Core
         void Publish<T>(T evt);
     }
 
-    /// <summary>一局游戏的全部系统。由 TurnFactory 组装。</summary>
-    public interface ITurnContext
+    /// <summary>一局游戏的全部系统。由 TurnFactory 组装。（partial：需要时可在别的文件追加成员）</summary>
+    public partial interface ITurnContext
     {
         IEventBus Events { get; }
         Random Random { get; }
         TurnConfig Config { get; }
         ISessionSystem Session { get; }
         IBoundsSystem Bounds { get; }
-        IMapSystem Map { get; }
+        IPlaneSystem Plane { get; }
         ITerrainSystem Terrain { get; }
+        IObstacleSystem Obstacles { get; }
         IPlayerSystem Player { get; }
         IRollSystem Roll { get; }
         ICombatSystem Combat { get; }
         IMonsterSystem Monsters { get; }
         ISharkSystem Sharks { get; }
-        ILavaSystem Lava { get; }
+        IEnvironmentSystem Environment { get; }
         ISpawnSystem Spawner { get; }
         IWeaponSystem Weapons { get; }
         IProjectileSystem Projectiles { get; }
@@ -62,21 +64,48 @@ namespace Turn.Core
         Vec2 RandomPoint(float margin);
     }
 
-    /// <summary>当前激活的地图。切换只改这里的一个枚举值，不碰任何单位。</summary>
-    public interface IMapSystem
+    /// <summary>
+    /// 当前激活的位面。切换只改这里的枚举值并发布 PlaneSwitchedEvent，不碰任何单位
+    /// （单位怎么跟着变由 RollSystem 编排各系统完成）。
+    /// </summary>
+    public interface IPlaneSystem
     {
-        MapId Active { get; }
+        PlaneId Active { get; }
+        /// <summary>当前所在的位面组（= PlaneIds.PairOf(Active)）。</summary>
+        PlanePairId ActivePair { get; }
+        /// <summary>本局组内翻滚切换的次数。</summary>
         int SwitchCount { get; }
-        /// <summary>切到另一张地图并发布 MapSwitchedEvent。只应由 RollSystem 在一次成功翻滚里调用。</summary>
+        /// <summary>切到同组的另一面并发布 PlaneSwitchedEvent。只应由 RollSystem 在一次成功翻滚里调用。</summary>
         void Switch();
+        /// <summary>
+        /// 关卡流程：进入另一组位面（从该组第一面开始）并发布 PlaneSwitchedEvent。
+        /// 只应由关卡 / 流程逻辑调用（程序A，M2 接入）；不计入 SwitchCount。
+        /// </summary>
+        void EnterPair(PlanePairId pair);
     }
 
-    /// <summary>地形检测：只读取当前激活地图的网格。岩浆消失后，岩浆格一律视为 Normal。</summary>
+    /// <summary>地形检测：只读取当前激活位面的网格。岩浆消失后，岩浆格一律视为 Normal。</summary>
     public interface ITerrainSystem
     {
         TerrainGridData ActiveGrid { get; }
-        TerrainGridData GetGrid(MapId map);
+        TerrainGridData GetGrid(PlaneId map);
         TerrainType Sample(Vec2 position);
+    }
+
+    /// <summary>
+    /// 遮挡物（只读取当前激活位面的遮挡）。所有会移动的单位和所有子弹都必须经过这里：
+    ///   · 单位移动：先算出想去的位置，再用 ResolveMove 修正（mask 传 ObstacleMask.Units）；
+    ///   · 子弹飞行：每步用 SegmentBlocked 检查这一段是否被挡（mask 传 ObstacleMask.Projectiles）。
+    /// 实体遮挡两者都挡；软遮挡只挡其中一种。
+    /// </summary>
+    public interface IObstacleSystem
+    {
+        /// <summary>半径为 radius 的单位从 from 走到 to，被 mask 对应的遮挡物挡住后实际到达的位置（贴边滑动）。</summary>
+        Vec2 ResolveMove(Vec2 from, Vec2 to, float radius, ObstacleMask mask);
+        /// <summary>半径为 radius 的东西沿线段 a → b 移动时是否会碰到 mask 对应的遮挡物。</summary>
+        bool SegmentBlocked(Vec2 a, Vec2 b, float radius, ObstacleMask mask);
+        /// <summary>点 position（半径 radius）是否与 mask 对应的遮挡物重叠（刷怪选点用）。</summary>
+        bool Overlaps(Vec2 position, float radius, ObstacleMask mask);
     }
 
     /// <summary>玩家：移动（含翻滚位移）、边界限制、脚下地形与环境结算（岩浆 / 浅水）。</summary>
@@ -87,12 +116,20 @@ namespace Turn.Core
         void Setup();
         /// <summary>每帧由输入层调用；长度会被限制在 1 以内。</summary>
         void SetMoveInput(Vec2 input);
+        /// <summary>当前生效的移动速度（等级基础速度 × 环境修正，如梦境减速层）。</summary>
+        float MoveSpeed { get; }
+        /// <summary>
+        /// 等级成长写入的基础属性（程序B 的 ProgressionSystem 升级时调用）。
+        /// 最大生命提高时，当前生命同步加上提高的部分。
+        /// </summary>
+        void SetLevelStats(float maxHp, float moveSpeed);
         void Tick(float dt);
     }
 
     /// <summary>
-    /// 翻滚：唯一的核心操作。一次成功的 TryRoll 在同一个调用里原子地完成
-    /// 无敌 → 切图 → 鲨鱼同步 → 岩浆喷发 → 装填 → 惩罚刷怪；冷却中调用什么都不做。
+    /// 翻滚：唯一的核心操作。一次成功的 TryRoll 在同一个调用里按策划书时序原子地完成
+    /// 无敌 → 位移 → 切位面 → 怪物偏移换皮 → 弹幕保留 → 惩罚刷怪 → 装填 → 位面进入结算 → CD；
+    /// 冷却中调用什么都不做。详细顺序见 RollSystem.TryRoll。
     /// </summary>
     public interface IRollSystem
     {
@@ -113,7 +150,7 @@ namespace Turn.Core
         void DamageMonster(MonsterEntity monster, float amount, DamageSource source);
     }
 
-    /// <summary>普通怪物：生成、追踪、互相挤开、边界、接触伤害、灼烧、空间查询。（岩浆伤害在 ILavaSystem 里一次性结算）</summary>
+    /// <summary>普通怪物：生成、追踪、互相挤开、边界、接触伤害、灼烧、空间查询。（岩浆伤害在 IEnvironmentSystem 里一次性结算）</summary>
     public interface IMonsterSystem
     {
         IReadOnlyList<MonsterEntity> Active { get; }
@@ -128,27 +165,44 @@ namespace Turn.Core
         void QueryCircle(Vec2 center, float radius, List<MonsterEntity> results);
         /// <summary>范围内最近的存活怪物；没有返回 null。</summary>
         MonsterEntity GetNearest(Vec2 from, float range);
+        /// <summary>
+        /// 翻滚第 6 步：所有存活怪物整体平移 offset（与玩家的相对位置不变，包围阵型不散），之后各自 Clamp 进边界。
+        /// 只应由 RollSystem 调用。（程序B 实现）
+        /// </summary>
+        void ShiftAll(Vec2 offset);
+        /// <summary>
+        /// 翻滚第 6 步：位面从 from 切到 to 后，所有存活怪物按「切图对应」表换成对应怪物的配置与 AI
+        /// （实例不销毁，血量 / Buff / 异常状态全部保留），并立刻打断冲锋回到 Idle；
+        /// 只属于旧位面的单位（如虫崽）在这里清除。只应由 RollSystem 调用。（程序B 实现）
+        /// </summary>
+        void SwapPlane(PlaneId from, PlaneId to);
     }
 
-    /// <summary>鲨鱼：存在与否完全由当前激活地图决定（海洋存在，火山销毁）。</summary>
+    /// <summary>鲨鱼：存在与否完全由当前激活位面决定（海洋存在，其他位面销毁）。</summary>
     public interface ISharkSystem
     {
         IReadOnlyList<SharkEntity> Active { get; }
-        /// <summary>按当前地图同步：海洋且没有鲨鱼 → 生成；火山 → 全部销毁。</summary>
-        void SyncWithMap();
+        /// <summary>按当前位面同步：海洋且没有鲨鱼 → 生成；其他位面 → 全部销毁。</summary>
+        void SyncWithPlane();
         void Tick(float dt);
     }
 
     /// <summary>
-    /// 岩浆：每次火山地图被激活（开局 / 翻滚切图）时喷发一次 —— 站在岩浆格里的普通怪物各受一次伤害，
-    /// 然后岩浆消失，直到下一次切回火山。海洋的浅水不受影响，一直存在。
+    /// 位面环境机制（程序A）：岩浆、浅水、困意、梦境减速、老板来电……按当前位面挂规则。
+    /// 进入位面时由 RollSystem / SessionSystem 调用 OnPlaneEntered；持续效果在 Tick 里结算。
+    /// 对玩家 / 怪物的伤害与回血一律经 ICombatSystem。
+    /// 当前实现仍是白模规则：切到火山时岩浆喷发一次后消失（策划书改为持续伤害，待确认后在 M1 改）。
     /// </summary>
-    public interface ILavaSystem
+    public interface IEnvironmentSystem
     {
-        /// <summary>岩浆当前是否存在（只在喷发结算的那一刻为 true）。</summary>
-        bool Present { get; }
-        /// <summary>按当前地图同步：刚切到火山 → 喷发一次后消失；海洋 → 无事发生。</summary>
-        void SyncWithMap();
+        /// <summary>岩浆当前是否存在。TerrainSystem 据此决定岩浆格是否视为 Normal。</summary>
+        bool LavaPresent { get; }
+        /// <summary>进入 plane 后的结算（开局一次 + 每次成功翻滚一次），完成后发布 PlaneEnteredEvent。</summary>
+        void OnPlaneEntered(PlaneId plane);
+        /// <summary>position 是否处在会造成伤害的环境里（B10 地形增伤用）。</summary>
+        bool IsHazard(Vec2 position);
+        /// <summary>持续性环境效果（困意、减速层、天降事件等）。由 SessionSystem 每步调用。</summary>
+        void Tick(float dt);
     }
 
     /// <summary>刷怪：开局一批 + 定时刷 + 翻滚惩罚。只通过 IMonsterSystem.Spawn 生成。</summary>
@@ -156,14 +210,17 @@ namespace Turn.Core
     {
         void SpawnInitial();
         void Tick(float dt, float time);
-        /// <summary>翻滚惩罚：固定生成一批新怪物，返回实际生成数量。只应由 RollSystem 调用。</summary>
-        int SpawnPenalty();
+        /// <summary>
+        /// 翻滚惩罚：在玩家周围为当前位面生成 count 只怪物，返回实际生成数量。
+        /// 只应由 RollSystem 调用；count 由 RollSystem 算好（已计入 B17 惩罚减免）。
+        /// </summary>
+        int SpawnPenalty(int count);
     }
 
     /// <summary>武器：全局唯一的弹匣 + 按当前地图选择的武器形态 + 自动索敌射击。</summary>
     public interface IWeaponSystem
     {
-        MapId Form { get; }
+        PlaneId Form { get; }
         WeaponFormConfig CurrentForm { get; }
         int Ammo { get; }
         int Capacity { get; }
@@ -176,8 +233,13 @@ namespace Turn.Core
     public interface IProjectileSystem
     {
         IReadOnlyList<ProjectileEntity> Active { get; }
-        ProjectileEntity Spawn(MapId form, Vec2 position, Vec2 velocity, float radius, float damage, int pierce, float maxDistance);
+        ProjectileEntity Spawn(PlaneId form, Vec2 position, Vec2 velocity, float radius, float damage, int pierce, float maxDistance);
         void Tick(float dt);
+        /// <summary>
+        /// 翻滚第 6b 步：已飞出的投射物（玩家的与敌方的）不销毁，存活时间 ×1.6（B19 再加），
+        /// 之后只对发射时所在位面的单位生效。只应由 RollSystem 调用。（程序B 实现）
+        /// </summary>
+        void OnPlaneSwitched(PlaneId from, PlaneId to);
     }
 
     public interface IExperienceSystem
@@ -208,7 +270,7 @@ namespace Turn.Core
 
     // ------------------------------------------------------------------
     // 武器形态：无状态，只通过 World 上的系统接口生成子弹。
-    // 新增地图 + 武器 = 新增一个 MapId 值 + 一个 IWeaponForm 实现 + WeaponForms.Create 里的一行。
+    // 新增地图 + 武器 = 新增一个 PlaneId 值 + 一个 IWeaponForm 实现 + WeaponForms.Create 里的一行。
     // ------------------------------------------------------------------
 
     public struct WeaponFireContext
@@ -222,7 +284,7 @@ namespace Turn.Core
 
     public interface IWeaponForm
     {
-        MapId Map { get; }
+        PlaneId Map { get; }
         void Fire(WeaponFireContext fire);
     }
 }

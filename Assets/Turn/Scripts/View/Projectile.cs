@@ -15,7 +15,7 @@ namespace Turn.View
 
         [Header("运行时只读")]
         [SerializeField] private int entityId;
-        [SerializeField] private MapId form;
+        [SerializeField] private PlaneId form;
 
         public void Init(ProjectileEntity p)
         {

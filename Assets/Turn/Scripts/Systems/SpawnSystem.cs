@@ -7,7 +7,7 @@ namespace Turn.Systems
     /// <summary>
     /// 刷怪：开局一批、定时刷（优先用当前地图的刷怪点）、翻滚惩罚。
     /// 所有新怪物都通过 IMonsterSystem.Spawn 加入同一个管理列表；这里永远不会动已有的怪物。
-    /// 翻滚惩罚不受常规存活上限限制：每次成功翻滚固定生成 PenaltyConfig.Count 只。
+    /// 翻滚惩罚不受常规存活上限限制：数量由 RollSystem 传入（基础 = PenaltyConfig.Count，B17 减免在 RollSystem 里算）。
     /// </summary>
     public sealed class SpawnSystem : ISpawnSystem
     {
@@ -48,9 +48,9 @@ namespace Turn.Systems
             }
         }
 
-        public int SpawnPenalty()
+        public int SpawnPenalty(int count)
         {
-            int count = Math.Max(0, _penalty.Count);
+            count = Math.Max(0, count);
             for (int i = 0; i < count; i++) _ctx.Monsters.Spawn(PenaltyPosition(), true);
             if (count > 0) _ctx.Events.Publish(new PenaltySpawnedEvent { Count = count });
             return count;
@@ -67,7 +67,7 @@ namespace Turn.Systems
         private Vec2 RegularPosition()
         {
             Vec2 player = _ctx.Player.State.Position;
-            List<Vec2> points = _ctx.Config.SpawnPoints[(int)_ctx.Map.Active];
+            List<Vec2> points = _ctx.Config.SpawnPoints[(int)_ctx.Plane.Active];
             float minSq = _spawn.MinDistance * _spawn.MinDistance;
 
             _candidates.Clear();

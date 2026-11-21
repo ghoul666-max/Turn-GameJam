@@ -50,7 +50,7 @@ namespace Turn.View
         [Tooltip("可击中的怪物数")]
         [Min(1)] public int pierce = 1;
 
-        public WeaponFormConfig ToConfig(MapId map)
+        public WeaponFormConfig ToConfig(PlaneId map)
         {
             return new WeaponFormConfig
             {
@@ -87,7 +87,7 @@ namespace Turn.View
         [SerializeField] private SpriteRenderer formIcon;
 
         [Header("运行时只读")]
-        [SerializeField] private MapId currentForm;
+        [SerializeField] private PlaneId currentForm;
         [SerializeField] private string currentFormName;
         [SerializeField] private int currentAmmo;
         [SerializeField] private int capacity;
@@ -96,12 +96,15 @@ namespace Turn.View
 
         public WeaponSettings Settings { get { return settings; } }
 
-        public WeaponFormSettings GetForm(MapId map)
+        /// <summary>该位面绑定的武器形态；还没做的位面返回 null（程序B 补齐其余 4 把）。</summary>
+        public WeaponFormSettings GetForm(PlaneId map)
         {
-            return map == MapId.Volcano ? fireball : harpoon;
+            if (map == PlaneId.Volcano) return fireball;
+            if (map == PlaneId.Ocean) return harpoon;
+            return null;
         }
 
-        public Projectile GetPrefab(MapId map)
+        public Projectile GetPrefab(PlaneId map)
         {
             WeaponFormSettings form = GetForm(map);
             return form != null ? form.prefab : null;

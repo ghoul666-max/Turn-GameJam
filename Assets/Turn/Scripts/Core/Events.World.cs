@@ -1,22 +1,23 @@
 namespace Turn.Core
 {
     // ------------------------------------------------------------------
+    // 世界事件（程序A）：位面、翻滚、环境、玩家生死。战斗相关事件在 Events.Combat.cs（程序B）。
     // 事件。命名范式：<名词><过去式>Event，全部为 struct。
     // 事件只描述“已经发生的事实”，订阅者不得在回调里反向修改发布者。
     // 表现层只靠事件触发表现（闪白、特效、换皮），状态一律每帧读取。
     // ------------------------------------------------------------------
 
-    public struct RunStartedEvent { public MapId Map; }
+    public struct RunStartedEvent { public PlaneId Plane; public PlanePairId Pair; }
 
     public struct PhaseChangedEvent { public RunPhase Phase; }
 
-    /// <summary>一次成功的翻滚。四项效果（无敌 / 切图 / 装填 / 惩罚刷怪）都已经执行完毕后才发布。</summary>
+    /// <summary>一次成功的翻滚。翻滚时序里的全部效果（无敌 / 切位面 / 怪物偏移换皮 / 弹幕 / 惩罚刷怪 / 装填 / 位面进入结算）都执行完毕后才发布。</summary>
     public struct RollPerformedEvent
     {
         public Vec2 Position;
         public Vec2 Direction;
-        public MapId FromMap;
-        public MapId ToMap;
+        public PlaneId FromPlane;
+        public PlaneId ToPlane;
         public int AmmoBefore;
         public int AmmoAfter;
         public int PenaltySpawned;
@@ -29,20 +30,14 @@ namespace Turn.Core
     /// <summary>翻滚位移结束（落地）。冲击波词条在这一刻结算。</summary>
     public struct RollLandedEvent { public Vec2 Position; }
 
-    public struct MapSwitchedEvent { public MapId From; public MapId To; }
+    /// <summary>位面切换（组内两面互换，或关卡流程进入新的一组）。只由 PlaneSystem 发布。</summary>
+    public struct PlaneSwitchedEvent { public PlaneId From; public PlaneId To; }
 
-    public struct MagazineReloadedEvent { public int Ammo; public int Capacity; }
-
-    public struct ShotFiredEvent { public MapId Form; public Vec2 Origin; public Vec2 Direction; public int AmmoLeft; }
-
-    /// <summary>弹匣打空。只有翻滚能重新装填。</summary>
-    public struct AmmoEmptiedEvent { }
-
-    public struct MonsterSpawnedEvent { public int MonsterId; public bool Penalty; }
-
-    public struct MonsterDamagedEvent { public int MonsterId; public Vec2 Position; public float Amount; public DamageSource Source; }
-
-    public struct MonsterDiedEvent { public int MonsterId; public Vec2 Position; }
+    /// <summary>
+    /// 进入某个位面后的环境结算已完成（清减速 / 鲨鱼生成销毁 / 困意计时归零 / 岩浆喷发等）。
+    /// 开局和每次成功翻滚各发布一次，由 EnvironmentSystem 发布。
+    /// </summary>
+    public struct PlaneEnteredEvent { public PlaneId Plane; }
 
     public struct PlayerDamagedEvent { public float Amount; public float Hp; public DamageSource Source; }
 
@@ -60,15 +55,8 @@ namespace Turn.Core
     /// <summary>切到火山地图：岩浆喷发一次（范围内怪物各受一次伤害），随后岩浆消失。</summary>
     public struct LavaEruptedEvent { public int Hits; public float Damage; }
 
-    public struct PenaltySpawnedEvent { public int Count; }
-
     public struct ShockwaveTriggeredEvent { public Vec2 Position; public float Radius; public int Hits; }
 
-    public struct OrbCollectedEvent { public int Value; }
-
-    public struct XpChangedEvent { public int Xp; public int XpToNext; public int Level; }
-
-    public struct LeveledUpEvent { public int Level; }
-
-    public struct UpgradeAppliedEvent { public UpgradeId Id; public int Level; }
+    /// <summary>天降危险的预警（例：梦境的老板来电）。表现层据此画落点圈；Delay 秒后在 Position 结算。</summary>
+    public struct HazardWarnedEvent { public Vec2 Position; public float Radius; public float Delay; }
 }

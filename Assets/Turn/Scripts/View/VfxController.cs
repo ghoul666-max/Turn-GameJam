@@ -57,7 +57,7 @@ namespace Turn.View
                 portal.SetLifetime(Mathf.Max(0.3f, _ctx.Config.Roll.Duration + 0.15f));
                 portal.Play(ViewMath.ToWorld(evt.Position), 1f, player);
             }
-            if (hud != null) hud.FlashScreen(ViewMath.MapColor(evt.ToMap));
+            if (hud != null) hud.FlashScreen(ViewMath.MapColor(evt.ToPlane));
         }
 
         private void OnShockwave(ShockwaveTriggeredEvent evt)

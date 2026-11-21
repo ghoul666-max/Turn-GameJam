@@ -14,9 +14,18 @@ Game Jam 回合制 2D 项目（Unity 6 / URP 2D）。
 2. 首次导入会重新生成 `Library/`（已通过 `.gitignore` 排除，不进入版本库）。
 3. 打开主场景 `Assets/Turn/Scenes/TurnGame.unity` 后直接 Play。
 
+## 文档
+
+| 文件 | 内容 |
+| --- | --- |
+| [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md) | AI 协作硬规则：三层架构、写入所有权、翻滚时序、文件归属 |
+| [`docs/AI-HANDOFF.md`](docs/AI-HANDOFF.md) | 当前进度交接：已完成 / 空实现 / 下一步 / 易踩的坑 |
+
 ## 目录结构
 
 ```
+CLAUDE.md / AGENTS.md   AI 协作规则（两份同内容）
+docs/                   交接与设计文档
 Assets/
   Turn/            回合制玩法：Scripts、Prefabs、Art、Animations、Resources、Scenes
     Scenes/TurnGame.unity      主玩法场景
@@ -25,9 +34,9 @@ Assets/
   Scenes/          模板示例场景（SampleScene.unity）
   Settings/        URP / 输入 / 渲染等工程设置
   Welcome/         2D 模板欢迎页资源
-  _backup_*/       手工备份的 Prefab 快照（不参与构建）
 Packages/          Package 清单与锁文件
 ProjectSettings/   Unity 工程配置（版本、输入、物理、质量等）
+_backup_20261117/  手工备份的 Prefab / 脚本快照（不参与构建）
 ```
 
 ## 构建场景顺序

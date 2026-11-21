@@ -146,10 +146,10 @@ namespace Turn.View
             if (levelText != null) levelText.text = "Lv " + prog.Level + "   " + prog.Xp + " / " + prog.XpToNext;
 
             // MapUI
-            MapId map = _ctx.Map.Active;
+            PlaneId map = _ctx.Plane.Active;
             if (mapText != null)
             {
-                mapText.text = "当前地图：" + MapIds.DisplayName(map) + (map == MapId.Ocean ? "   鲨鱼 ×" + _ctx.Sharks.Active.Count : "");
+                mapText.text = "当前地图：" + PlaneIds.DisplayName(map) + (map == PlaneId.Ocean ? "   鲨鱼 ×" + _ctx.Sharks.Active.Count : "");
                 mapText.color = ViewMath.MapColor(map);
             }
             float cd = _ctx.Roll.EffectiveCooldown;
@@ -165,7 +165,7 @@ namespace Turn.View
             {
                 rollText.text = p.RollCooldownLeft > 0f
                     ? "翻滚冷却 " + p.RollCooldownLeft.ToString("0.0") + "s"
-                    : "翻滚就绪 [Space]  → " + MapIds.DisplayName(MapIds.Other(map)) + "  +" + _ctx.Config.Penalty.Count + " 怪";
+                    : "翻滚就绪 [Space]  → " + PlaneIds.DisplayName(PlaneIds.Other(map)) + "  +" + _ctx.Config.Penalty.Count + " 怪";
             }
             if (terrainText != null) terrainText.text = "脚下：" + TerrainName(p.Terrain);
             if (statsText != null)

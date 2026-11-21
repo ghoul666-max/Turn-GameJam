@@ -17,13 +17,13 @@ namespace Turn.View
         [SerializeField] private Color shallowColor = new Color(0.4f, 0.9f, 1f, 0.9f);
 
         [Header("运行时只读")]
-        [SerializeField] private MapId activeMap;
+        [SerializeField] private PlaneId activeMap;
         [SerializeField] private TerrainType currentTerrain;
 
         private ITurnContext _ctx;
 
         public TerrainType CurrentTerrain { get { return currentTerrain; } }
-        public MapId ActiveMap { get { return activeMap; } }
+        public PlaneId ActiveMap { get { return activeMap; } }
 
         public void Bind(ITurnContext ctx)
         {
@@ -39,7 +39,7 @@ namespace Turn.View
         private void LateUpdate()
         {
             if (_ctx == null) return;
-            activeMap = _ctx.Map.Active;
+            activeMap = _ctx.Plane.Active;
             currentTerrain = _ctx.Terrain.Sample(_ctx.Player.State.Position);
 
             if (marker == null) return;

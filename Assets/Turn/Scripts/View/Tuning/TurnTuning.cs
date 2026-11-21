@@ -70,8 +70,8 @@ namespace Turn.View
             if (weapon != null)
             {
                 d.weapon = Copy(weapon.Settings);
-                d.fireball = ProjectileTuning.From(weapon.GetForm(MapId.Volcano));
-                d.harpoon = ProjectileTuning.From(weapon.GetForm(MapId.Ocean));
+                d.fireball = ProjectileTuning.From(weapon.GetForm(PlaneId.Volcano));
+                d.harpoon = ProjectileTuning.From(weapon.GetForm(PlaneId.Ocean));
             }
             if (spawn != null)
             {
@@ -91,8 +91,8 @@ namespace Turn.View
             if (player != null) c.Player = player.ToConfig();
             if (roll != null) c.Roll = roll.ToConfig();
             if (weapon != null) c.Weapon = weapon.ToConfig();
-            if (fireball != null) fireball.ApplyTo(c.Forms[(int)MapId.Volcano]);
-            if (harpoon != null) harpoon.ApplyTo(c.Forms[(int)MapId.Ocean]);
+            if (fireball != null) fireball.ApplyTo(c.Forms[(int)PlaneId.Volcano]);
+            if (harpoon != null) harpoon.ApplyTo(c.Forms[(int)PlaneId.Ocean]);
             if (monster != null) c.Monster = monster.ToConfig();
             if (shark != null) c.Shark = shark.ToConfig();
             if (spawn != null) c.Spawn = spawn.ToConfig();

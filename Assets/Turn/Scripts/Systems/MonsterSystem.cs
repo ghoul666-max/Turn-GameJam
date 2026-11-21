@@ -8,7 +8,7 @@ namespace Turn.Systems
     /// 普通怪物。跨地图保留的实体：地图切换时这里什么都不做 —— 不销毁、不重建、不改坐标 / 血量 / Buff。
     /// （皮肤是纯表现，由 MonsterController 按当前地图切换。）
     /// 每步：移出死亡实体 → 直线追踪玩家 → 互相挤开 → 统一边界 → 接触伤害 → 灼烧。
-    /// 岩浆伤害不在这里：切到火山时由 LavaSystem 一次性结算。
+    /// 岩浆伤害不在这里：切到火山时由 EnvironmentSystem 一次性结算。
     /// 注意：怪物在浅水区没有任何回血逻辑（这是规则，不是遗漏）。
     /// 位置 / 存活 / 计时 / 灼烧字段只有这里能写；生命由 CombatSystem 写。
     /// </summary>
@@ -114,7 +114,7 @@ namespace Turn.Systems
                     _ctx.Combat.DamagePlayer(_config.ContactDamage, DamageSource.Monster);
                 }
 
-                // 5) 脚下地形（只记录；岩浆伤害由 LavaSystem 在切图时一次性结算，浅水什么都不做）
+                // 5) 脚下地形（只记录；岩浆伤害由 EnvironmentSystem 在切图时一次性结算，浅水什么都不做）
                 m.Terrain = _ctx.Terrain.Sample(m.Position);
 
                 // 6) 灼烧（持续 Buff，跨地图保留）
@@ -202,6 +202,19 @@ namespace Turn.Systems
                 best = m;
             }
             return best;
+        }
+
+        // ---------------- 翻滚第 6 步（契约期空实现，程序B 实现） ----------------
+
+        public void ShiftAll(Vec2 offset)
+        {
+            // TODO(程序B)：所有存活怪物 Position += offset，再 Clamp 进边界（保持与玩家的相对位置，包围阵型不散）。
+        }
+
+        public void SwapPlane(PlaneId from, PlaneId to)
+        {
+            // TODO(程序B)：按「切图对应」表换怪物配置与 AI、打断冲锋回 Idle、清除只属于旧位面的单位（虫崽）。
+            // 皮肤目前由表现层 EntityViewSync 收到 PlaneSwitchedEvent 后切换。
         }
     }
 }

@@ -27,7 +27,11 @@ namespace Turn.View
             if (weapon != null)
             {
                 c.Weapon = weapon.Settings.ToConfig();
-                for (int i = 0; i < MapIds.Count; i++) c.Forms[i] = weapon.GetForm((MapId)i).ToConfig((MapId)i);
+                for (int i = 0; i < PlaneIds.Count; i++)
+                {
+                    WeaponFormSettings form = weapon.GetForm((PlaneId)i);
+                    c.Forms[i] = form != null ? form.ToConfig((PlaneId)i) : null; // 没做的位面留空，WeaponSystem 会补默认值
+                }
             }
             else Debug.LogError("[Turn] GameManager 没有引用 WeaponController。");
 
@@ -39,9 +43,9 @@ namespace Turn.View
                 c.Environment = map.Environment.ToConfig();
                 Rect rect = bounds != null ? bounds.Rect : new Rect(-20f, -12f, 40f, 24f);
                 map.SyncTerrainShape(rect); // 水池与岩浆池一一对应（大小、形状完全一样）
-                for (int i = 0; i < MapIds.Count; i++)
+                for (int i = 0; i < PlaneIds.Count; i++)
                 {
-                    MapId id = (MapId)i;
+                    PlaneId id = (PlaneId)i;
                     TerrainGrid grid = map.GetTerrain(id);
                     c.Terrain[i] = grid != null
                         ? grid.ToData(rect, map.TerrainCellSize)

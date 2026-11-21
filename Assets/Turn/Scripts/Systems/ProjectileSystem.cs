@@ -25,7 +25,7 @@ namespace Turn.Systems
             _upgrades = upgrades;
         }
 
-        public ProjectileEntity Spawn(MapId form, Vec2 position, Vec2 velocity, float radius, float damage, int pierce, float maxDistance)
+        public ProjectileEntity Spawn(PlaneId form, Vec2 position, Vec2 velocity, float radius, float damage, int pierce, float maxDistance)
         {
             var p = new ProjectileEntity();
             p.Id = _nextId++;
@@ -39,6 +39,11 @@ namespace Turn.Systems
             p.Alive = true;
             _active.Add(p);
             return p;
+        }
+
+        public void OnPlaneSwitched(PlaneId from, PlaneId to)
+        {
+            // TODO(程序B)：已飞出的投射物保留、存活时间 ×1.6（B19 再加）、之后只对发射时所在位面的单位生效。
         }
 
         public void Tick(float dt)

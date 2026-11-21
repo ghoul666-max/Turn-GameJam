@@ -16,8 +16,8 @@ namespace Turn.Systems
     {
         private readonly ITurnContext _ctx;
         private readonly WeaponConfig _config;
-        private readonly WeaponFormConfig[] _forms = new WeaponFormConfig[MapIds.Count];
-        private readonly IWeaponForm[] _behaviors = new IWeaponForm[MapIds.Count];
+        private readonly WeaponFormConfig[] _forms = new WeaponFormConfig[PlaneIds.Count];
+        private readonly IWeaponForm[] _behaviors = new IWeaponForm[PlaneIds.Count];
         private readonly UpgradeConfig _upgrades;
         private bool _emptyAnnounced;
 
@@ -29,11 +29,11 @@ namespace Turn.Systems
             _ctx = ctx;
             _config = config;
             _upgrades = upgrades;
-            for (int i = 0; i < MapIds.Count; i++)
+            for (int i = 0; i < PlaneIds.Count; i++)
             {
-                MapId map = (MapId)i;
+                PlaneId map = (PlaneId)i;
                 WeaponFormConfig form = forms != null && i < forms.Length ? forms[i] : null;
-                _forms[i] = form ?? new WeaponFormConfig { Map = map, Name = MapIds.DisplayName(map) + "武器" };
+                _forms[i] = form ?? new WeaponFormConfig { Map = map, Name = PlaneIds.DisplayName(map) + "武器" };
                 _behaviors[i] = WeaponForms.Create(map);
             }
 
@@ -41,7 +41,7 @@ namespace Turn.Systems
             FireTimer = config.FireInterval;
         }
 
-        public MapId Form { get { return _ctx.Map.Active; } }
+        public PlaneId Form { get { return _ctx.Plane.Active; } }
         public WeaponFormConfig CurrentForm { get { return _forms[(int)Form]; } }
 
         /// <summary>容量 = 基础 + 扩容词条等级 × 每级增加（两种形态共用）。</summary>

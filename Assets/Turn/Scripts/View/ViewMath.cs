@@ -35,9 +35,18 @@ namespace Turn.View
             return new Vec2(v.x, v.y);
         }
 
-        public static Color MapColor(MapId map)
+        public static Color MapColor(PlaneId map)
         {
-            return map == MapId.Volcano ? new Color(1f, 0.45f, 0.2f, 1f) : new Color(0.3f, 0.75f, 1f, 1f);
+            switch (map)
+            {
+                case PlaneId.Volcano: return new Color(1f, 0.45f, 0.2f, 1f);
+                case PlaneId.Ocean: return new Color(0.3f, 0.75f, 1f, 1f);
+                case PlaneId.Office: return new Color(0.82f, 0.84f, 0.88f, 1f);
+                case PlaneId.Dream: return new Color(0.95f, 0.5f, 0.9f, 1f);
+                case PlaneId.Primal: return new Color(0.75f, 0.6f, 0.35f, 1f);
+                case PlaneId.Future: return new Color(0.55f, 0.45f, 1f, 1f);
+                default: return Color.white;
+            }
         }
     }
 }

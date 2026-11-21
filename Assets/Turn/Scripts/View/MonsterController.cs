@@ -41,7 +41,7 @@ namespace Turn.View
     ///   · 按实体 Id 同步位置、朝向、血条、灼烧标记，受击闪白；
     ///   · 皮肤切换：只切换 VolcanoSkin / OceanSkin 两个子节点的显隐，不创建新实例；
     ///   · 死亡：模拟层已移除该实体，这里播放 0.2 秒淡出后 Destroy 自身。
-    /// 追击、受伤、灼烧、边界在 MonsterSystem / CombatSystem 里；岩浆一次性伤害在 LavaSystem 里。
+    /// 追击、受伤、灼烧、边界在 MonsterSystem / CombatSystem 里；岩浆一次性伤害在 EnvironmentSystem 里。
     /// </summary>
     public sealed class MonsterController : MonoBehaviour
     {
@@ -65,7 +65,7 @@ namespace Turn.View
         [SerializeField] private float hp;
         [SerializeField] private bool burning;
         [SerializeField] private bool penaltySpawned;
-        [SerializeField] private MapId skin;
+        [SerializeField] private PlaneId skin;
 
         private Color _volcanoColor = Color.white;
         private Color _oceanColor = Color.white;
@@ -75,7 +75,7 @@ namespace Turn.View
         public MonsterSettings Settings { get { return settings; } }
         public int EntityId { get { return entityId; } }
 
-        public void Init(int id, MapId map)
+        public void Init(int id, PlaneId map)
         {
             entityId = id;
             if (volcanoRenderer != null) _volcanoColor = volcanoRenderer.color;
@@ -84,11 +84,11 @@ namespace Turn.View
         }
 
         /// <summary>只改外观：火山显示 VolcanoSkin，海洋显示 OceanSkin。</summary>
-        public void SetSkin(MapId map)
+        public void SetSkin(PlaneId map)
         {
             skin = map;
-            if (volcanoSkin != null) volcanoSkin.SetActive(map == MapId.Volcano);
-            if (oceanSkin != null) oceanSkin.SetActive(map == MapId.Ocean);
+            if (volcanoSkin != null) volcanoSkin.SetActive(map == PlaneId.Volcano);
+            if (oceanSkin != null) oceanSkin.SetActive(map == PlaneId.Ocean);
         }
 
         public void Sync(MonsterEntity e)
