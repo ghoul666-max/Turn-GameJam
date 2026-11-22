@@ -149,6 +149,8 @@ namespace Turn.View
         {
             if (_ctx == null) return;
 
+            if (TurnInput.ObstacleDebugPressed) Obstacle.ShowDebug = !Obstacle.ShowDebug;
+
             // 数值面板打开时：暂停模拟、屏蔽玩法输入（面板里打字不会触发翻滚 / 选升级）
             if (_tuning != null && _tuning.IsOpen)
             {

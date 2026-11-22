@@ -67,6 +67,20 @@ namespace Turn.Core
         Solid = Units | Projectiles,
     }
 
+    /// <summary>遮挡物的判定形状。矩形是轴对齐的（不随物体旋转）。</summary>
+    public enum ObstacleShape : byte { Circle = 0, Box = 1 }
+
+    /// <summary>
+    /// 玩家移速修正的来源。每个来源一个倍率（1 = 不影响），多个来源相乘。
+    /// 只能在末尾追加。
+    /// </summary>
+    public enum PlayerSpeedSource { DreamSlow = 0 }
+
+    public static class PlayerSpeedSources
+    {
+        public const int Count = 1;
+    }
+
     /// <summary>地形类型。存进网格时按 byte 存。</summary>
     public enum TerrainType : byte { Normal = 0, Lava = 1, ShallowWater = 2 }
 

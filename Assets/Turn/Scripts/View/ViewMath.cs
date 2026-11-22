@@ -10,6 +10,7 @@ namespace Turn.View
         public const int GroundOrder = -100;
         public const int TerrainOrder = -90;
         public const int DecorOrder = -80;
+        public const int ObstacleOrder = -75;
         public const int BoundsOrder = -70;
         public const int OrbOrder = -20;
         public const int ShadowOrder = -10;
@@ -19,6 +20,7 @@ namespace Turn.View
         public const int ProjectileOrder = 20;
         public const int HpBarOrder = 25;
         public const int VfxOrder = 30;
+        public const int ObstacleDebugOrder = 40;
 
         public static Vector3 ToWorld(Vec2 v)
         {

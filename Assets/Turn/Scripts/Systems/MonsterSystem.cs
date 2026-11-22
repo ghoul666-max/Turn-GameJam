@@ -41,6 +41,8 @@ namespace Turn.Systems
             var m = new MonsterEntity();
             m.Id = _nextId++;
             m.Position = _ctx.Bounds.Clamp(position, _config.Radius); // 生成点也必须在边界内
+            // 不生成在遮挡物里（程序A 补）
+            m.Position = _ctx.Bounds.Clamp(_ctx.Obstacles.ResolveMove(m.Position, m.Position, _config.Radius, ObstacleMask.Units), _config.Radius);
             m.Form = _ctx.Plane.Active;
             m.MaxHp = MaxHpFor(m.Form);
             m.Hp = m.MaxHp;
@@ -91,11 +93,14 @@ namespace Turn.Systems
             // 2) 互相挤开（数量在一两百以内，两两检测足够便宜）
             Separate();
 
-            // 3) 统一边界
+            // 3) 遮挡物 + 统一边界（程序A 补）。没动也要过一次：切位面后站在新位面遮挡物里的怪会被推到外侧。
+            //    这里只做“推出去 / 贴边滑动”，没有寻路：绕障碍属于怪物 AI，由程序B 决定要不要做。
             for (int i = 0; i < _active.Count; i++)
             {
                 MonsterEntity m = _active[i];
-                if (m.Alive) m.Position = _ctx.Bounds.Clamp(m.Position, _config.Radius);
+                if (!m.Alive) continue;
+                Vec2 resolved = _ctx.Obstacles.ResolveMove(m.Position, m.Position, _config.Radius, ObstacleMask.Units);
+                m.Position = _ctx.Bounds.Clamp(resolved, _config.Radius);
             }
 
             float interval = MathF.Max(0.02f, _env.DotTickInterval);
@@ -213,7 +218,9 @@ namespace Turn.Systems
             {
                 MonsterEntity m = _active[i];
                 if (!m.Alive) continue;
-                m.Position = _ctx.Bounds.Clamp(m.Position + offset, _config.Radius);
+                // 平移后落在新位面的遮挡物里就推到外侧（程序A 补）
+                Vec2 shifted = _ctx.Obstacles.ResolveMove(m.Position, m.Position + offset, _config.Radius, ObstacleMask.Units);
+                m.Position = _ctx.Bounds.Clamp(shifted, _config.Radius);
                 m.Terrain = _ctx.Terrain.Sample(m.Position);
             }
         }

@@ -7,7 +7,12 @@ namespace Turn.View
     [Serializable]
     public sealed class MonsterSettings
     {
+        [Tooltip("火山 / 海洋之外、还没单独配置的位面的怪物最大生命")]
         [Min(1f)] public float maxHp = 30f;
+        [Tooltip("火山形态（石头人）的最大生命。切位面时血量按比例换算。")]
+        [Min(1f)] public float volcanoMaxHp = 60f;
+        [Tooltip("海洋形态（安康鱼）的最大生命。切位面时血量按比例换算。")]
+        [Min(1f)] public float oceanMaxHp = 45f;
         public float moveSpeed = 2f;
         [Tooltip("接触伤害（每次）")]
         public float contactDamage = 8f;
@@ -25,6 +30,9 @@ namespace Turn.View
             return new MonsterConfig
             {
                 MaxHp = maxHp,
+                // 旧的数值面板存档里没有这两个字段时读出来是 0，回退到默认值
+                VolcanoMaxHp = volcanoMaxHp > 0f ? volcanoMaxHp : 60f,
+                OceanMaxHp = oceanMaxHp > 0f ? oceanMaxHp : 45f,
                 Speed = moveSpeed,
                 ContactDamage = contactDamage,
                 ContactInterval = contactInterval,

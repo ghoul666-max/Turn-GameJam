@@ -27,6 +27,8 @@ namespace Turn.View
         public Vector2 Center { get { return center; } }
         public Vector2 Size { get { return size; } }
         public Rect Rect { get { return new Rect(center - size * 0.5f, size); } }
+        /// <summary>边界线的材质（遮挡物调试线复用它）。</summary>
+        public Material DebugLineMaterial { get { return boundsDebug != null ? boundsDebug.sharedMaterial : null; } }
 
         public BoundsRect ToData()
         {

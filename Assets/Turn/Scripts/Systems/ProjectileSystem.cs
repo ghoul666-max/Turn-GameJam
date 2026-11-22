@@ -68,6 +68,7 @@ namespace Turn.Systems
                 ProjectileEntity p = _active[i];
                 if (!p.Alive) continue;
 
+                Vec2 from = p.Position;
                 Vec2 step = p.Velocity * dt;
                 p.Position += step;
                 p.DistanceLeft -= step.Magnitude;
@@ -79,6 +80,15 @@ namespace Turn.Systems
                 }
 
                 if (p.Form != _ctx.Plane.Active) continue;
+
+                // 遮挡物（实体 / 只挡弹）：这一步扫过的线段碰到就消失（程序A 补）。只检查当前位面的子弹，
+                // 隐藏在另一层的子弹等切回来后再检查。
+                if (_ctx.Obstacles.SegmentBlocked(from, p.Position, p.Radius, ObstacleMask.Projectiles))
+                {
+                    p.Alive = false;
+                    continue;
+                }
+
                 _ctx.Monsters.QueryCircle(p.Position, p.Radius, _hits);
                 for (int k = 0; k < _hits.Count; k++)
                 {

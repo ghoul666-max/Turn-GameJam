@@ -20,7 +20,9 @@
             "initialAmmo": -1,
             "fireInterval": 0.6000000238418579,
             "targetRange": 8.0,
-            "attackRange": 11.0
+            "attackRange": 11.0,
+            "projectileLifetime": 3.0,
+            "planeSwitchLifetimeMultiplier": 1.600000023841858
         },
         "fireball": {
             "projectileSpeed": 9.0,
@@ -88,7 +90,9 @@
             "initialAmmo": -1,
             "fireInterval": 0.6000000238418579,
             "targetRange": 8.0,
-            "attackRange": 11.0
+            "attackRange": 11.0,
+            "projectileLifetime": 3.0,
+            "planeSwitchLifetimeMultiplier": 1.600000023841858
         },
         "fireball": {
             "projectileSpeed": 9.0,

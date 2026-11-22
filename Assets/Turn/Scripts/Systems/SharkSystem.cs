@@ -8,6 +8,7 @@ namespace Turn.Systems
     /// 鲨鱼：海洋专属威胁。它的存在完全由当前激活地图决定，不跟随地图切换做空间传送：
     ///   海洋激活且没有鲨鱼 → 生成 SpawnCount 条；火山激活 → 全部直接销毁（实体丢弃，表现层 Destroy GameObject）。
     /// 没有生命值、不在 IMonsterSystem 里，所以武器不会索敌它、子弹 / 冲击波不会打中它，也不参与死亡与经验掉落。
+    /// 移动会被遮挡物挡住（贴边滑动），和玩家、怪物一样。
     /// 接触攻击不分敌我：同一口咬下去，玩家（经 CombatSystem，检查无敌帧）和接触到的普通怪物都会受伤；鲨鱼之间互不伤害。
     /// </summary>
     public sealed class SharkSystem : ISharkSystem
@@ -58,7 +59,8 @@ namespace Turn.Systems
                 Vec2 to = player.Position - s.Position;
                 float dist = to.Magnitude;
                 s.Velocity = dist > 0.05f ? to / dist * _config.Speed : Vec2.Zero;
-                s.Position = _ctx.Bounds.Clamp(s.Position + s.Velocity * dt, _config.Radius);
+                Vec2 next = _ctx.Obstacles.ResolveMove(s.Position, s.Position + s.Velocity * dt, _config.Radius, ObstacleMask.Units);
+                s.Position = _ctx.Bounds.Clamp(next, _config.Radius);
 
                 // 接触攻击：冷却好了且咬得到任何东西时，一口同时结算玩家与普通怪物
                 if (s.AttackTimer > 0f) s.AttackTimer -= dt;

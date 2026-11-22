@@ -53,6 +53,7 @@ namespace Turn.View
                     var points = new List<Vec2>();
                     map.CollectSpawnPoints(id, points);
                     c.SpawnPoints[i].AddRange(points);
+                    map.CollectObstacles(id, c.Obstacles[i]);
                 }
             }
             else Debug.LogError("[Turn] GameManager 没有引用 MapManager。");

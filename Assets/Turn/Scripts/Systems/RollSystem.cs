@@ -67,7 +67,7 @@ namespace Turn.Systems
             }
 
             // 策划书「翻滚时序」。步骤编号与策划书一致；第 4 步（惩罚刷怪）暂定挪到第 6b 步之后，
-            // 让惩罚怪直接按新位面生成（待策划确认）。第 7 步策划书缺失。
+            // 让惩罚怪直接按新位面生成（11/21 已确认）。第 7 步策划书缺失。
 
             // 1) 无敌帧
             float invincible = EffectiveInvincibleTime;

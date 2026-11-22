@@ -100,6 +100,8 @@ namespace Turn.Core
     /// </summary>
     public interface IObstacleSystem
     {
+        /// <summary>当前激活位面的全部遮挡物（只读；调试显示 / AI 绕路用）。</summary>
+        IReadOnlyList<ObstacleData> Active { get; }
         /// <summary>半径为 radius 的单位从 from 走到 to，被 mask 对应的遮挡物挡住后实际到达的位置（贴边滑动）。</summary>
         Vec2 ResolveMove(Vec2 from, Vec2 to, float radius, ObstacleMask mask);
         /// <summary>半径为 radius 的东西沿线段 a → b 移动时是否会碰到 mask 对应的遮挡物。</summary>
@@ -116,8 +118,14 @@ namespace Turn.Core
         void Setup();
         /// <summary>每帧由输入层调用；长度会被限制在 1 以内。</summary>
         void SetMoveInput(Vec2 input);
-        /// <summary>当前生效的移动速度（等级基础速度 × 环境修正，如梦境减速层）。</summary>
+        /// <summary>当前生效的移动速度 = 等级基础速度 × 所有来源的移速倍率之积。</summary>
         float MoveSpeed { get; }
+        /// <summary>所有来源的移速倍率之积（1 = 不受影响）。</summary>
+        float SpeedMultiplier { get; }
+        /// <summary>设置某个来源的移速倍率（1 = 不影响，0.6 = 减速 40%）。同一来源重复设置会覆盖。</summary>
+        void SetSpeedModifier(PlayerSpeedSource source, float multiplier);
+        /// <summary>清除所有移速修正（例：进入工位清除全部减速层）。</summary>
+        void ClearSpeedModifiers();
         /// <summary>
         /// 等级成长写入的基础属性（程序B 的 ProgressionSystem 升级时调用）。
         /// 最大生命提高时，当前生命同步加上提高的部分。
@@ -191,7 +199,7 @@ namespace Turn.Core
     /// 位面环境机制（程序A）：岩浆、浅水、困意、梦境减速、老板来电……按当前位面挂规则。
     /// 进入位面时由 RollSystem / SessionSystem 调用 OnPlaneEntered；持续效果在 Tick 里结算。
     /// 对玩家 / 怪物的伤害与回血一律经 ICombatSystem。
-    /// 当前实现仍是白模规则：切到火山时岩浆喷发一次后消失（策划书改为持续伤害，待确认后在 M1 改）。
+    /// 岩浆规则保持白模做法（11/21 确认）：切到火山时喷发一次、伤害站在岩浆里的怪物，随后消失。
     /// </summary>
     public interface IEnvironmentSystem
     {

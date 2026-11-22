@@ -66,6 +66,8 @@ namespace Turn.Core
         public readonly TerrainGridData[] Terrain = new TerrainGridData[PlaneIds.Count];
         /// <summary>按 (int)PlaneId 下标：每个位面的刷怪点（世界坐标）。</summary>
         public readonly List<Vec2>[] SpawnPoints = NewPlaneLists();
+        /// <summary>按 (int)PlaneId 下标：每个位面的遮挡物（世界坐标）。</summary>
+        public readonly List<ObstacleData>[] Obstacles = NewObstacleLists();
 
         private static List<Vec2>[] NewPlaneLists()
         {
@@ -73,6 +75,28 @@ namespace Turn.Core
             for (int i = 0; i < lists.Length; i++) lists[i] = new List<Vec2>();
             return lists;
         }
+
+        private static List<ObstacleData>[] NewObstacleLists()
+        {
+            var lists = new List<ObstacleData>[PlaneIds.Count];
+            for (int i = 0; i < lists.Length; i++) lists[i] = new List<ObstacleData>();
+            return lists;
+        }
+    }
+
+    /// <summary>
+    /// 一个遮挡物的判定数据（世界坐标）。开局由表现层的 Obstacle 组件转换而来，运行时只读。
+    /// 圆：Center + Radius；矩形：Center ± HalfSize（轴对齐）。
+    /// </summary>
+    public struct ObstacleData
+    {
+        public ObstacleShape Shape;
+        public Vec2 Center;
+        public float Radius;
+        public Vec2 HalfSize;
+        public ObstacleMask Mask;
+
+        public bool Blocks(ObstacleMask mask) { return (Mask & mask) != 0; }
     }
 
     /// <summary>

@@ -163,6 +163,9 @@ namespace Turn.View
                 _dirty = true;
             }
 
+            bool showObstacles = GUILayout.Toggle(Obstacle.ShowDebug, " 显示遮挡物判定框（调试，F2 同效；红 = 实体，黄 = 只挡人，蓝 = 只挡弹；不保存）");
+            if (showObstacles != Obstacle.ShowDebug) Obstacle.ShowDebug = showObstacles;
+
             GUILayout.BeginHorizontal();
             if (standalone)
             {
@@ -237,7 +240,9 @@ namespace Turn.View
             if (Section("monster", "普通怪物"))
             {
                 MonsterSettings m = d.monster;
-                m.maxHp = F("m.hp", "最大生命", m.maxHp, 1f, 500f);
+                m.volcanoMaxHp = F("m.hpVolcano", "火山怪最大生命（石头人）", m.volcanoMaxHp, 1f, 500f);
+                m.oceanMaxHp = F("m.hpOcean", "海洋怪最大生命（安康鱼）", m.oceanMaxHp, 1f, 500f);
+                m.maxHp = F("m.hp", "其他位面怪最大生命", m.maxHp, 1f, 500f);
                 m.moveSpeed = F("m.speed", "移动速度", m.moveSpeed, 0f, 10f);
                 m.contactDamage = F("m.dmg", "接触伤害", m.contactDamage, 0f, 100f);
                 m.contactInterval = F("m.interval", "接触伤害间隔（秒）", m.contactInterval, 0.05f, 5f);

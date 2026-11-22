@@ -10,7 +10,7 @@ namespace Turn.Systems
     ///   · 火山被激活（开局 / 翻滚切过来）的那一刻：站在岩浆格里的普通怪物各受一次 LavaHitDamage；
     ///   · 结算完岩浆立刻消失：TerrainSystem 之后把岩浆格当作普通地面；
     ///   · 其他位面：什么都不做。玩家脚下的岩浆 / 浅水结算仍在 PlayerSystem 里。
-    /// M1 / M2 待做：岩浆持续伤害（待策划确认）、工位困意、梦境减速层、老板来电。
+    /// 岩浆规则 11/21 确认保持不变（策划书 10/s 持续是笔误）。M2 待做：工位困意、梦境减速层、老板来电。
     /// </summary>
     public sealed class EnvironmentSystem : IEnvironmentSystem
     {

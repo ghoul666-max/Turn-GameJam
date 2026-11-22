@@ -32,6 +32,20 @@ namespace Turn.View
             }
         }
 
+        /// <summary>F2：切换遮挡物判定框显示（调试）。</summary>
+        public static bool ObstacleDebugPressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                return kb != null && kb.f2Key.wasPressedThisFrame;
+#else
+                return Input.GetKeyDown(KeyCode.F2);
+#endif
+            }
+        }
+
         public static bool RollPressed
         {
             get

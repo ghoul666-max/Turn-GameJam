@@ -43,9 +43,9 @@ namespace Turn.Core
     {
         public float MaxHp = 30f;
         public float Speed = 2f;
-        /// <summary>火山石头人的最大生命；Inspector 接入由程序A在 TurnConfigReader 完成。</summary>
+        /// <summary>火山石头人的最大生命（Inspector：MonsterPrefab 的 MonsterSettings.volcanoMaxHp；F1 面板可调）。</summary>
         public float VolcanoMaxHp = 60f;
-        /// <summary>海洋安康鱼的最大生命；Inspector 接入由程序A在 TurnConfigReader 完成。</summary>
+        /// <summary>海洋安康鱼的最大生命（Inspector：MonsterPrefab 的 MonsterSettings.oceanMaxHp；F1 面板可调）。</summary>
         public float OceanMaxHp = 45f;
 
         public float ContactDamage = 8f;

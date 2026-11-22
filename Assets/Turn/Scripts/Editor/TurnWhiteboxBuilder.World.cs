@@ -286,6 +286,10 @@ namespace Turn.EditorTools
             EditorUtility.SetDirty(volcano.Grid);
             EditorUtility.SetDirty(ocean.Grid);
 
+            // ---- 其他 4 个位面的空 Root + 火山 / 海洋的白模遮挡物 ----
+            AddMissingPlaneRoots(mapManager, rect);
+            PlaceWhiteboxObstacles(mapManager);
+
             mapManager.AlignRoots();
             mapManager.Apply(PlaneId.Volcano); // 场景里同样只有一张图是激活的
             ApplyMaterialInScene(scene);
@@ -576,6 +580,250 @@ namespace Turn.EditorTools
             rt.pivot = new Vector2(0f, 0.5f);
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
+        }
+
+        // ================================================================
+        // M1：补齐空位面 + 白模遮挡物（可以直接在现有场景上执行，不重建场景、不动其他参数）
+        // ================================================================
+
+        private static readonly PlaneId[] ExtraPlanes = { PlaneId.Office, PlaneId.Dream, PlaneId.Primal, PlaneId.Future };
+        private static readonly string[] ExtraPlaneSlots = { "office", "dream", "primal", "future" };
+
+        [MenuItem("Turn/M1 · 补齐工位 / 梦境 / 原始 / 未来 4 个空位面（不重建场景）", false, 40)]
+        public static void AddMissingPlanesMenu()
+        {
+            MapManager map;
+            WorldBounds bounds;
+            if (!FindSceneParts(out map, out bounds)) return;
+            PrepareSharedAssets();
+            int added = AddMissingPlaneRoots(map, bounds.Rect);
+            map.AlignRoots();
+            map.Apply(PlaneId.Volcano);
+            EditorUtility.SetDirty(map);
+            EditorSceneManager.MarkSceneDirty(map.gameObject.scene);
+            Debug.Log(added > 0
+                ? "[Turn] 已补齐 " + added + " 个空位面 Root（地面 + 边框 + 刷怪点），并拖进 MapManager。记得保存场景。"
+                : "[Turn] 4 个位面的 Root 都已存在，没有改动。");
+        }
+
+        [MenuItem("Turn/M1 · 在火山 / 海洋摆放白模遮挡物（不重建场景，会替换上次生成的白模遮挡物）", false, 41)]
+        public static void PlaceWhiteboxObstaclesMenu()
+        {
+            MapManager map;
+            WorldBounds bounds;
+            if (!FindSceneParts(out map, out bounds)) return;
+            PrepareSharedAssets();
+            int count = PlaceWhiteboxObstacles(map);
+            EditorUtility.SetDirty(map);
+            EditorSceneManager.MarkSceneDirty(map.gameObject.scene);
+            Debug.Log("[Turn] 已在火山 / 海洋摆放 " + count + " 个白模遮挡物（VolcanoObstacles / OceanObstacles）。记得保存场景。F2 可在运行时显示判定框。");
+        }
+
+        private static bool FindSceneParts(out MapManager map, out WorldBounds bounds)
+        {
+            map = null;
+            bounds = null;
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                Debug.LogWarning("[Turn] 请先退出 Play 模式。");
+                return false;
+            }
+            SearchLoadedScenes(out map, out bounds);
+            if (map == null || bounds == null)
+            {
+                // 当前打开的不是 TurnGame：先问要不要保存当前场景，再自动打开 TurnGame
+                if (!File.Exists(ScenePath))
+                {
+                    Debug.LogWarning("[Turn] 找不到 " + ScenePath + "，请先用 Turn → ① 生成白模。");
+                    return false;
+                }
+                if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return false;
+                EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+                SearchLoadedScenes(out map, out bounds);
+            }
+            if (map == null || bounds == null)
+            {
+                Debug.LogWarning("[Turn] " + ScenePath + " 里没有 MapManager / WorldBounds。");
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>在所有已加载的场景里找 MapManager / WorldBounds。</summary>
+        private static void SearchLoadedScenes(out MapManager map, out WorldBounds bounds)
+        {
+            map = null;
+            bounds = null;
+            for (int s = 0; s < SceneManager.sceneCount; s++)
+            {
+                Scene scene = SceneManager.GetSceneAt(s);
+                if (!scene.isLoaded) continue;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (map == null) map = root.GetComponentInChildren<MapManager>(true);
+                    if (bounds == null) bounds = root.GetComponentInChildren<WorldBounds>(true);
+                }
+            }
+        }
+
+        /// <summary>不重新生成 Sprite：直接加载 Art 目录里已有的占位图和材质。</summary>
+        private static void PrepareSharedAssets()
+        {
+            foreach (string key in new[] { "square", "circle", "ring", "diamond", "triangle", "harpoon", "shadow" })
+            {
+                if (S(key) != null) continue;
+                Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(ArtDir + "/" + key + ".png");
+                if (sprite != null) Sprites[key] = sprite;
+            }
+            if (_material == null) _material = LoadMaterial();
+            EnsureTags(TagMapRoot);
+        }
+
+        /// <summary>给 MapManager 里还是空的位面槽位建 Root（地面 + 边框 + 刷怪点，默认隐藏），返回新建数量。</summary>
+        private static int AddMissingPlaneRoots(MapManager map, Rect rect)
+        {
+            int added = 0;
+            GameObject anchor = map.GetRoot(PlaneId.Ocean);
+            for (int i = 0; i < ExtraPlanes.Length; i++)
+            {
+                PlaneId plane = ExtraPlanes[i];
+                if (map.GetRoot(plane) != null) continue;
+
+                Color tint = ViewMath.MapColor(plane);
+                Color ground = new Color(tint.r * 0.28f, tint.g * 0.28f, tint.b * 0.28f, 1f);
+                Color border = new Color(tint.r * 0.7f, tint.g * 0.7f, tint.b * 0.7f, 1f);
+                MapParts parts = BuildEmptyPlaneRoot(plane.ToString(), rect, ground, border);
+
+                string slot = ExtraPlaneSlots[i];
+                Set(map, slot + ".root", parts.Root);
+                Set(map, slot + ".ground", parts.Ground);
+                Set(map, slot + ".spawnPoints", parts.SpawnPoints);
+
+                if (anchor != null && anchor.transform.parent == null)
+                {
+                    parts.Root.transform.SetSiblingIndex(anchor.transform.GetSiblingIndex() + 1 + added);
+                }
+                ApplyMaterial(parts.Root);
+                added++;
+            }
+            return added;
+        }
+
+        /// <summary>空位面：边框 + 地面 + 刷怪点（离边界 2 格的一圈），不带地形网格与装饰。M2 再按策划书补机制与美术。</summary>
+        private static MapParts BuildEmptyPlaneRoot(string prefix, Rect rect, Color groundColor, Color borderColor)
+        {
+            var parts = new MapParts();
+            parts.Root = new GameObject(prefix + "Root");
+            parts.Root.tag = TagMapRoot;
+            Transform root = parts.Root.transform;
+
+            Transform visual = Child(prefix + "Visual", root, Vector3.zero, Vector3.one);
+            float t = 0.5f;
+            MakeSprite("BorderTop", visual, S("square"), borderColor, ViewMath.DecorOrder, new Vector3(rect.center.x, rect.yMax + t * 0.5f, 0f), new Vector3(rect.width + t * 2f, t, 1f));
+            MakeSprite("BorderBottom", visual, S("square"), borderColor, ViewMath.DecorOrder, new Vector3(rect.center.x, rect.yMin - t * 0.5f, 0f), new Vector3(rect.width + t * 2f, t, 1f));
+            MakeSprite("BorderLeft", visual, S("square"), borderColor, ViewMath.DecorOrder, new Vector3(rect.xMin - t * 0.5f, rect.center.y, 0f), new Vector3(t, rect.height, 1f));
+            MakeSprite("BorderRight", visual, S("square"), borderColor, ViewMath.DecorOrder, new Vector3(rect.xMax + t * 0.5f, rect.center.y, 0f), new Vector3(t, rect.height, 1f));
+
+            parts.Ground = MakeSprite(prefix + "Ground", root, S("square"), groundColor, ViewMath.GroundOrder,
+                new Vector3(rect.center.x, rect.center.y, 0f), new Vector3(rect.width, rect.height, 1f));
+
+            parts.SpawnPoints = Child(prefix + "SpawnPoints", root, Vector3.zero, Vector3.one);
+            Vector2[] points =
+            {
+                new Vector2(rect.xMin + 2f, rect.yMin + 2f), new Vector2(rect.center.x, rect.yMin + 2f), new Vector2(rect.xMax - 2f, rect.yMin + 2f),
+                new Vector2(rect.xMax - 2f, rect.center.y), new Vector2(rect.xMax - 2f, rect.yMax - 2f), new Vector2(rect.center.x, rect.yMax - 2f),
+                new Vector2(rect.xMin + 2f, rect.yMax - 2f), new Vector2(rect.xMin + 2f, rect.center.y),
+            };
+            for (int i = 0; i < points.Length; i++) Child("SpawnPoint_" + i, parts.SpawnPoints, (Vector3)points[i], Vector3.one);
+
+            parts.Root.SetActive(false);
+            return parts;
+        }
+
+        private struct ObstacleSpec
+        {
+            public string Name;
+            public ObstacleKind Kind;
+            public ObstacleShape Shape;
+            public Vector2 Position;
+            public float Radius;
+            public Vector2 Size;
+            public Color Color;
+
+            public static ObstacleSpec Circle(string name, float x, float y, float radius, Color color)
+            {
+                return new ObstacleSpec { Name = name, Kind = ObstacleKind.Solid, Shape = ObstacleShape.Circle, Position = new Vector2(x, y), Radius = radius, Size = Vector2.one, Color = color };
+            }
+
+            public static ObstacleSpec Box(string name, float x, float y, float w, float h, Color color)
+            {
+                return new ObstacleSpec { Name = name, Kind = ObstacleKind.Solid, Shape = ObstacleShape.Box, Position = new Vector2(x, y), Radius = 0.5f, Size = new Vector2(w, h), Color = color };
+            }
+        }
+
+        /// <summary>
+        /// 火山 / 海洋的白模遮挡物（策划书 4.1：熔岩巨石、断石柱、岩丘 / 珊瑚礁、沉船残骸、巨贝壳，全是实体）。
+        /// 两张图的位置刻意错开：翻滚后人和怪会被新位面的遮挡物推开。中心 4 格内（出生点）和边缘刷怪圈留空。
+        /// 坐标按 40 × 24 的默认边界摆放；边界改过的话在 Scene 里手动挪即可。
+        /// </summary>
+        private static int PlaceWhiteboxObstacles(MapManager map)
+        {
+            Color boulder = new Color(0.36f, 0.27f, 0.24f, 1f);
+            Color pillar = new Color(0.5f, 0.44f, 0.4f, 1f);
+            Color mound = new Color(0.28f, 0.2f, 0.17f, 1f);
+            ObstacleSpec[] volcano =
+            {
+                ObstacleSpec.Circle("熔岩巨石_1", -11f, 5f, 1.0f, boulder),
+                ObstacleSpec.Circle("熔岩巨石_2", 9f, -6f, 1.0f, boulder),
+                ObstacleSpec.Circle("熔岩巨石_3", 14f, 6f, 0.9f, boulder),
+                ObstacleSpec.Box("断石柱_1", -6f, -6f, 0.9f, 2.6f, pillar),
+                ObstacleSpec.Box("断石柱_2", 6f, 7f, 2.6f, 0.9f, pillar),
+                ObstacleSpec.Box("断石柱_3", -15f, -4f, 0.9f, 2.2f, pillar),
+                ObstacleSpec.Circle("岩丘_1", 2f, -8f, 1.4f, mound),
+                ObstacleSpec.Circle("岩丘_2", -4f, 8f, 1.3f, mound),
+                ObstacleSpec.Circle("岩丘_3", 13f, -1f, 1.2f, mound),
+            };
+
+            Color coral = new Color(0.95f, 0.45f, 0.55f, 1f);
+            Color wreck = new Color(0.45f, 0.35f, 0.25f, 1f);
+            Color shell = new Color(0.92f, 0.86f, 0.76f, 1f);
+            ObstacleSpec[] ocean =
+            {
+                ObstacleSpec.Circle("珊瑚礁_1", -12f, -5f, 1.2f, coral),
+                ObstacleSpec.Circle("珊瑚礁_2", 7f, 5f, 1.1f, coral),
+                ObstacleSpec.Circle("珊瑚礁_3", -5f, -8f, 1.0f, coral),
+                ObstacleSpec.Circle("珊瑚礁_4", 15f, -7f, 1.0f, coral),
+                ObstacleSpec.Box("沉船残骸_1", -8f, 6f, 3.4f, 1.2f, wreck),
+                ObstacleSpec.Box("沉船残骸_2", 10f, -3f, 1.2f, 3.0f, wreck),
+                ObstacleSpec.Circle("巨贝壳_1", 3f, 9f, 0.9f, shell),
+                ObstacleSpec.Circle("巨贝壳_2", -16f, 4f, 0.9f, shell),
+                ObstacleSpec.Circle("巨贝壳_3", 12f, 8f, 0.8f, shell),
+            };
+
+            return FillObstacles(map.GetRoot(PlaneId.Volcano), "VolcanoObstacles", volcano)
+                 + FillObstacles(map.GetRoot(PlaneId.Ocean), "OceanObstacles", ocean);
+        }
+
+        /// <summary>在位面 Root 下重建名为 containerName 的遮挡物容器（旧的整个替换掉）。</summary>
+        private static int FillObstacles(GameObject root, string containerName, ObstacleSpec[] specs)
+        {
+            if (root == null) return 0;
+            Transform old = root.transform.Find(containerName);
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+
+            Transform container = Child(containerName, root.transform, Vector3.zero, Vector3.one);
+            for (int i = 0; i < specs.Length; i++)
+            {
+                ObstacleSpec spec = specs[i];
+                Transform t = Child(spec.Name, container, new Vector3(spec.Position.x, spec.Position.y, 0f), Vector3.one);
+                var obstacle = t.gameObject.AddComponent<Obstacle>();
+                obstacle.Configure(spec.Kind, spec.Shape, spec.Radius, spec.Size);
+
+                bool circle = spec.Shape == ObstacleShape.Circle;
+                Vector3 scale = circle ? new Vector3(spec.Radius * 2f, spec.Radius * 2f, 1f) : new Vector3(spec.Size.x, spec.Size.y, 1f);
+                MakeSprite("Visual", t, S(circle ? "circle" : "square"), spec.Color, ViewMath.ObstacleOrder, Vector3.zero, scale);
+            }
+            return specs.Length;
         }
     }
 }

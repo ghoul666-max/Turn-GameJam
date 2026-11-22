@@ -136,6 +136,29 @@ namespace Turn.View
             return slot != null ? slot.spawnPoints : null;
         }
 
+        /// <summary>收集某个位面 Root 下所有启用的遮挡物（Root 本身隐藏也能收集；子物体被单独关掉的不算）。</summary>
+        public void CollectObstacles(PlaneId plane, List<ObstacleData> results)
+        {
+            results.Clear();
+            GameObject root = GetRoot(plane);
+            if (root == null) return;
+            Obstacle[] all = root.GetComponentsInChildren<Obstacle>(true);
+            for (int i = 0; i < all.Length; i++)
+            {
+                Obstacle o = all[i];
+                if (o.enabled && ActiveUnder(o.transform, root.transform)) results.Add(o.ToData());
+            }
+        }
+
+        private static bool ActiveUnder(Transform t, Transform root)
+        {
+            for (Transform p = t; p != null && p != root; p = p.parent)
+            {
+                if (!p.gameObject.activeSelf) return false;
+            }
+            return true;
+        }
+
         public void CollectSpawnPoints(PlaneId map, List<Vec2> results)
         {
             results.Clear();
@@ -187,6 +210,7 @@ namespace Turn.View
             Unbind();
             _ctx = ctx;
             AlignRoots();
+            if (worldBounds != null && worldBounds.DebugLineMaterial != null) Obstacle.DebugMaterial = worldBounds.DebugLineMaterial;
             ctx.Events.Subscribe<PlaneSwitchedEvent>(OnMapSwitched);
             ctx.Events.Subscribe<LavaEruptedEvent>(OnLavaErupted);
             _lavaShowTimer = -1f;

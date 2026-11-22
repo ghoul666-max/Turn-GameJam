@@ -35,8 +35,9 @@ namespace Turn.View
                 FireInterval = fireInterval,
                 TargetRange = targetRange,
                 AttackRange = attackRange,
-                ProjectileLifetime = projectileLifetime,
-                PlaneSwitchLifetimeMultiplier = planeSwitchLifetimeMultiplier,
+                // 旧的数值面板存档里没有这两个字段时读出来是 0，回退到默认值
+                ProjectileLifetime = projectileLifetime > 0f ? projectileLifetime : 3f,
+                PlaneSwitchLifetimeMultiplier = planeSwitchLifetimeMultiplier >= 1f ? planeSwitchLifetimeMultiplier : 1.6f,
             };
         }
     }
