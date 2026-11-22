@@ -21,6 +21,10 @@ namespace Turn.Core
         public float TargetRange = 8f;
         /// <summary>攻击范围：子弹最远飞行距离。</summary>
         public float AttackRange = 11f;
+        /// <summary>投射物最长存活秒数；射程上限仍由 AttackRange 独立控制。</summary>
+        public float ProjectileLifetime = 3f;
+        /// <summary>首次切离发射位面时剩余寿命的倍率。</summary>
+        public float PlaneSwitchLifetimeMultiplier = 1.6f;
     }
 
     /// <summary>某张地图绑定的武器形态（火山 = 火球，海洋 = 鱼叉）。</summary>
@@ -39,6 +43,11 @@ namespace Turn.Core
     {
         public float MaxHp = 30f;
         public float Speed = 2f;
+        /// <summary>火山石头人的最大生命；Inspector 接入由程序A在 TurnConfigReader 完成。</summary>
+        public float VolcanoMaxHp = 60f;
+        /// <summary>海洋安康鱼的最大生命；Inspector 接入由程序A在 TurnConfigReader 完成。</summary>
+        public float OceanMaxHp = 45f;
+
         public float ContactDamage = 8f;
         public float ContactInterval = 0.6f;
         public float Radius = 0.4f;
@@ -124,8 +133,11 @@ namespace Turn.Core
         public Vec2 Position;
         /// <summary>MonsterSystem 写：本步的追踪速度（表现层据此决定朝向）。</summary>
         public Vec2 Velocity;
-        /// <summary>CombatSystem 写。</summary>
+        /// <summary>CombatSystem 写伤害与治疗；MonsterSystem 仅换形态时按血量比例重标定。</summary>
         public float Hp;
+        /// <summary>MonsterSystem 写：怪物当前行为形态；不依赖位面事件提前改变表现。</summary>
+        public PlaneId Form;
+        /// <summary>MonsterSystem 写：生成时赋值，切位面时按形态更新。</summary>
         public float MaxHp;
         /// <summary>MonsterSystem 写（死亡由 CombatSystem 通过 IMonsterSystem.Despawn 发起）。</summary>
         public bool Alive;
@@ -151,8 +163,12 @@ namespace Turn.Core
     public sealed class ProjectileEntity
     {
         public int Id;
-        /// <summary>由哪张地图的武器形态发射（决定外观：火球 / 鱼叉）。</summary>
+        /// <summary>ProjectileSystem 写：发射时所属位面，切换后不改变。</summary>
         public PlaneId Form;
+        /// <summary>ProjectileSystem 写：剩余存活秒数，独立于射程。</summary>
+        public float LifetimeLeft;
+        /// <summary>ProjectileSystem 写：每枚弹幕只允许首次切走时延寿。</summary>
+        public bool LifetimeExtended;
         public Vec2 Position;
         public Vec2 Velocity;
         public float Radius;

@@ -20,6 +20,10 @@ namespace Turn.View
         public float targetRange = 8f;
         [Tooltip("攻击范围：子弹最远飞行距离（世界单位）")]
         public float attackRange = 11f;
+        [Tooltip("子弹最长存活秒数（切位面仅首次延长剩余时间；射程不变）")]
+        [Min(0.1f)] public float projectileLifetime = 3f;
+        [Tooltip("首次切离发射位面时剩余寿命倍率")]
+        [Min(1f)] public float planeSwitchLifetimeMultiplier = 1.6f;
 
         public WeaponConfig ToConfig()
         {
@@ -31,6 +35,8 @@ namespace Turn.View
                 FireInterval = fireInterval,
                 TargetRange = targetRange,
                 AttackRange = attackRange,
+                ProjectileLifetime = projectileLifetime,
+                PlaneSwitchLifetimeMultiplier = planeSwitchLifetimeMultiplier,
             };
         }
     }

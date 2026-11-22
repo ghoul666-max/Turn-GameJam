@@ -13,6 +13,8 @@ namespace Turn.Systems
     {
         private readonly ITurnContext _ctx;
         private readonly UpgradeConfig _upgrades;
+        private readonly float _lifetime;
+        private readonly float _planeSwitchLifetimeMultiplier;
         private readonly List<ProjectileEntity> _active = new List<ProjectileEntity>();
         private readonly List<MonsterEntity> _hits = new List<MonsterEntity>();
         private int _nextId = 1;
@@ -23,6 +25,8 @@ namespace Turn.Systems
         {
             _ctx = ctx;
             _upgrades = upgrades;
+            _lifetime = MathF.Max(0.1f, ctx.Config.Weapon.ProjectileLifetime);
+            _planeSwitchLifetimeMultiplier = MathF.Max(1f, ctx.Config.Weapon.PlaneSwitchLifetimeMultiplier);
         }
 
         public ProjectileEntity Spawn(PlaneId form, Vec2 position, Vec2 velocity, float radius, float damage, int pierce, float maxDistance)
@@ -30,6 +34,7 @@ namespace Turn.Systems
             var p = new ProjectileEntity();
             p.Id = _nextId++;
             p.Form = form;
+            p.LifetimeLeft = _lifetime;
             p.Position = position;
             p.Velocity = velocity;
             p.Radius = MathF.Max(0.02f, radius);
@@ -43,7 +48,14 @@ namespace Turn.Systems
 
         public void OnPlaneSwitched(PlaneId from, PlaneId to)
         {
-            // TODO(程序B)：已飞出的投射物保留、存活时间 ×1.6（B19 再加）、之后只对发射时所在位面的单位生效。
+            if (from == to) return;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                ProjectileEntity p = _active[i];
+                if (!p.Alive || p.Form != from || p.LifetimeExtended) continue;
+                p.LifetimeLeft *= _planeSwitchLifetimeMultiplier;
+                p.LifetimeExtended = true;
+            }
         }
 
         public void Tick(float dt)
@@ -59,17 +71,19 @@ namespace Turn.Systems
                 Vec2 step = p.Velocity * dt;
                 p.Position += step;
                 p.DistanceLeft -= step.Magnitude;
-                if (p.DistanceLeft <= 0f || !_ctx.Bounds.Contains(p.Position, 0.5f))
+                p.LifetimeLeft -= dt;
+                if (p.LifetimeLeft <= 0f || p.DistanceLeft <= 0f || !_ctx.Bounds.Contains(p.Position, 0.5f))
                 {
                     p.Alive = false;
                     continue;
                 }
 
+                if (p.Form != _ctx.Plane.Active) continue;
                 _ctx.Monsters.QueryCircle(p.Position, p.Radius, _hits);
                 for (int k = 0; k < _hits.Count; k++)
                 {
                     MonsterEntity m = _hits[k];
-                    if (!m.Alive || p.HitIds.Contains(m.Id)) continue;
+                    if (!m.Alive || m.Form != p.Form || p.HitIds.Contains(m.Id)) continue;
                     p.HitIds.Add(m.Id);
 
                     _ctx.Combat.DamageMonster(m, p.Damage, DamageSource.Weapon);

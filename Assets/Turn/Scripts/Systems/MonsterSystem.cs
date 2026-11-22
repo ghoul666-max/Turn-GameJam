@@ -41,8 +41,9 @@ namespace Turn.Systems
             var m = new MonsterEntity();
             m.Id = _nextId++;
             m.Position = _ctx.Bounds.Clamp(position, _config.Radius); // 生成点也必须在边界内
-            m.MaxHp = _config.MaxHp;
-            m.Hp = _config.MaxHp;
+            m.Form = _ctx.Plane.Active;
+            m.MaxHp = MaxHpFor(m.Form);
+            m.Hp = m.MaxHp;
             m.Alive = true;
             m.Penalty = penalty;
             m.Terrain = _ctx.Terrain.Sample(m.Position);
@@ -204,17 +205,41 @@ namespace Turn.Systems
             return best;
         }
 
-        // ---------------- 翻滚第 6 步（契约期空实现，程序B 实现） ----------------
+        // ---------------- 翻滚第 6 步（程序B） ----------------
 
         public void ShiftAll(Vec2 offset)
         {
-            // TODO(程序B)：所有存活怪物 Position += offset，再 Clamp 进边界（保持与玩家的相对位置，包围阵型不散）。
+            for (int i = 0; i < _active.Count; i++)
+            {
+                MonsterEntity m = _active[i];
+                if (!m.Alive) continue;
+                m.Position = _ctx.Bounds.Clamp(m.Position + offset, _config.Radius);
+                m.Terrain = _ctx.Terrain.Sample(m.Position);
+            }
         }
 
         public void SwapPlane(PlaneId from, PlaneId to)
         {
-            // TODO(程序B)：按「切图对应」表换怪物配置与 AI、打断冲锋回 Idle、清除只属于旧位面的单位（虫崽）。
-            // 皮肤目前由表现层 EntityViewSync 收到 PlaneSwitchedEvent 后切换。
+            if (PlaneIds.PairOf(from) != PlaneIds.PairOf(to)) return;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                MonsterEntity m = _active[i];
+                if (!m.Alive || m.Form != from) continue;
+                float ratio = m.MaxHp > 0f ? MathF.Max(0f, MathF.Min(1f, m.Hp / m.MaxHp)) : 0f;
+                m.Form = to;
+                m.MaxHp = MaxHpFor(to);
+                m.Hp = m.MaxHp * ratio;
+                m.Velocity = Vec2.Zero; // 换形态中断当前移动；后续行为状态由各怪物行为实现。
+                m.ContactTimer = 0f;
+                m.Terrain = _ctx.Terrain.Sample(m.Position);
+            }
+        }
+
+        private float MaxHpFor(PlaneId plane)
+        {
+            if (plane == PlaneId.Volcano) return MathF.Max(1f, _config.VolcanoMaxHp);
+            if (plane == PlaneId.Ocean) return MathF.Max(1f, _config.OceanMaxHp);
+            return MathF.Max(1f, _config.MaxHp);
         }
     }
 }

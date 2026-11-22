@@ -229,6 +229,8 @@ namespace Turn.View
                 w.fireInterval = F("w.interval", "攻击间隔（秒）", w.fireInterval, 0.05f, 3f);
                 w.targetRange = F("w.target", "自动索敌范围", w.targetRange, 1f, 30f);
                 w.attackRange = F("w.range", "射程（子弹最远距离）", w.attackRange, 1f, 40f);
+                w.projectileLifetime = F("w.lifetime", "子弹存活秒数", w.projectileLifetime, 0.1f, 20f);
+                w.planeSwitchLifetimeMultiplier = F("w.planeLife", "首次切层剩余寿命倍率", w.planeSwitchLifetimeMultiplier, 1f, 4f);
             }
             if (Section("fireball", "火球（火山地图）")) Projectile("fb", d.fireball);
             if (Section("harpoon", "鱼叉（海洋地图）")) Projectile("hp", d.harpoon);

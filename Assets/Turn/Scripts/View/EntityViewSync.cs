@@ -162,6 +162,7 @@ namespace Turn.View
                     _projectiles.Add(e.Id, view);
                 }
                 view.Sync(e);
+                view.gameObject.SetActive(e.Form == _ctx.Plane.Active);
             }
 
             _stale.Clear();
