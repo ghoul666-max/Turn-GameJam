@@ -20,14 +20,15 @@ namespace Turn.Core
     public sealed class RollConfig
     {
         /// <summary>全局冷却（秒）。</summary>
-        public float Cooldown = 3f;
-        /// <summary>升级缩短冷却后的下限（秒）。</summary>
-        public float MinCooldown = 0.8f;
-        public float InvincibleTime = 0.5f;
+        public float Cooldown = 1.8f;
+        /// <summary>B13 缩短冷却后的下限（秒，策划 0.9）。</summary>
+        public float MinCooldown = 0.9f;
+        /// <summary>无敌帧（秒）；B14 每层 +0.15，两层后 0.65。</summary>
+        public float InvincibleTime = 0.35f;
         /// <summary>翻滚动画 / 位移时长（秒）。</summary>
-        public float Duration = 0.35f;
+        public float Duration = 0.2f;
         /// <summary>翻滚位移距离（世界单位）。</summary>
-        public float Distance = 2.5f;
+        public float Distance = 0.8f;
     }
 
     public sealed class SharkConfig

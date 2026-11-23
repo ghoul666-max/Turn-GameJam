@@ -29,6 +29,10 @@ namespace Turn.View
         [SerializeField] private VfxController vfx;
         [SerializeField] private CameraFollow cameraFollow;
 
+        [Header("弹幕表现")]
+        [Tooltip("敌方弹幕（泡泡 / 代码弹 / 落石 / 激光等）的表现 Prefab；不填时借用当前位面的玩家子弹 Prefab 并染红")]
+        [SerializeField] private Projectile enemyProjectilePrefab;
+
         [Header("实体容器")]
         [SerializeField] private Transform monsterContainer;
         [SerializeField] private Transform sharkContainer;
@@ -42,6 +46,13 @@ namespace Turn.View
         [SerializeField] private float simStep = 1f / 60f;
         [Tooltip("帧率低时一帧最多补几步")]
         [SerializeField] private int maxStepsPerFrame = 5;
+
+        [Header("调试快捷键（发布前取消勾选）")]
+        [Tooltip("F3 立刻通过本关 / F4 无敌开关 / F5 游戏速度 1× → 2× → 4×")]
+        [SerializeField] private bool debugShortcuts = true;
+        private bool _godMode;
+        private float _debugSpeed = 1f;
+        private GUIStyle _debugStyle;
 
         [Header("运行时只读")]
         [SerializeField] private RunPhase phase;
@@ -109,13 +120,50 @@ namespace Turn.View
         /// <summary>从场景组件 / Prefab 的 Inspector 读出当前数值（数值面板“从 Inspector 读取”用）。</summary>
         private TurnTuningData CaptureTuning()
         {
-            return TurnTuningData.Capture(player, weapon, spawnManager, mapManager);
+            return TurnTuningData.Capture(player, weapon, spawnManager, mapManager, upgradeManager);
         }
 
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
             if (_views != null) _views.Dispose();
+            if (_debugSpeed != 1f) Time.timeScale = 1f;
+        }
+
+        // ---------------- 调试快捷键 ----------------
+
+        private void HandleDebugKeys()
+        {
+            if (TurnInput.DebugGodModePressed) _godMode = !_godMode;
+            if (TurnInput.DebugSpeedPressed)
+            {
+                _debugSpeed = _debugSpeed >= 4f ? 1f : _debugSpeed * 2f;
+                Time.timeScale = _debugSpeed;
+            }
+            bool blocked = (_flow != null && _flow.IsTitleOpen) || (_pageTurn != null && _pageTurn.IsPlaying);
+            if (TurnInput.DebugSkipLevelPressed && !blocked) _ctx.Session.DebugClearLevel();
+        }
+
+        /// <summary>
+        /// 调试无敌：每个模拟步前把无敌剩余时间垫到 0.25 秒，所有伤害都在 CombatSystem 的无敌判定里被挡下。
+        /// （InvincibleLeft 平时只由 RollSystem 写；这里是唯一的调试例外。）
+        /// </summary>
+        private void ApplyGodMode()
+        {
+            PlayerState p = _ctx.Player.State;
+            if (p.InvincibleLeft < 0.25f) p.InvincibleLeft = 0.25f;
+        }
+
+        private void OnGUI()
+        {
+            if (!debugShortcuts || (!_godMode && _debugSpeed == 1f)) return;
+            if (_debugStyle == null)
+            {
+                _debugStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Bold };
+                _debugStyle.normal.textColor = new Color(1f, 0.85f, 0.2f, 1f);
+            }
+            string text = "调试：" + (_godMode ? "无敌（F4）  " : "") + (_debugSpeed != 1f ? "速度 ×" + _debugSpeed.ToString("0") + "（F5）" : "");
+            GUI.Label(new Rect(12f, 8f, 600f, 28f), text, _debugStyle);
         }
 
         private void Start()
@@ -175,6 +223,7 @@ namespace Turn.View
             if (victory)
             {
                 body = "三组位面全部通过\n\n全程 " + FormatTime(_totalTime) + "    击杀 " + _totalKills + "    翻滚 " + _totalRolls + " 次";
+                if (_flow != null && !string.IsNullOrEmpty(_flow.Credits)) body += "\n\n<size=22>" + _flow.Credits + "</size>";
             }
             else
             {
@@ -243,7 +292,7 @@ namespace Turn.View
 
             TurnConfig config = TurnConfigReader.Read(player, weapon, mapManager, worldBounds, spawnManager, upgradeManager);
             // 数值面板：有存档且启用时覆盖 Inspector 数值；第一次运行时把 Inspector 数值记成存档
-            TurnTuningStore.ApplyOrCapture(config, player, weapon, spawnManager, mapManager);
+            TurnTuningStore.ApplyOrCapture(config, player, weapon, spawnManager, mapManager, upgradeManager);
             // 关卡：开局位面换成本关这一组的第一面（如果 Inspector 的开局位面就在这一组里，保留它，方便测试第二面）
             if (_levelChosen && PlaneIds.PairOf(config.Environment.StartPlane) != _levelPair)
             {
@@ -274,6 +323,8 @@ namespace Turn.View
                 SharkPrefab = spawnManager != null ? spawnManager.SharkPrefab : null,
                 FireballPrefab = weapon != null ? weapon.GetPrefab(PlaneId.Volcano) : null,
                 HarpoonPrefab = weapon != null ? weapon.GetPrefab(PlaneId.Ocean) : null,
+                FormPrefabs = CollectFormPrefabs(),
+                EnemyPrefab = enemyProjectilePrefab,
                 OrbPrefab = upgradeManager != null ? upgradeManager.ExperienceOrbPrefab : null,
                 MonsterContainer = monsterContainer,
                 SharkContainer = sharkContainer,
@@ -290,6 +341,15 @@ namespace Turn.View
             if (hud != null) hud.SetPaused(false);
         }
 
+        /// <summary>六把武器各自的子弹 Prefab（WeaponController 上每个形态的 prefab 槽），按 PlaneId 下标。</summary>
+        private Projectile[] CollectFormPrefabs()
+        {
+            var prefabs = new Projectile[PlaneIds.Count];
+            if (weapon == null) return prefabs;
+            for (int i = 0; i < prefabs.Length; i++) prefabs[i] = weapon.GetPrefab((PlaneId)i);
+            return prefabs;
+        }
+
         private void OnChooseUpgrade(int index)
         {
             if (_ctx != null) _ctx.Session.TryChooseUpgrade(index);
@@ -302,6 +362,7 @@ namespace Turn.View
             if (_ctx == null) return;
 
             if (TurnInput.ObstacleDebugPressed) Obstacle.ShowDebug = !Obstacle.ShowDebug;
+            if (debugShortcuts) HandleDebugKeys();
 
             // 标题页：只等开始（Space / Enter / 按钮），封面翻开动画播完才放行
             if (_flow != null && _flow.IsTitleOpen)
@@ -393,6 +454,7 @@ namespace Turn.View
             int steps = 0;
             while (_accumulator >= step && steps < maxStepsPerFrame)
             {
+                if (_godMode) ApplyGodMode();
                 session.Tick(step);
                 _accumulator -= step;
                 steps++;

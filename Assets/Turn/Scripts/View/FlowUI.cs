@@ -19,7 +19,12 @@ namespace Turn.View
         [Header("标题页文字")]
         [SerializeField] private string gameTitle = "TURN";
         [SerializeField] private string subtitle = "在两个位面之间翻滚，活下去";
-        [SerializeField] private string startHint = "Space / Enter 开始        F1 数值面板        F2 显示遮挡物";
+        [SerializeField] private string startHint = "Space / Enter 开始      F1 数值面板      F2 遮挡物      F3 跳关 · F4 无敌 · F5 加速（调试）";
+        [Tooltip("音乐署名：Incompetech 的曲子是 CC BY 4.0，必须署名（见 docs/AUDIO-HANDOFF.md）。标题页底部和胜利结算都会显示。")]
+        [SerializeField] private string credits = "Music by Kevin MacLeod (incompetech.com), licensed under CC BY 4.0.";
+
+        /// <summary>音乐署名（胜利结算也会附上）。</summary>
+        public string Credits { get { return credits; } }
 
         public const float OpenCoverTime = 0.7f;
 
@@ -176,7 +181,10 @@ namespace Turn.View
             Stretch(sub.rectTransform, new Vector2(0f, 0.4f), new Vector2(1f, 0.5f), Vector2.zero);
             Text hint = MakeText("Hint", page.rectTransform, startHint, 26, FontStyle.Normal);
             hint.color = new Color(InkColor.r, InkColor.g, InkColor.b, 0.7f);
-            Stretch(hint.rectTransform, new Vector2(0f, 0.06f), new Vector2(1f, 0.14f), Vector2.zero);
+            Stretch(hint.rectTransform, new Vector2(0f, 0.08f), new Vector2(1f, 0.15f), Vector2.zero);
+            Text credit = MakeText("Credits", page.rectTransform, credits, 20, FontStyle.Normal);
+            credit.color = new Color(InkColor.r, InkColor.g, InkColor.b, 0.6f);
+            Stretch(credit.rectTransform, new Vector2(0f, 0.015f), new Vector2(1f, 0.06f), Vector2.zero);
 
             MakeButton("StartButton", page.rectTransform, "开始游戏", new Vector2(0.5f, 0.27f), new Vector2(360f, 84f), StartFromTitle);
             _title.gameObject.SetActive(false);

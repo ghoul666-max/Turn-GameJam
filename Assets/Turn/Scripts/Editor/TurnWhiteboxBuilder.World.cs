@@ -289,6 +289,7 @@ namespace Turn.EditorTools
             // ---- 其他 4 个位面的空 Root + 火山 / 海洋的白模遮挡物 ----
             AddMissingPlaneRoots(mapManager, rect);
             PlaceWhiteboxObstacles(mapManager);
+            AssignPlaceholderProjectiles(weapon, gm);
 
             mapManager.AlignRoots();
             mapManager.Apply(PlaneId.Volcano); // 场景里同样只有一张图是激活的
@@ -912,6 +913,143 @@ namespace Turn.EditorTools
                 MakeSprite("Visual", t, S(circle ? "circle" : "square"), spec.Color, ViewMath.ObstacleOrder, Vector3.zero, scale);
             }
             return specs.Length;
+        }
+
+        // ================================================================
+        // 4 把新武器 + 敌方弹幕的白模子弹 Prefab（美术替换前的占位，形状 / 颜色互相区分）
+        // ================================================================
+
+        [MenuItem("Turn/生成 4 把新武器 + 敌方弹幕的白模子弹并接入场景（不重建场景）", false, 42)]
+        public static void AssignPlaceholderProjectilesMenu()
+        {
+            MapManager map;
+            WorldBounds bounds;
+            if (!FindSceneParts(out map, out bounds)) return;
+            EnsureFolders();
+            EnsureTags(TagProjectile);
+            PrepareSharedAssets();
+
+            WeaponController weapon = null;
+            GameManager gm = null;
+            for (int s = 0; s < SceneManager.sceneCount; s++)
+            {
+                Scene scene = SceneManager.GetSceneAt(s);
+                if (!scene.isLoaded) continue;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (weapon == null) weapon = root.GetComponentInChildren<WeaponController>(true);
+                    if (gm == null) gm = root.GetComponentInChildren<GameManager>(true);
+                }
+            }
+            if (weapon == null || gm == null)
+            {
+                Debug.LogWarning("[Turn] 场景里没有 WeaponController / GameManager。");
+                return;
+            }
+            int count = AssignPlaceholderProjectiles(weapon, gm);
+            EditorUtility.SetDirty(weapon);
+            EditorUtility.SetDirty(gm);
+            EditorSceneManager.MarkSceneDirty(gm.gameObject.scene);
+            Debug.Log("[Turn] 已生成并接入 " + count + " 个白模子弹 Prefab（键盘 / 画笔 / 弩 / 激光 / 敌方弹幕）。已经拖了美术 Prefab 的槽位不会被覆盖。记得保存场景。");
+        }
+
+        /// <summary>
+        /// 生成（或覆盖）占位子弹 Prefab，并填进 WeaponController 的键盘 / 画笔 / 弩 / 激光槽和 GameManager 的敌方弹幕槽。
+        /// 槽位里已经是别的 Prefab（美术做好的）时不覆盖。返回接入的数量。
+        /// </summary>
+        private static int AssignPlaceholderProjectiles(WeaponController weapon, GameManager gm)
+        {
+            int count = 0;
+            if (weapon != null)
+            {
+                count += AssignIfEmpty(weapon, "keyboard.prefab", BuildKeyboardShard());
+                count += AssignIfEmpty(weapon, "paintbrush.prefab", BuildInkBlob());
+                count += AssignIfEmpty(weapon, "crossbow.prefab", BuildCrossbowBolt());
+                count += AssignIfEmpty(weapon, "laser.prefab", BuildLaserBolt());
+            }
+            if (gm != null) count += AssignIfEmpty(gm, "enemyProjectilePrefab", BuildEnemyShot());
+            return count;
+        }
+
+        private const string PlaceholderPrefix = "Placeholder";
+
+        /// <summary>槽位为空、或者放的是上次生成的占位 Prefab 时才写入。</summary>
+        private static int AssignIfEmpty(Object target, string path, GameObject prefab)
+        {
+            if (prefab == null) return 0;
+            var so = new SerializedObject(target);
+            SerializedProperty p = so.FindProperty(path);
+            if (p == null)
+            {
+                Debug.LogError("[Turn] 找不到序列化字段 " + target.GetType().Name + "." + path);
+                return 0;
+            }
+            Object current = p.objectReferenceValue;
+            if (current != null && !current.name.StartsWith(PlaceholderPrefix)) return 0; // 已经是美术 Prefab
+            p.objectReferenceValue = prefab.GetComponent<Projectile>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+            return 1;
+        }
+
+        private static GameObject NewProjectile(string name, out Transform visual, float spin)
+        {
+            var root = new GameObject(name);
+            root.tag = TagProjectile;
+            var p = root.AddComponent<Projectile>();
+            visual = Child("Visual", root.transform, Vector3.zero, Vector3.one);
+            Set(p, "visual", visual);
+            SetFloat(p, "spinSpeed", spin);
+            return root;
+        }
+
+        /// <summary>工位 · 键盘：小方块字符碎片，青白色，自转。</summary>
+        private static GameObject BuildKeyboardShard()
+        {
+            Transform v;
+            GameObject root = NewProjectile(PlaceholderPrefix + "KeyboardProjectile", out v, 720f);
+            MakeSprite("Key", v, S("square"), new Color(0.85f, 0.95f, 1f, 1f), ViewMath.ProjectileOrder, Vector3.zero, new Vector3(0.24f, 0.24f, 1f));
+            MakeSprite("Glyph", v, S("square"), new Color(0.2f, 0.35f, 0.5f, 1f), ViewMath.ProjectileOrder + 1, Vector3.zero, new Vector3(0.1f, 0.1f, 1f));
+            return SavePrefab(root, PlaceholderPrefix + "KeyboardProjectilePrefab");
+        }
+
+        /// <summary>梦境 · 画笔：紫色墨团。</summary>
+        private static GameObject BuildInkBlob()
+        {
+            Transform v;
+            GameObject root = NewProjectile(PlaceholderPrefix + "InkProjectile", out v, 0f);
+            MakeSprite("Ink", v, S("circle"), new Color(0.55f, 0.3f, 0.85f, 1f), ViewMath.ProjectileOrder, Vector3.zero, new Vector3(0.45f, 0.4f, 1f));
+            MakeSprite("Shine", v, S("circle"), new Color(0.85f, 0.7f, 1f, 1f), ViewMath.ProjectileOrder + 1, new Vector3(0.08f, 0.06f, 0f), new Vector3(0.14f, 0.14f, 1f));
+            return SavePrefab(root, PlaceholderPrefix + "InkProjectilePrefab");
+        }
+
+        /// <summary>原始 · 弩：细长木杆 + 菱形箭头（朝 +X 飞）。</summary>
+        private static GameObject BuildCrossbowBolt()
+        {
+            Transform v;
+            GameObject root = NewProjectile(PlaceholderPrefix + "CrossbowProjectile", out v, 0f);
+            MakeSprite("Shaft", v, S("square"), new Color(0.55f, 0.4f, 0.25f, 1f), ViewMath.ProjectileOrder, new Vector3(-0.1f, 0f, 0f), new Vector3(0.8f, 0.08f, 1f));
+            MakeSprite("Tip", v, S("diamond"), new Color(0.75f, 0.75f, 0.78f, 1f), ViewMath.ProjectileOrder + 1, new Vector3(0.32f, 0f, 0f), new Vector3(0.24f, 0.16f, 1f));
+            return SavePrefab(root, PlaceholderPrefix + "CrossbowProjectilePrefab");
+        }
+
+        /// <summary>未来 · 激光枪：粉红光束 + 白色内芯（朝 +X 飞）。</summary>
+        private static GameObject BuildLaserBolt()
+        {
+            Transform v;
+            GameObject root = NewProjectile(PlaceholderPrefix + "LaserProjectile", out v, 0f);
+            MakeSprite("Beam", v, S("square"), new Color(1f, 0.3f, 0.55f, 1f), ViewMath.ProjectileOrder, Vector3.zero, new Vector3(0.7f, 0.14f, 1f));
+            MakeSprite("Core", v, S("square"), new Color(1f, 0.95f, 0.98f, 1f), ViewMath.ProjectileOrder + 1, Vector3.zero, new Vector3(0.6f, 0.05f, 1f));
+            return SavePrefab(root, PlaceholderPrefix + "LaserProjectilePrefab");
+        }
+
+        /// <summary>敌方弹幕（泡泡 / 代码弹 / 落石 / 激光共用的占位）：红圈 + 暗红芯，一眼能和玩家子弹区分。</summary>
+        private static GameObject BuildEnemyShot()
+        {
+            Transform v;
+            GameObject root = NewProjectile(PlaceholderPrefix + "EnemyProjectile", out v, 0f);
+            MakeSprite("Ring", v, S("ring"), new Color(1f, 0.25f, 0.2f, 1f), ViewMath.ProjectileOrder, Vector3.zero, new Vector3(0.5f, 0.5f, 1f));
+            MakeSprite("Core", v, S("circle"), new Color(0.55f, 0.05f, 0.05f, 1f), ViewMath.ProjectileOrder + 1, Vector3.zero, new Vector3(0.24f, 0.24f, 1f));
+            return SavePrefab(root, PlaceholderPrefix + "EnemyProjectilePrefab");
         }
     }
 }

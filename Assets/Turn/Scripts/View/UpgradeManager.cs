@@ -10,7 +10,8 @@ namespace Turn.View
         [Tooltip("每次升级提供的候选数（互不相同）")]
         [Min(1)] public int optionCount = 3;
         [Header("B01-B19 最大层数")]
-        public int[] buildMaxLevels = { 5, 4, 2, 3, 3, 2, 3, 2, 3, 2, 2, 3, 3, 2, 2, 1, 2, 1, 2 };
+        // B10 地形增伤暂设 0（不进池），等策划定危险地形规则后再开（原值 2）。
+        public int[] buildMaxLevels = { 5, 4, 2, 3, 3, 2, 3, 2, 3, 0, 2, 3, 3, 2, 2, 1, 2, 1, 2 };
         [Header("普通 / 稀有 / 史诗权重")]
         [Min(0)] public int commonWeight = 70, rareWeight = 25, epicWeight = 5;
         [Header("通用武器词条数值")]
@@ -38,19 +39,21 @@ namespace Turn.View
         public float burnDuration = 3f;
         [Min(0)] public int burnMaxLevel = 5;
 
-        [Header("3. 翻滚 CD 缩短")]
+        [Header("3. 旧：翻滚 CD 缩短（已不使用，B13 改读 rollCooldownReductionPerLevel）")]
         public float rollCooldownPerLevel = 0.4f;
         [Min(0)] public int rollCooldownMaxLevel = 5;
 
-        [Header("4. 翻滚无敌时间延长")]
+        [Header("4. B14 无敌延长（每层秒数）")]
         public float rollInvinciblePerLevel = 0.15f;
         [Min(0)] public int rollInvincibleMaxLevel = 5;
 
-        [Header("5. 翻滚落地冲击波")]
+        [Header("5. B15 翻滚冲击（1 层 = 基础值，之后每层递增）")]
         public float shockwaveBaseRadius = 2.5f;
         public float shockwaveRadiusPerLevel = 0.5f;
         public float shockwaveBaseDamage = 20f;
         public float shockwaveDamagePerLevel = 10f;
+        [Tooltip("B15 击退距离（世界单位）")]
+        [Min(0f)] public float shockwaveKnockback = 1f;
         [Min(0)] public int shockwaveMaxLevel = 5;
 
         public UpgradeConfig ToConfig()
@@ -82,6 +85,7 @@ namespace Turn.View
                 ShockwaveRadiusPerLevel = shockwaveRadiusPerLevel,
                 ShockwaveBaseDamage = shockwaveBaseDamage,
                 ShockwaveDamagePerLevel = shockwaveDamagePerLevel,
+                ShockwaveKnockback = shockwaveKnockback,
             };
             // 旧场景资源的新字段未被序列化时 Unity 可能提供 0，回退策划默认值。
             if (c.BuildMaxLevels == null || c.BuildMaxLevels.Length != BuildIds.Count)

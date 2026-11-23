@@ -141,8 +141,8 @@ namespace Turn.Core
     public sealed class UpgradeConfig
     {
         public int OptionCount = 3;
-        /// <summary>按 B01..B19 顺序配置的最大叠层。</summary>
-        public int[] BuildMaxLevels = { 5, 4, 2, 3, 3, 2, 3, 2, 3, 2, 2, 3, 3, 2, 2, 1, 2, 1, 2 };
+        /// <summary>按 B01..B19 顺序配置的最大叠层。B10 地形增伤暂设 0（不进池）：岩浆喷发即消失，等策划定危险地形规则后再开（原值 2）。</summary>
+        public int[] BuildMaxLevels = { 5, 4, 2, 3, 3, 2, 3, 2, 3, 0, 2, 3, 3, 2, 2, 1, 2, 1, 2 };
         /// <summary>词条稀有度权重：普通、稀有、史诗。</summary>
         public int CommonWeight = 70, RareWeight = 25, EpicWeight = 5;
         public float DamagePerLevel = 0.20f;

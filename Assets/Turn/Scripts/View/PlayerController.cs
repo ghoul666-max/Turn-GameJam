@@ -23,15 +23,15 @@ namespace Turn.View
     public sealed class RollSettings
     {
         [Tooltip("翻滚全局冷却（秒）")]
-        public float cooldown = 3f;
-        [Tooltip("“翻滚 CD 缩短”词条能压到的最低冷却（秒）")]
-        public float minCooldown = 0.8f;
-        [Tooltip("翻滚无敌时长（秒）")]
-        public float invincibleTime = 0.5f;
+        public float cooldown = 1.8f;
+        [Tooltip("B13 翻滚加速能压到的最低冷却（秒，策划 0.9）")]
+        public float minCooldown = 0.9f;
+        [Tooltip("翻滚无敌时长（秒）；B14 每层 +0.15，两层后 0.65")]
+        public float invincibleTime = 0.35f;
         [Tooltip("翻滚动画 / 位移时长（秒）")]
-        public float duration = 0.35f;
+        public float duration = 0.2f;
         [Tooltip("翻滚移动距离（世界单位）")]
-        public float distance = 2.5f;
+        public float distance = 0.8f;
 
         public RollConfig ToConfig()
         {

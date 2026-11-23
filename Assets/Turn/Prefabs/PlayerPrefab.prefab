@@ -272,11 +272,11 @@ MonoBehaviour:
     maxHp: 100
     radius: 0.35
   rollSettings:
-    cooldown: 3
-    minCooldown: 0.8
-    invincibleTime: 0.5
-    duration: 0.35
-    distance: 2.5
+    cooldown: 1.8
+    minCooldown: 0.9
+    invincibleTime: 0.35
+    duration: 0.2
+    distance: 0.8
   body: {fileID: 7804173746945776030}
   bodyRenderer: {fileID: 9200687394341564601}
   animator: {fileID: 2287654563542303864}

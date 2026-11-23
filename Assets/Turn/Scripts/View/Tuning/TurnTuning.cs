@@ -157,6 +157,26 @@ namespace Turn.View
             if (level != null && level.version > 0) c.Level.SurviveSeconds = level.surviveSeconds;
         }
 
+        /// <summary>
+        /// 旧存档迁移（battleVersion = 0，即程序B 的 Build / 怪物池之前保存的文件）：
+        /// 战斗侧分组（武器、六把子弹、怪物、升级、经验）整体换成当前 Inspector 数值；A 侧分组（玩家、翻滚、刷怪、鲨鱼、地图、关卡）保留。
+        /// </summary>
+        public void AdoptCombat(TurnTuningData src)
+        {
+            if (src == null) return;
+            weapon = src.weapon;
+            fireball = src.fireball;
+            harpoon = src.harpoon;
+            keyboard = src.keyboard;
+            paintbrush = src.paintbrush;
+            crossbow = src.crossbow;
+            laser = src.laser;
+            monster = src.monster;
+            upgrades = src.upgrades;
+            experience = src.experience;
+            battleVersion = src.battleVersion;
+        }
+
         private static T Copy<T>(T source) where T : class, new()
         {
             return source == null ? new T() : JsonUtility.FromJson<T>(JsonUtility.ToJson(source));
@@ -271,6 +291,15 @@ namespace Turn.View
                 file.defaults = file.values.Clone();
                 Save(file);
                 return;
+            }
+            if (upgrade != null && file.values != null && file.values.battleVersion <= 0)
+            {
+                TurnTuningData fresh = TurnTuningData.Capture(player, weapon, spawn, map, upgrade);
+                file.values.AdoptCombat(fresh);
+                if (file.defaults == null) file.defaults = new TurnTuningData();
+                file.defaults.AdoptCombat(fresh.Clone());
+                Save(file);
+                Debug.Log("[TurnTuning] 旧存档没有 Build 池分组：战斗侧数值已换成当前 Inspector 数值并保存。");
             }
             if (file.useTuning) file.values.ApplyTo(config);
         }

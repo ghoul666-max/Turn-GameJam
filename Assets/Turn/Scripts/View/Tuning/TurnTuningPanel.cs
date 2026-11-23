@@ -265,6 +265,15 @@ namespace Turn.View
                     u.fireIntervalReductionPerLevel = F("build.speed", "B02 每层攻速提升", u.fireIntervalReductionPerLevel, 0f, .5f);
                     u.criticalChancePerLevel = F("build.crit", "B08 每层暴击率", u.criticalChancePerLevel, 0f, 1f);
                     u.hazardDamagePerLevel = F("build.hazard", "B10 每层地形增伤", u.hazardDamagePerLevel, 0f, 2f);
+                    // 翻滚机制词条（程序A 的 RollSystem 读取）
+                    u.rollCooldownReductionPerLevel = F("build.rollcd", "B13 每层翻滚冷却缩短（比例）", u.rollCooldownReductionPerLevel, 0f, .5f);
+                    u.rollInvinciblePerLevel = F("build.rollinv", "B14 每层无敌延长（秒）", u.rollInvinciblePerLevel, 0f, .5f);
+                    u.shockwaveBaseRadius = F("build.swRadius", "B15 冲击半径", u.shockwaveBaseRadius, 0f, 10f);
+                    u.shockwaveBaseDamage = F("build.swDamage", "B15 冲击伤害", u.shockwaveBaseDamage, 0f, 200f);
+                    u.shockwaveKnockback = F("build.swKnock", "B15 击退距离", u.shockwaveKnockback, 0f, 5f);
+                    u.penaltyReductionPerLevel = F("build.penalty", "B17 每层惩罚减免（比例）", u.penaltyReductionPerLevel, 0f, 1f);
+                    u.doubleRollWindow = F("build.dblWindow", "B18 免费再翻窗口（秒）", u.doubleRollWindow, 0f, 3f);
+                    u.doubleRollCooldown = F("build.dblCd", "B18 独立冷却（秒）", u.doubleRollCooldown, 0f, 60f);
                     u.projectileLifetimeBonusPerLevel = F("build.linger", "B19 每层弹幕延寿", u.projectileLifetimeBonusPerLevel, 0f, 2f);
                 }
             }

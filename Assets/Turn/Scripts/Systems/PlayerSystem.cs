@@ -23,6 +23,10 @@ namespace Turn.Systems
         private float _baseMoveSpeed;
         private readonly float[] _speedModifiers = new float[PlayerSpeedSources.Count];
         private float _speedMultiplier = 1f;
+        /// <summary>维修机器人命中后待结算的击退（下一次 Tick 开头经遮挡物 / 边界修正后应用）。</summary>
+        private Vec2 _pendingKnockback;
+        /// <summary>击退分步长度：每步都过一次 ResolveMove，避免一下穿过薄遮挡物。</summary>
+        private const float KnockbackStep = 0.25f;
 
         public PlayerState State { get; private set; }
         public PlayerConfig Config { get; private set; }
@@ -38,6 +42,14 @@ namespace Turn.Systems
             State = new PlayerState();
             _baseMoveSpeed = config.MoveSpeed;
             ClearSpeedModifiers();
+            // B 的 MonsterSystem 只发“机器人已命中”的事实；玩家位置只在这里写。
+            ctx.Events.Subscribe<RobotKnockbackHitEvent>(OnRobotKnockbackHit);
+        }
+
+        private void OnRobotKnockbackHit(RobotKnockbackHitEvent evt)
+        {
+            if (evt.Plane != _ctx.Plane.Active || evt.Distance <= 0f || evt.Direction.SqrMagnitude < 0.0001f) return;
+            _pendingKnockback = _pendingKnockback + evt.Direction.Normalized * evt.Distance;
         }
 
         public void Setup()
@@ -54,6 +66,7 @@ namespace Turn.Systems
             State.Terrain = _ctx.Terrain.Sample(State.Position);
             _envTerrain = State.Terrain;
             _envTimer = 0f;
+            _pendingKnockback = Vec2.Zero;
         }
 
         public void SetMoveInput(Vec2 input)
@@ -103,7 +116,22 @@ namespace Turn.Systems
             if (!s.Alive)
             {
                 s.MoveDir = Vec2.Zero;
+                _pendingKnockback = Vec2.Zero;
                 return;
+            }
+
+            // 0) 维修机器人击退：分小步经遮挡物修正，再 Clamp 进边界
+            if (_pendingKnockback.SqrMagnitude > 0.0001f)
+            {
+                float distance = _pendingKnockback.Magnitude;
+                Vec2 dir = _pendingKnockback / distance;
+                int steps = Math.Max(1, (int)MathF.Ceiling(distance / KnockbackStep));
+                float step = distance / steps;
+                Vec2 p = s.Position;
+                for (int i = 0; i < steps; i++)
+                    p = _ctx.Obstacles.ResolveMove(p, p + dir * step, Config.Radius, ObstacleMask.Units);
+                s.Position = _ctx.Bounds.Clamp(p, Config.Radius);
+                _pendingKnockback = Vec2.Zero;
             }
 
             // 1) 移动（先算想去的位置，再经遮挡物修正）

@@ -55,6 +55,8 @@ namespace Turn.Core
         void Tick(float dt);
         /// <summary>LevelUp 阶段选择第 index 个升级项。</summary>
         bool TryChooseUpgrade(int index);
+        /// <summary>调试：立刻判定本关通过（走和存活满时间完全相同的流程）。只在 Playing / LevelUp 阶段有效。</summary>
+        void DebugClearLevel();
     }
 
     /// <summary>统一移动边界管理器：玩家、普通怪物、鲨鱼、子弹都用这一个矩形。</summary>
@@ -145,6 +147,8 @@ namespace Turn.Core
     public interface IRollSystem
     {
         bool CanRoll { get; }
+        /// <summary>B18 双程翻滚：当前可以免费再翻一次（不刷怪、不装填）。HUD 可用它提示。</summary>
+        bool FreeRollAvailable { get; }
         float EffectiveCooldown { get; }
         float EffectiveInvincibleTime { get; }
         int RollCount { get; }
@@ -173,6 +177,11 @@ namespace Turn.Core
         void ApplyBurn(MonsterEntity monster, float dps, float duration);
         /// <summary>程序B：对怪物施加速度倍率（0.7 表示减速 30%）并刷新持续时间。</summary>
         void ApplySlow(MonsterEntity monster, float factor, float duration);
+        /// <summary>
+        /// 把一只怪物沿 direction 推开 distance（经遮挡物修正 + 边界 Clamp）。
+        /// 程序A 的 B15 翻滚冲击调用；怪物位置仍只由 MonsterSystem 写。（程序B 实现）
+        /// </summary>
+        void Knockback(MonsterEntity monster, Vec2 direction, float distance);
         void Tick(float dt);
         /// <summary>与圆相交的存活怪物（结果先清空）。</summary>
         void QueryCircle(Vec2 center, float radius, List<MonsterEntity> results);

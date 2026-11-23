@@ -18,6 +18,10 @@ namespace Turn.View
             public SharkAI SharkPrefab;
             public Projectile FireballPrefab;
             public Projectile HarpoonPrefab;
+            /// <summary>按 PlaneId 下标的六把武器子弹 Prefab（GameManager 从 WeaponController 收集）；缺的位面借用火球 / 鱼叉并染色区分。</summary>
+            public Projectile[] FormPrefabs;
+            /// <summary>敌方弹幕 Prefab；不填时借用玩家子弹 Prefab 并染红。</summary>
+            public Projectile EnemyPrefab;
             public ExperienceOrb OrbPrefab;
             public Transform MonsterContainer;
             public Transform SharkContainer;
@@ -163,10 +167,11 @@ namespace Turn.View
                 Projectile view;
                 if (!_projectiles.TryGetValue(e.Id, out view))
                 {
-                    Projectile prefab = e.Form == PlaneId.Volcano ? _refs.FireballPrefab : _refs.HarpoonPrefab;
-                    if (prefab == null) prefab = _refs.FireballPrefab ?? _refs.HarpoonPrefab;
+                    bool placeholder;
+                    Projectile prefab = PickProjectilePrefab(e, out placeholder);
                     if (prefab == null) continue;
                     view = Object.Instantiate(prefab, ViewMath.ToWorld(e.Position), Quaternion.identity, _refs.ProjectileContainer);
+                    if (placeholder) TintPlaceholder(view, e);
                     view.name = (e.Enemy ? "Enemy_" + e.EnemyKind + "_" : e.Form == PlaneId.Volcano ? "Fireball_" : "Projectile_") + e.Id;
                     view.Init(e);
                     _projectiles.Add(e.Id, view);
@@ -185,6 +190,46 @@ namespace Turn.View
                 Projectile view = _projectiles[_stale[i]];
                 if (view != null) Object.Destroy(view.gameObject);
                 _projectiles.Remove(_stale[i]);
+            }
+        }
+
+        /// <summary>
+        /// 选子弹 Prefab：敌方弹幕 → EnemyPrefab；玩家子弹 → 该位面武器自己的 Prefab。
+        /// 缺专用 Prefab 时借用火球 / 鱼叉，placeholder = true（之后按位面染色，白模阶段能分清六把武器和敌弹）。
+        /// </summary>
+        private Projectile PickProjectilePrefab(ProjectileEntity e, out bool placeholder)
+        {
+            placeholder = false;
+            if (e.Enemy && _refs.EnemyPrefab != null) return _refs.EnemyPrefab;
+            int i = (int)e.Form;
+            Projectile own = !e.Enemy && _refs.FormPrefabs != null && i >= 0 && i < _refs.FormPrefabs.Length ? _refs.FormPrefabs[i] : null;
+            if (own != null)
+            {
+                // 还没配专用 Prefab 的新武器在 Inspector 里可能也拖了火球 / 鱼叉：同一个 Prefab 仍按占位染色
+                placeholder = e.Form != PlaneId.Volcano && e.Form != PlaneId.Ocean && (own == _refs.FireballPrefab || own == _refs.HarpoonPrefab);
+                return own;
+            }
+            placeholder = e.Enemy || (e.Form != PlaneId.Volcano && e.Form != PlaneId.Ocean);
+            Projectile prefab = e.Form == PlaneId.Volcano ? _refs.FireballPrefab : _refs.HarpoonPrefab;
+            return prefab != null ? prefab : (_refs.FireballPrefab ?? _refs.HarpoonPrefab);
+        }
+
+        private static readonly Color[] PlaceholderColors =
+        {
+            new Color(1f, .55f, .2f), new Color(.35f, .75f, 1f), new Color(.8f, .85f, .9f),
+            new Color(1f, .5f, .9f), new Color(.75f, .55f, .3f), new Color(.3f, 1f, .95f),
+        };
+        private static readonly Color EnemyPlaceholderColor = new Color(1f, .25f, .25f);
+
+        private static void TintPlaceholder(Projectile view, ProjectileEntity e)
+        {
+            int i = (int)e.Form;
+            Color c = e.Enemy ? EnemyPlaceholderColor : (i >= 0 && i < PlaceholderColors.Length ? PlaceholderColors[i] : Color.white);
+            SpriteRenderer[] renderers = view.GetComponentsInChildren<SpriteRenderer>(true);
+            for (int r = 0; r < renderers.Length; r++)
+            {
+                Color old = renderers[r].color;
+                renderers[r].color = new Color(c.r, c.g, c.b, old.a);
             }
         }
 

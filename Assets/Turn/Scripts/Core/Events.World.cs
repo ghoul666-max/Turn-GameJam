@@ -25,6 +25,8 @@ namespace Turn.Core
         public int AmmoAfter;
         public int PenaltySpawned;
         public float InvincibleTime;
+        /// <summary>B18 双程翻滚的免费第二次（没有刷怪、没有装填）。</summary>
+        public bool Free;
     }
 
     /// <summary>冷却中按了空格：什么效果都没有发生。</summary>

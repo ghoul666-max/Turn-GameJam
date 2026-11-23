@@ -70,13 +70,25 @@ namespace Turn.Systems
             LevelConfig level = _ctx.Config.Level;
             if (level.SurviveSeconds > 0f && Time >= level.SurviveSeconds)
             {
-                PlanePairId pair = _ctx.Plane.ActivePair;
-                bool victory = pair == level.FinalPair;
-                _ctx.Events.Publish(new LevelClearedEvent { Pair = pair, Time = Time, Victory = victory });
-                SetPhase(victory ? RunPhase.Victory : RunPhase.LevelCleared);
+                ClearLevel();
                 return;
             }
             OpenLevelUpIfPending();
+        }
+
+        public void DebugClearLevel()
+        {
+            if (!_started || (Phase != RunPhase.Playing && Phase != RunPhase.LevelUp)) return;
+            ClearLevel();
+        }
+
+        /// <summary>本关通过：发布 LevelClearedEvent，最后一组 = 胜利，否则 LevelCleared（等表现层翻页）。</summary>
+        private void ClearLevel()
+        {
+            PlanePairId pair = _ctx.Plane.ActivePair;
+            bool victory = pair == _ctx.Config.Level.FinalPair;
+            _ctx.Events.Publish(new LevelClearedEvent { Pair = pair, Time = Time, Victory = victory });
+            SetPhase(victory ? RunPhase.Victory : RunPhase.LevelCleared);
         }
 
         public bool TryChooseUpgrade(int index)

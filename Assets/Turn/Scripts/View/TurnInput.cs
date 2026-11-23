@@ -32,6 +32,36 @@ namespace Turn.View
             }
         }
 
+        /// <summary>F3：调试 · 立刻通过本关。</summary>
+        public static bool DebugSkipLevelPressed { get { return FKey(3); } }
+        /// <summary>F4：调试 · 无敌开关。</summary>
+        public static bool DebugGodModePressed { get { return FKey(4); } }
+        /// <summary>F5：调试 · 游戏速度 1× → 2× → 4× 循环。</summary>
+        public static bool DebugSpeedPressed { get { return FKey(5); } }
+
+        private static bool FKey(int n)
+        {
+#if ENABLE_INPUT_SYSTEM
+            UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+            if (kb == null) return false;
+            switch (n)
+            {
+                case 3: return kb.f3Key.wasPressedThisFrame;
+                case 4: return kb.f4Key.wasPressedThisFrame;
+                case 5: return kb.f5Key.wasPressedThisFrame;
+                default: return false;
+            }
+#else
+            switch (n)
+            {
+                case 3: return Input.GetKeyDown(KeyCode.F3);
+                case 4: return Input.GetKeyDown(KeyCode.F4);
+                case 5: return Input.GetKeyDown(KeyCode.F5);
+                default: return false;
+            }
+#endif
+        }
+
         /// <summary>F2：切换遮挡物判定框显示（调试）。</summary>
         public static bool ObstacleDebugPressed
         {
