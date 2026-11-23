@@ -51,6 +51,8 @@ namespace Turn.View
         [SerializeField] private AudioClip dreamMusic;
         [SerializeField] private AudioClip primalMusic;
         [SerializeField] private AudioClip futureMusic;
+        [Tooltip("标题页音乐（空着 = 标题页静音）；开始游戏后自动交叉淡入到当前位面的音乐")]
+        [SerializeField] private AudioClip titleMusic;
 
         [Header("翻滚 / 玩家")]
         [SerializeField] private SoundCue roll = new SoundCue();
@@ -205,7 +207,23 @@ namespace Turn.View
 
         private void PlayMusicFor(PlaneId plane)
         {
-            AudioClip clip = MusicFor(plane);
+            PlayMusic(MusicFor(plane));
+        }
+
+        /// <summary>标题页音乐。由 GameManager 在显示标题时调用；开局后由位面音乐交叉淡入顶替。</summary>
+        public void PlayTitleMusic()
+        {
+            PlayMusic(titleMusic);
+        }
+
+        /// <summary>回到当前位面的音乐（从标题页开始时调用，把标题曲换回关卡曲）。</summary>
+        public void PlayPlaneMusic()
+        {
+            if (_ctx != null) PlayMusicFor(_ctx.Plane.Active);
+        }
+
+        private void PlayMusic(AudioClip clip)
+        {
             if (clip == null || _musicA == null) return;
             AudioSource current = _musicOnA ? _musicA : _musicB;
             if (current.clip == clip && current.isPlaying) return;

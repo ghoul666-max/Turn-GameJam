@@ -127,13 +127,18 @@ namespace Turn.View
             ResetTotals();
             StartNewRun();
             if (_flow != null) _flow.ShowTitle();
+            if (_audio != null) _audio.PlayTitleMusic();
         }
 
         // ---------------- 流程（标题 / 暂停 / 结算的按钮与快捷键都走这里） ----------------
 
         private void OnTitleOpened()
         {
-            if (_audio != null) _audio.PlayPageTurn();
+            if (_audio != null)
+            {
+                _audio.PlayPageTurn();
+                _audio.PlayPlaneMusic(); // 封面翻开 = 真正开局：标题曲换回本关位面曲
+            }
         }
 
         private void ResumeFromPause()
@@ -159,6 +164,7 @@ namespace Turn.View
         {
             RestartFromFirstLevel();
             if (_flow != null) _flow.ShowTitle();
+            if (_audio != null) _audio.PlayTitleMusic();
         }
 
         private void ShowResult(bool victory)

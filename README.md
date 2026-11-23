@@ -20,6 +20,7 @@ Game Jam 回合制 2D 项目（Unity 6 / URP 2D）。
 | --- | --- |
 | [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md) | AI 协作硬规则：三层架构、写入所有权、翻滚时序、文件归属 |
 | [`docs/AI-HANDOFF.md`](docs/AI-HANDOFF.md) | 当前进度交接：已完成 / 空实现 / 下一步 / 易踩的坑 |
+| [`docs/AUDIO-HANDOFF.md`](docs/AUDIO-HANDOFF.md) | 音频交接：版权署名要求、17 个音效槽位与 6 个位面 BGM 的接入位置 |
 
 ## 目录结构
 
