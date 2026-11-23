@@ -41,6 +41,7 @@ namespace Turn.View
             if (map != null)
             {
                 c.Environment = map.Environment.ToConfig();
+                if (map.Level != null) c.Level = map.Level.ToConfig();
                 Rect rect = bounds != null ? bounds.Rect : new Rect(-20f, -12f, 40f, 24f);
                 map.SyncTerrainShape(rect); // 水池与岩浆池一一对应（大小、形状完全一样）
                 for (int i = 0; i < PlaneIds.Count; i++)

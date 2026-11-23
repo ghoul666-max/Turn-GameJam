@@ -52,6 +52,8 @@ namespace Turn.View
         public SpawnSettings spawn = new SpawnSettings();
         public PenaltySettings penalty = new PenaltySettings();
         public float shallowRegenPerSecond = 3f;
+        public PlaneMechanicsSettings mechanics = new PlaneMechanicsSettings();
+        public LevelSettings level = new LevelSettings();
 
         public TurnTuningData Clone()
         {
@@ -80,7 +82,12 @@ namespace Turn.View
                 if (spawn.MonsterPrefab != null) d.monster = Copy(spawn.MonsterPrefab.Settings);
                 if (spawn.SharkPrefab != null) d.shark = Copy(spawn.SharkPrefab.Settings);
             }
-            if (map != null) d.shallowRegenPerSecond = map.Environment.shallowRegenPerSecond;
+            if (map != null)
+            {
+                d.shallowRegenPerSecond = map.Environment.shallowRegenPerSecond;
+                d.mechanics = Copy(map.Environment.mechanics);
+                d.level = Copy(map.Level);
+            }
             return d;
         }
 
@@ -98,6 +105,8 @@ namespace Turn.View
             if (spawn != null) c.Spawn = spawn.ToConfig();
             if (penalty != null) c.Penalty = penalty.ToConfig();
             if (c.Environment != null) c.Environment.ShallowRegenPerSecond = shallowRegenPerSecond;
+            if (mechanics != null) mechanics.ApplyTo(c.Environment); // 旧存档没有这一组（version = 0）时不覆盖
+            if (level != null && level.version > 0) c.Level.SurviveSeconds = level.surviveSeconds;
         }
 
         private static T Copy<T>(T source) where T : class, new()

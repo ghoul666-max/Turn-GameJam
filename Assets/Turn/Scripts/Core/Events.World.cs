@@ -11,6 +11,9 @@ namespace Turn.Core
 
     public struct PhaseChangedEvent { public RunPhase Phase; }
 
+    /// <summary>本关存活够时间。Victory = 这是最后一关（三组位面全部通过）。</summary>
+    public struct LevelClearedEvent { public PlanePairId Pair; public float Time; public bool Victory; }
+
     /// <summary>一次成功的翻滚。翻滚时序里的全部效果（无敌 / 切位面 / 怪物偏移换皮 / 弹幕 / 惩罚刷怪 / 装填 / 位面进入结算）都执行完毕后才发布。</summary>
     public struct RollPerformedEvent
     {
@@ -58,5 +61,11 @@ namespace Turn.Core
     public struct ShockwaveTriggeredEvent { public Vec2 Position; public float Radius; public int Hits; }
 
     /// <summary>天降危险的预警（例：梦境的老板来电）。表现层据此画落点圈；Delay 秒后在 Position 结算。</summary>
-    public struct HazardWarnedEvent { public Vec2 Position; public float Radius; public float Delay; }
+    public struct HazardWarnedEvent { public int Id; public Vec2 Position; public float Radius; public float Delay; }
+
+    /// <summary>天降危险砸下（结算已完成）。HitPlayer = 玩家是否真的受伤（无敌 / 不在范围内为 false）。</summary>
+    public struct HazardLandedEvent { public int Id; public Vec2 Position; public float Radius; public bool HitPlayer; }
+
+    /// <summary>预警中的天降危险被取消（例：电话还没砸下就翻滚离开了梦境）。</summary>
+    public struct HazardCancelledEvent { public int Id; }
 }

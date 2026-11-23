@@ -38,6 +38,8 @@
         },
         "monster": {
             "maxHp": 30.0,
+            "volcanoMaxHp": 60.0,
+            "oceanMaxHp": 45.0,
             "moveSpeed": 2.0,
             "contactDamage": 8.0,
             "contactInterval": 0.6000000238418579,
@@ -69,7 +71,25 @@
             "minDistance": 4.0,
             "maxDistance": 8.0
         },
-        "shallowRegenPerSecond": 3.0
+        "shallowRegenPerSecond": 3.0,
+        "mechanics": {
+            "version": 1,
+            "drowsyDelay": 5.0,
+            "drowsyDps": 4.0,
+            "drowsyDarkenTime": 10.0,
+            "dreamSlowInterval": 2.0,
+            "dreamSlowPerStack": 0.05000000074505806,
+            "dreamSlowMax": 0.4000000059604645,
+            "phoneWarning": 0.800000011920929,
+            "phoneRadius": 2.5,
+            "phoneDamage": 25.0,
+            "phoneIntervalMin": 4.0,
+            "phoneIntervalMax": 6.0
+        },
+        "level": {
+            "version": 1,
+            "surviveSeconds": 30.0
+        }
     },
     "defaults": {
         "player": {
@@ -108,6 +128,8 @@
         },
         "monster": {
             "maxHp": 30.0,
+            "volcanoMaxHp": 60.0,
+            "oceanMaxHp": 45.0,
             "moveSpeed": 2.0,
             "contactDamage": 8.0,
             "contactInterval": 0.6000000238418579,
@@ -139,6 +161,24 @@
             "minDistance": 4.0,
             "maxDistance": 8.0
         },
-        "shallowRegenPerSecond": 3.0
+        "shallowRegenPerSecond": 3.0,
+        "mechanics": {
+            "version": 1,
+            "drowsyDelay": 5.0,
+            "drowsyDps": 4.0,
+            "drowsyDarkenTime": 10.0,
+            "dreamSlowInterval": 2.0,
+            "dreamSlowPerStack": 0.05000000074505806,
+            "dreamSlowMax": 0.4000000059604645,
+            "phoneWarning": 0.800000011920929,
+            "phoneRadius": 2.5,
+            "phoneDamage": 25.0,
+            "phoneIntervalMin": 4.0,
+            "phoneIntervalMax": 6.0
+        },
+        "level": {
+            "version": 1,
+            "surviveSeconds": 300.0
+        }
     }
 }

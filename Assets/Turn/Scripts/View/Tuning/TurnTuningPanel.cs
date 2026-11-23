@@ -208,6 +208,12 @@ namespace Turn.View
 
         private void DrawFields(TurnTuningData d)
         {
+            if (Section("level", "关卡"))
+            {
+                // 旧存档没有这一组（version = 0）：换成默认值（300 秒），保存后生效
+                if (d.level == null || d.level.version <= 0) d.level = new LevelSettings();
+                d.level.surviveSeconds = F("lv.survive", "每关存活多少秒过关（0 = 不过关）", d.level.surviveSeconds, 0f, 900f);
+            }
             if (Section("player", "主角"))
             {
                 PlayerSettings p = d.player;
@@ -282,6 +288,23 @@ namespace Turn.View
             if (Section("env", "环境"))
             {
                 d.shallowRegenPerSecond = F("env.regen", "浅水每秒回血（玩家）", d.shallowRegenPerSecond, 0f, 50f);
+            }
+            if (Section("mechanics", "位面机制（工位 / 梦境）"))
+            {
+                // 旧存档没有这一组（读出来 version = 0、数值全是 0）：换成策划书默认值，保存后生效
+                if (d.mechanics == null || d.mechanics.version <= 0) d.mechanics = new PlaneMechanicsSettings();
+                PlaneMechanicsSettings m = d.mechanics;
+                m.drowsyDelay = F("pm.drowsyDelay", "工位：停留多少秒开始掉血", m.drowsyDelay, 0f, 30f);
+                m.drowsyDps = F("pm.drowsyDps", "工位：困意每秒伤害", m.drowsyDps, 0f, 50f);
+                m.drowsyDarkenTime = F("pm.darken", "工位：画面暗到最深的秒数", m.drowsyDarkenTime, 0.1f, 60f);
+                m.dreamSlowInterval = F("pm.slowInterval", "梦境：每隔多少秒叠一层减速", m.dreamSlowInterval, 0.05f, 10f);
+                m.dreamSlowPerStack = F("pm.slowStack", "梦境：每层减速比例", m.dreamSlowPerStack, 0f, 0.5f);
+                m.dreamSlowMax = F("pm.slowMax", "梦境：减速上限", m.dreamSlowMax, 0f, 0.95f);
+                m.phoneWarning = F("pm.phoneWarn", "来电：预警秒数", m.phoneWarning, 0.05f, 5f);
+                m.phoneRadius = F("pm.phoneRadius", "来电：砸落半径", m.phoneRadius, 0.1f, 10f);
+                m.phoneDamage = F("pm.phoneDmg", "来电：伤害", m.phoneDamage, 0f, 200f);
+                m.phoneIntervalMin = F("pm.phoneMin", "来电：最短间隔（秒）", m.phoneIntervalMin, 0.5f, 30f);
+                m.phoneIntervalMax = F("pm.phoneMax", "来电：最长间隔（秒）", m.phoneIntervalMax, 0.5f, 30f);
             }
         }
 

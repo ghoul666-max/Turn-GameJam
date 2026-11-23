@@ -41,6 +41,9 @@ namespace Turn.View
 
         public const float FlashTime = 0.35f;
 
+        /// <summary>false = 暂停 / 结算由 FlowUI 显示，HUD 自带的暂停面板和结算面板不再打开。</summary>
+        public bool UseBuiltInPanels { get; set; } = true;
+
         private void Awake()
         {
             UIFont.Apply(gameObject);
@@ -75,9 +78,15 @@ namespace Turn.View
             Unbind();
         }
 
+        /// <summary>覆盖结算面板上的文字（GameManager 在胜利时写入全程统计）。</summary>
+        public void SetResultText(string text)
+        {
+            if (defeatText != null) defeatText.text = text;
+        }
+
         public void SetPaused(bool paused)
         {
-            if (pausePanel != null) pausePanel.SetActive(paused);
+            if (pausePanel != null) pausePanel.SetActive(paused && UseBuiltInPanels);
         }
 
         /// <summary>地图切换特效：全屏闪一下新地图的主题色。</summary>
@@ -100,7 +109,11 @@ namespace Turn.View
         private void OnPhaseChanged(PhaseChangedEvent evt)
         {
             if (defeatPanel == null) return;
-            defeatPanel.SetActive(evt.Phase == RunPhase.Defeat);
+            defeatPanel.SetActive(UseBuiltInPanels && (evt.Phase == RunPhase.Defeat || evt.Phase == RunPhase.Victory));
+            if (evt.Phase == RunPhase.Victory && defeatText != null)
+            {
+                defeatText.text = "胜利！三组位面全部通过\n\n按 R / Enter 从第一关重新开始";
+            }
             if (evt.Phase == RunPhase.Defeat && defeatText != null)
             {
                 defeatText.text = "倒下了……\n存活 " + FormatTime(_ctx.Session.Time) + "   等级 " + _ctx.Progression.Level +
@@ -149,7 +162,7 @@ namespace Turn.View
             PlaneId map = _ctx.Plane.Active;
             if (mapText != null)
             {
-                mapText.text = "当前地图：" + PlaneIds.DisplayName(map) + (map == PlaneId.Ocean ? "   鲨鱼 ×" + _ctx.Sharks.Active.Count : "");
+                mapText.text = "当前地图：" + PlaneIds.DisplayName(map) + PlaneStatus(map);
                 mapText.color = ViewMath.MapColor(map);
             }
             float cd = _ctx.Roll.EffectiveCooldown;
@@ -170,7 +183,9 @@ namespace Turn.View
             if (terrainText != null) terrainText.text = "脚下：" + TerrainName(p.Terrain);
             if (statsText != null)
             {
-                statsText.text = FormatTime(_ctx.Session.Time) + "   击杀 " + prog.Kills + "   怪物 " + _ctx.Monsters.AliveCount +
+                float left = _ctx.Session.LevelTimeLeft;
+                string level = "第 " + ((int)_ctx.Plane.ActivePair + 1) + " 关" + (left > 0f ? "  过关还剩 " + FormatTime(left) : "");
+                statsText.text = level + "   " + FormatTime(_ctx.Session.Time) + "   击杀 " + prog.Kills + "   怪物 " + _ctx.Monsters.AliveCount +
                                  "   翻滚 " + _ctx.Roll.RollCount;
             }
 
@@ -194,6 +209,23 @@ namespace Turn.View
                 {
                     screenFlash.color = new Color(0f, 0f, 0f, 0f);
                 }
+            }
+        }
+
+        /// <summary>位面机制状态（鲨鱼数量 / 困意 / 梦境减速），接在“当前地图”后面。</summary>
+        private string PlaneStatus(PlaneId map)
+        {
+            IEnvironmentSystem env = _ctx.Environment;
+            switch (map)
+            {
+                case PlaneId.Ocean:
+                    return "   鲨鱼 ×" + _ctx.Sharks.Active.Count;
+                case PlaneId.Office:
+                    return "   困意 " + Mathf.RoundToInt(env.Drowsiness * 100f) + "%" + (env.DrowsyDamaging ? "  掉血中" : "");
+                case PlaneId.Dream:
+                    return "   减速 " + env.DreamSlowStacks + " 层 -" + Mathf.RoundToInt(env.DreamSlow * 100f) + "%";
+                default:
+                    return "";
             }
         }
 

@@ -50,11 +50,46 @@ namespace Turn.Core
         public float DotTickInterval = 0.25f;
         public float PlayerLavaDps = 10f;
         public float ShallowRegenPerSecond = 3f;
+
+        // ---- 工位：困意 ----
+        /// <summary>在工位连续停留超过这么多秒后开始掉血。</summary>
+        public float DrowsyDelay = 5f;
+        /// <summary>困意每秒伤害（玩家）。</summary>
+        public float DrowsyDps = 4f;
+        /// <summary>从进入工位到画面暗到最深、眼皮合到最紧所需的秒数（纯表现进度）。</summary>
+        public float DrowsyDarkenTime = 10f;
+
+        // ---- 梦境：减速层 ----
+        /// <summary>每隔多少秒叠一层减速。</summary>
+        public float DreamSlowInterval = 2f;
+        /// <summary>每层减速比例（0.05 = 5%）。</summary>
+        public float DreamSlowPerStack = 0.05f;
+        /// <summary>减速上限（0.4 = 40%）。</summary>
+        public float DreamSlowMax = 0.4f;
+
+        // ---- 梦境：老板来电 ----
+        /// <summary>预警时长（秒）：落点圈出现到电话砸下。</summary>
+        public float PhoneWarning = 0.8f;
+        public float PhoneRadius = 2.5f;
+        public float PhoneDamage = 25f;
+        /// <summary>两次来电之间的间隔（秒，在 [Min, Max] 之间随机）。</summary>
+        public float PhoneIntervalMin = 4f;
+        public float PhoneIntervalMax = 6f;
+    }
+
+    /// <summary>关卡：一关 = 一组位面。存活够时间就过关（翻页），最后一组过关 = 胜利。</summary>
+    public sealed class LevelConfig
+    {
+        /// <summary>每关需要存活的秒数；≤ 0 表示不会过关（无尽测试用）。</summary>
+        public float SurviveSeconds = 300f;
+        /// <summary>最后一关的位面组：这一组过关即胜利。</summary>
+        public PlanePairId FinalPair = PlanePairId.PrimalFuture;
     }
 
     /// <summary>一局的全部配置（世界部分）。战斗部分在 Models.Combat.cs 的同名 partial 里。</summary>
     public sealed partial class TurnConfig
     {
+        public LevelConfig Level = new LevelConfig();
         public PlayerConfig Player = new PlayerConfig();
         public RollConfig Roll = new RollConfig();
         public SharkConfig Shark = new SharkConfig();

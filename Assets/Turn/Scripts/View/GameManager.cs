@@ -54,6 +54,20 @@ namespace Turn.View
         private float _accumulator;
         private bool _paused;
         private TurnTuningPanel _tuning;
+        private EnvironmentView _environmentView;
+        private PageTurnView _pageTurn;
+        private FlowUI _flow;
+        private TurnAudio _audio;
+
+        // 关卡（一关 = 一组位面）：第一关 = Inspector 里开局位面所在的组；每关都是全新的一局（等级 / 词条 / 怪物全部清空）
+        private PlanePairId _firstPair;
+        private PlanePairId _levelPair;
+        private bool _levelChosen;
+        private bool _resultShown;
+        // 全程统计（胜利结算用，只累计已通过的关）
+        private float _totalTime;
+        private int _totalKills;
+        private int _totalRolls;
 
         /// <summary>当前一局的系统上下文（调试 / 扩展用；表现层只读）。</summary>
         public ITurnContext Context { get { return _ctx; } }
@@ -72,6 +86,24 @@ namespace Turn.View
             _tuning = GetComponent<TurnTuningPanel>();
             if (_tuning == null) _tuning = gameObject.AddComponent<TurnTuningPanel>();
             _tuning.SetupInGame(StartNewRun, CaptureTuning);
+
+            // 位面机制表现（困意遮罩、老板来电）：没有手动挂就自动挂一个
+            _environmentView = GetComponent<EnvironmentView>();
+            if (_environmentView == null) _environmentView = gameObject.AddComponent<EnvironmentView>();
+
+            // 过关翻页过场：没有手动挂就自动挂一个
+            _pageTurn = GetComponent<PageTurnView>();
+            if (_pageTurn == null) _pageTurn = gameObject.AddComponent<PageTurnView>();
+
+            // 标题页 / 暂停菜单 / 结算界面：没有手动挂就自动挂一个（手动挂上可以在 Inspector 里改标题文字）
+            _flow = GetComponent<FlowUI>();
+            if (_flow == null) _flow = gameObject.AddComponent<FlowUI>();
+            _flow.Setup(OnTitleOpened, ResumeFromPause, RestartLevel, RestartFromFirstLevel, ReturnToTitle);
+            if (hud != null) hud.UseBuiltInPanels = false;
+
+            // 音效：没有手动挂就自动挂一个（自动挂的没有音频，要配音效请在编辑器里给 GameManager 加上 TurnAudio 组件）
+            _audio = GetComponent<TurnAudio>();
+            if (_audio == null) _audio = gameObject.AddComponent<TurnAudio>();
         }
 
         /// <summary>从场景组件 / Prefab 的 Inspector 读出当前数值（数值面板“从 Inspector 读取”用）。</summary>
@@ -88,7 +120,108 @@ namespace Turn.View
 
         private void Start()
         {
+            PlaneId start = mapManager != null ? mapManager.Environment.startMap : PlaneId.Volcano;
+            _firstPair = PlaneIds.PairOf(start);
+            _levelPair = _firstPair;
+            _levelChosen = true;
+            ResetTotals();
             StartNewRun();
+            if (_flow != null) _flow.ShowTitle();
+        }
+
+        // ---------------- 流程（标题 / 暂停 / 结算的按钮与快捷键都走这里） ----------------
+
+        private void OnTitleOpened()
+        {
+            if (_audio != null) _audio.PlayPageTurn();
+        }
+
+        private void ResumeFromPause()
+        {
+            _paused = false;
+            if (_flow != null) _flow.SetPause(false);
+            if (hud != null) hud.SetPaused(false);
+        }
+
+        private void RestartLevel()
+        {
+            StartNewRun();
+        }
+
+        private void RestartFromFirstLevel()
+        {
+            _levelPair = _firstPair;
+            ResetTotals();
+            StartNewRun();
+        }
+
+        private void ReturnToTitle()
+        {
+            RestartFromFirstLevel();
+            if (_flow != null) _flow.ShowTitle();
+        }
+
+        private void ShowResult(bool victory)
+        {
+            _resultShown = true;
+            if (victory) AddTotals();
+            string body;
+            if (victory)
+            {
+                body = "三组位面全部通过\n\n全程 " + FormatTime(_totalTime) + "    击杀 " + _totalKills + "    翻滚 " + _totalRolls + " 次";
+            }
+            else
+            {
+                body = "第 " + ((int)_levelPair + 1) + " 关 · " + PlaneIds.DisplayName(_levelPair) + "\n\n存活 " + FormatTime(_ctx.Session.Time) +
+                       "    等级 " + _ctx.Progression.Level + "    击杀 " + _ctx.Progression.Kills + "    翻滚 " + _ctx.Roll.RollCount + " 次";
+            }
+            if (_flow != null) _flow.ShowResult(victory, victory ? "胜利！" : "倒下了……", body);
+            else if (hud != null) hud.SetResultText(body);
+        }
+
+        // ---------------- 关卡 ----------------
+
+        /// <summary>本关存活够时间：累计统计 → 翻页 → 在纸后面开下一关的新一局。</summary>
+        private void BeginPageTurn()
+        {
+            AddTotals();
+            PlanePairId cleared = _levelPair;
+            PlanePairId next = (PlanePairId)Mathf.Min((int)cleared + 1, PlaneIds.PairCount - 1);
+            if (_audio != null) _audio.PlayPageTurn();
+            if (_pageTurn == null)
+            {
+                _levelPair = next;
+                StartNewRun();
+                return;
+            }
+            string done = "第 " + ((int)cleared + 1) + " 页 · " + PlaneIds.DisplayName(cleared) + "\n完成";
+            string upcoming = "第 " + ((int)next + 1) + " 页 · " + PlaneIds.DisplayName(next);
+            _pageTurn.Play(done, upcoming, () =>
+            {
+                _levelPair = next;
+                StartNewRun();
+            }, null);
+        }
+
+        private void AddTotals()
+        {
+            if (_ctx == null) return;
+            _totalTime += _ctx.Session.Time;
+            _totalKills += _ctx.Progression.Kills;
+            _totalRolls += _ctx.Roll.RollCount;
+        }
+
+        private void ResetTotals()
+        {
+            _totalTime = 0f;
+            _totalKills = 0;
+            _totalRolls = 0;
+        }
+
+        private static string FormatTime(float seconds)
+        {
+            int total = Mathf.Max(0, Mathf.FloorToInt(seconds));
+            return (total / 60).ToString("00") + ":" + (total % 60).ToString("00");
         }
 
         // ---------------- 一局 ----------------
@@ -105,10 +238,23 @@ namespace Turn.View
             TurnConfig config = TurnConfigReader.Read(player, weapon, mapManager, worldBounds, spawnManager, upgradeManager);
             // 数值面板：有存档且启用时覆盖 Inspector 数值；第一次运行时把 Inspector 数值记成存档
             TurnTuningStore.ApplyOrCapture(config, player, weapon, spawnManager, mapManager);
+            // 关卡：开局位面换成本关这一组的第一面（如果 Inspector 的开局位面就在这一组里，保留它，方便测试第二面）
+            if (_levelChosen && PlaneIds.PairOf(config.Environment.StartPlane) != _levelPair)
+            {
+                config.Environment.StartPlane = PlaneIds.First(_levelPair);
+            }
+            _resultShown = false;
             int seed = randomSeed != 0 ? randomSeed : System.Environment.TickCount;
             _ctx = TurnFactory.Create(config, seed);
 
             if (mapManager != null) mapManager.Bind(_ctx);
+            if (_environmentView != null) _environmentView.Bind(_ctx, worldBounds != null ? worldBounds.DebugLineMaterial : null);
+            if (_audio != null) _audio.Bind(_ctx);
+            if (_flow != null)
+            {
+                _flow.SetPause(false);
+                _flow.HideResult();
+            }
             if (player != null) player.Bind(_ctx);
             if (weapon != null) weapon.Bind(_ctx);
             if (terrainDetector != null) terrainDetector.Bind(_ctx);
@@ -151,6 +297,23 @@ namespace Turn.View
 
             if (TurnInput.ObstacleDebugPressed) Obstacle.ShowDebug = !Obstacle.ShowDebug;
 
+            // 标题页：只等开始（Space / Enter / 按钮），封面翻开动画播完才放行
+            if (_flow != null && _flow.IsTitleOpen)
+            {
+                _ctx.Player.SetMoveInput(Vec2.Zero);
+                _accumulator = 0f;
+                if (!(_tuning != null && _tuning.IsOpen) && (TurnInput.RollPressed || TurnInput.RestartPressed)) _flow.StartFromTitle();
+                return;
+            }
+
+            // 翻页过场中：暂停模拟、屏蔽玩法输入
+            if (_pageTurn != null && _pageTurn.IsPlaying)
+            {
+                _ctx.Player.SetMoveInput(Vec2.Zero);
+                _accumulator = 0f;
+                return;
+            }
+
             // 数值面板打开时：暂停模拟、屏蔽玩法输入（面板里打字不会触发翻滚 / 选升级）
             if (_tuning != null && _tuning.IsOpen)
             {
@@ -160,16 +323,46 @@ namespace Turn.View
             }
             ISessionSystem session = _ctx.Session;
 
+            // 过关：翻页进下一关
+            if (session.Phase == RunPhase.LevelCleared)
+            {
+                BeginPageTurn();
+                return;
+            }
+
             if (session.IsOver)
             {
-                if (TurnInput.RestartPressed) StartNewRun();
+                bool victory = session.Phase == RunPhase.Victory;
+                if (!_resultShown) ShowResult(victory);
+                // 胜利：R / Enter 从第一关重新开始；失败：重打本关；T 回到标题
+                if (TurnInput.TitlePressed) ReturnToTitle();
+                else if (TurnInput.RestartPressed)
+                {
+                    if (victory) RestartFromFirstLevel();
+                    else RestartLevel();
+                }
                 return;
             }
 
             if (TurnInput.PausePressed && session.Phase == RunPhase.Playing)
             {
                 _paused = !_paused;
+                if (_flow != null) _flow.SetPause(_paused);
                 if (hud != null) hud.SetPaused(_paused);
+            }
+            if (_paused)
+            {
+                // 暂停菜单快捷键：R 重打本关，T 回到标题（Esc / P 继续）
+                if (TurnInput.TitlePressed)
+                {
+                    ReturnToTitle();
+                    return;
+                }
+                if (TurnInput.RestartPressed)
+                {
+                    RestartLevel();
+                    return;
+                }
             }
 
             if (session.Phase == RunPhase.LevelUp)

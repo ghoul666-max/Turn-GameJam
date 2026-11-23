@@ -46,6 +46,9 @@ namespace Turn.Core
         RunPhase Phase { get; }
         /// <summary>已存活秒数（只在 Playing 阶段增长）。</summary>
         float Time { get; }
+        /// <summary>本关还要存活多少秒才过关（关卡时长 ≤ 0 时恒为 0）。</summary>
+        float LevelTimeLeft { get; }
+        /// <summary>失败或胜利：本局结束，等待重开。（LevelCleared 不算结束：表现层翻页后开下一关）</summary>
         bool IsOver { get; }
         void Start();
         /// <summary>推进一个固定步长。非 Playing 阶段什么都不做。</summary>
@@ -205,6 +208,16 @@ namespace Turn.Core
     {
         /// <summary>岩浆当前是否存在。TerrainSystem 据此决定岩浆格是否视为 Normal。</summary>
         bool LavaPresent { get; }
+        /// <summary>进入当前位面后经过的秒数（翻滚 / 开局时归零）。</summary>
+        float PlaneTime { get; }
+        /// <summary>工位困意的表现进度 0..1（画面变暗、眼皮合拢）。不在工位时为 0。</summary>
+        float Drowsiness { get; }
+        /// <summary>工位困意是否已经开始掉血。</summary>
+        bool DrowsyDamaging { get; }
+        /// <summary>梦境减速层数（离开梦境清零）。</summary>
+        int DreamSlowStacks { get; }
+        /// <summary>梦境减速比例（0..DreamSlowMax）。</summary>
+        float DreamSlow { get; }
         /// <summary>进入 plane 后的结算（开局一次 + 每次成功翻滚一次），完成后发布 PlaneEnteredEvent。</summary>
         void OnPlaneEntered(PlaneId plane);
         /// <summary>position 是否处在会造成伤害的环境里（B10 地形增伤用）。</summary>

@@ -95,8 +95,10 @@ namespace Turn.View
         public void SetSkin(PlaneId map)
         {
             skin = map;
-            if (volcanoSkin != null) volcanoSkin.SetActive(map == PlaneId.Volcano);
-            if (oceanSkin != null) oceanSkin.SetActive(map == PlaneId.Ocean);
+            // 其他位面还没有专属皮肤：组内第一面借用火山皮、第二面借用海洋皮，避免怪物隐形（程序A 补，白模占位）
+            bool firstOfPair = ((int)map & 1) == 0;
+            if (volcanoSkin != null) volcanoSkin.SetActive(firstOfPair);
+            if (oceanSkin != null) oceanSkin.SetActive(!firstOfPair);
         }
 
         public void Sync(MonsterEntity e)

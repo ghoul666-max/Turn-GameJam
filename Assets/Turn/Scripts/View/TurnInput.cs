@@ -72,6 +72,20 @@ namespace Turn.View
             }
         }
 
+        /// <summary>T：回到标题（暂停菜单 / 结算界面里）。</summary>
+        public static bool TitlePressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                return kb != null && kb.tKey.wasPressedThisFrame;
+#else
+                return Input.GetKeyDown(KeyCode.T);
+#endif
+            }
+        }
+
         public static bool PausePressed
         {
             get

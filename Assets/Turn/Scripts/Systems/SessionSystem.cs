@@ -5,7 +5,7 @@ namespace Turn.Systems
     /// <summary>
     /// 一局的流程编排。每个模拟步的固定顺序：
     /// 定时刷怪 → 玩家移动/环境 → 位面环境 → 翻滚计时（落地冲击波）→ 怪物 → 鲨鱼 → 武器 → 子弹 → 经验球。
-    /// 之后依次检查：失败 → 是否有待处理的升级。
+    /// 之后依次检查：失败 → 过关（存活满 LevelConfig.SurviveSeconds）→ 是否有待处理的升级。
     /// 翻滚不在这里：它由输入层直接调用 IRollSystem.TryRoll，在一次调用里原子完成。
     /// </summary>
     public sealed class SessionSystem : ISessionSystem
@@ -15,7 +15,16 @@ namespace Turn.Systems
 
         public RunPhase Phase { get; private set; }
         public float Time { get; private set; }
-        public bool IsOver { get { return Phase == RunPhase.Defeat; } }
+        public bool IsOver { get { return Phase == RunPhase.Defeat || Phase == RunPhase.Victory; } }
+
+        public float LevelTimeLeft
+        {
+            get
+            {
+                float total = _ctx.Config.Level.SurviveSeconds;
+                return total > 0f && total > Time ? total - Time : 0f;
+            }
+        }
 
         public SessionSystem(ITurnContext ctx)
         {
@@ -54,6 +63,17 @@ namespace Turn.Systems
             if (!_ctx.Player.State.Alive)
             {
                 SetPhase(RunPhase.Defeat);
+                return;
+            }
+
+            // 过关：存活够时间（死亡优先判定）。表现层收到后翻页，开下一关的新一局。
+            LevelConfig level = _ctx.Config.Level;
+            if (level.SurviveSeconds > 0f && Time >= level.SurviveSeconds)
+            {
+                PlanePairId pair = _ctx.Plane.ActivePair;
+                bool victory = pair == level.FinalPair;
+                _ctx.Events.Publish(new LevelClearedEvent { Pair = pair, Time = Time, Victory = victory });
+                SetPhase(victory ? RunPhase.Victory : RunPhase.LevelCleared);
                 return;
             }
             OpenLevelUpIfPending();

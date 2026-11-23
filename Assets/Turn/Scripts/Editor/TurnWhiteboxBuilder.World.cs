@@ -606,7 +606,7 @@ namespace Turn.EditorTools
                 : "[Turn] 4 个位面的 Root 都已存在，没有改动。");
         }
 
-        [MenuItem("Turn/M1 · 在火山 / 海洋摆放白模遮挡物（不重建场景，会替换上次生成的白模遮挡物）", false, 41)]
+        [MenuItem("Turn/M1 · 摆放 6 个位面的白模遮挡物（不重建场景，会替换上次生成的白模遮挡物）", false, 41)]
         public static void PlaceWhiteboxObstaclesMenu()
         {
             MapManager map;
@@ -616,7 +616,7 @@ namespace Turn.EditorTools
             int count = PlaceWhiteboxObstacles(map);
             EditorUtility.SetDirty(map);
             EditorSceneManager.MarkSceneDirty(map.gameObject.scene);
-            Debug.Log("[Turn] 已在火山 / 海洋摆放 " + count + " 个白模遮挡物（VolcanoObstacles / OceanObstacles）。记得保存场景。F2 可在运行时显示判定框。");
+            Debug.Log("[Turn] 已摆放 " + count + " 个白模遮挡物（各位面 Root 下的 *Obstacles）。没有 Root 的位面会跳过，先点「补齐 4 个空位面」。记得保存场景。F2 可在运行时显示判定框。");
         }
 
         private static bool FindSceneParts(out MapManager map, out WorldBounds bounds)
@@ -643,7 +643,7 @@ namespace Turn.EditorTools
             }
             if (map == null || bounds == null)
             {
-                Debug.LogWarning("[Turn] " + ScenePath + " 里没有 MapManager / WorldBounds。");
+                Debug.LogWarning("[Turn] " + ScenePath + " 里没有 MapManager / WorldBounds。"); 
                 return false;
             }
             return true;
@@ -759,6 +759,14 @@ namespace Turn.EditorTools
             {
                 return new ObstacleSpec { Name = name, Kind = ObstacleKind.Solid, Shape = ObstacleShape.Box, Position = new Vector2(x, y), Radius = 0.5f, Size = new Vector2(w, h), Color = color };
             }
+
+            /// <summary>改成软遮挡（只挡人 / 只挡弹）。</summary>
+            public ObstacleSpec As(ObstacleKind kind)
+            {
+                ObstacleSpec copy = this;
+                copy.Kind = kind;
+                return copy;
+            }
         }
 
         /// <summary>
@@ -800,8 +808,81 @@ namespace Turn.EditorTools
                 ObstacleSpec.Circle("巨贝壳_3", 12f, 8f, 0.8f, shell),
             };
 
+            // ---- 工位（策划书 4.2）：办公桌 / 隔断屏风 / 机箱 = 实体，文件堆 = 软·只挡人 ----
+            Color desk = new Color(0.62f, 0.6f, 0.56f, 1f);
+            Color screen = new Color(0.45f, 0.5f, 0.55f, 1f);
+            Color tower = new Color(0.25f, 0.27f, 0.3f, 1f);
+            Color paper = new Color(0.95f, 0.95f, 0.9f, 1f);
+            ObstacleSpec[] office =
+            {
+                ObstacleSpec.Box("办公桌_1", -10f, 5f, 3.0f, 1.4f, desk),
+                ObstacleSpec.Box("办公桌_2", 9f, -5f, 3.0f, 1.4f, desk),
+                ObstacleSpec.Box("办公桌_3", 10f, 6f, 1.4f, 3.0f, desk),
+                ObstacleSpec.Box("隔断屏风_1", -5f, -7f, 0.4f, 4.0f, screen),
+                ObstacleSpec.Box("隔断屏风_2", 5f, 7.5f, 4.0f, 0.4f, screen),
+                ObstacleSpec.Box("机箱_1", -14f, -5f, 0.8f, 1.0f, tower),
+                ObstacleSpec.Box("机箱_2", 14f, -1f, 0.8f, 1.0f, tower),
+                ObstacleSpec.Circle("文件堆_1", 3f, -9f, 1.0f, paper).As(ObstacleKind.BlocksUnitsOnly),
+                ObstacleSpec.Circle("文件堆_2", -13f, 2f, 0.9f, paper).As(ObstacleKind.BlocksUnitsOnly),
+            };
+
+            // ---- 梦境（策划书 4.2）：悬浮书本 / 扭曲家具 = 实体，云朵平台 = 软·只挡弹 ----
+            Color book = new Color(0.55f, 0.35f, 0.85f, 1f);
+            Color furniture = new Color(0.95f, 0.55f, 0.35f, 1f);
+            Color cloud = new Color(0.92f, 0.95f, 1f, 1f);
+            ObstacleSpec[] dream =
+            {
+                ObstacleSpec.Box("悬浮书本_1", -9f, -4f, 1.6f, 1.0f, book),
+                ObstacleSpec.Box("悬浮书本_2", 12f, 4f, 1.0f, 1.6f, book),
+                ObstacleSpec.Circle("扭曲家具_1", 6f, -7f, 1.2f, furniture),
+                ObstacleSpec.Circle("扭曲家具_2", -6f, 7f, 1.1f, furniture),
+                ObstacleSpec.Box("扭曲家具_3", 15f, -6f, 1.4f, 1.4f, furniture),
+                ObstacleSpec.Circle("云朵平台_1", -13f, 6f, 1.6f, cloud).As(ObstacleKind.BlocksProjectilesOnly),
+                ObstacleSpec.Circle("云朵平台_2", 8f, 8f, 1.4f, cloud).As(ObstacleKind.BlocksProjectilesOnly),
+                ObstacleSpec.Circle("云朵平台_3", -3f, -9f, 1.4f, cloud).As(ObstacleKind.BlocksProjectilesOnly),
+            };
+
+            // ---- 原始（策划书 4.3）：巨石 / 古树 / 兽骨堆 = 实体，灌木 = 软（策划书没写挡什么，暂定只挡弹）----
+            Color stone = new Color(0.5f, 0.47f, 0.42f, 1f);
+            Color tree = new Color(0.35f, 0.25f, 0.15f, 1f);
+            Color bush = new Color(0.3f, 0.55f, 0.25f, 1f);
+            Color bone = new Color(0.9f, 0.88f, 0.78f, 1f);
+            ObstacleSpec[] primal =
+            {
+                ObstacleSpec.Circle("巨石_1", -10f, -6f, 1.2f, stone),
+                ObstacleSpec.Circle("巨石_2", 11f, 5f, 1.1f, stone),
+                ObstacleSpec.Circle("古树_1", -6f, 6f, 0.9f, tree),
+                ObstacleSpec.Circle("古树_2", 7f, -7f, 0.9f, tree),
+                ObstacleSpec.Circle("古树_3", 15f, -3f, 0.8f, tree),
+                ObstacleSpec.Circle("兽骨堆_1", 12f, -8f, 0.9f, bone),
+                ObstacleSpec.Circle("灌木_1", -14f, 3f, 1.3f, bush).As(ObstacleKind.BlocksProjectilesOnly),
+                ObstacleSpec.Circle("灌木_2", 4f, 9f, 1.2f, bush).As(ObstacleKind.BlocksProjectilesOnly),
+                ObstacleSpec.Circle("灌木_3", -2f, -8f, 1.2f, bush).As(ObstacleKind.BlocksProjectilesOnly),
+            };
+
+            // ---- 未来（策划书 4.3）：集装箱 / 能量立柱 / 报废机甲 = 实体，全息挡板 = 软·只挡弹 ----
+            Color container = new Color(0.25f, 0.4f, 0.65f, 1f);
+            Color pylon = new Color(0.6f, 0.9f, 1f, 1f);
+            Color mech = new Color(0.4f, 0.4f, 0.45f, 1f);
+            Color holo = new Color(0.55f, 0.95f, 0.95f, 1f);
+            ObstacleSpec[] future =
+            {
+                ObstacleSpec.Box("集装箱_1", -9f, 5f, 3.4f, 1.4f, container),
+                ObstacleSpec.Box("集装箱_2", 10f, -5f, 1.4f, 3.4f, container),
+                ObstacleSpec.Circle("能量立柱_1", -5f, -6f, 0.6f, pylon),
+                ObstacleSpec.Circle("能量立柱_2", 6f, 6f, 0.6f, pylon),
+                ObstacleSpec.Circle("能量立柱_3", 14f, 4f, 0.6f, pylon),
+                ObstacleSpec.Box("报废机甲_1", -14f, -4f, 2.0f, 2.0f, mech),
+                ObstacleSpec.Box("全息挡板_1", 3f, -8f, 3.0f, 0.3f, holo).As(ObstacleKind.BlocksProjectilesOnly),
+                ObstacleSpec.Box("全息挡板_2", -3f, 8f, 3.0f, 0.3f, holo).As(ObstacleKind.BlocksProjectilesOnly),
+            };
+
             return FillObstacles(map.GetRoot(PlaneId.Volcano), "VolcanoObstacles", volcano)
-                 + FillObstacles(map.GetRoot(PlaneId.Ocean), "OceanObstacles", ocean);
+                 + FillObstacles(map.GetRoot(PlaneId.Ocean), "OceanObstacles", ocean)
+                 + FillObstacles(map.GetRoot(PlaneId.Office), "OfficeObstacles", office)
+                 + FillObstacles(map.GetRoot(PlaneId.Dream), "DreamObstacles", dream)
+                 + FillObstacles(map.GetRoot(PlaneId.Primal), "PrimalObstacles", primal)
+                 + FillObstacles(map.GetRoot(PlaneId.Future), "FutureObstacles", future);
         }
 
         /// <summary>在位面 Root 下重建名为 containerName 的遮挡物容器（旧的整个替换掉）。</summary>

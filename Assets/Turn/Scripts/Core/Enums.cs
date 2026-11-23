@@ -84,8 +84,11 @@ namespace Turn.Core
     /// <summary>地形类型。存进网格时按 byte 存。</summary>
     public enum TerrainType : byte { Normal = 0, Lava = 1, ShallowWater = 2 }
 
-    /// <summary>一局的阶段。只有 SessionSystem 能改。</summary>
-    public enum RunPhase { Playing, LevelUp, Defeat }
+    /// <summary>
+    /// 一局（= 一关 = 一组位面）的阶段。只有 SessionSystem 能改。只能在末尾追加。
+    /// LevelCleared：本关存活够时间，等表现层翻页后进入下一关；Victory：最后一关也过了。
+    /// </summary>
+    public enum RunPhase { Playing, LevelUp, Defeat, LevelCleared, Victory }
 
     /// <summary>五种升级词条。</summary>
     public enum UpgradeId { Magazine = 0, Burn = 1, RollCooldown = 2, RollInvincible = 3, Shockwave = 4 }

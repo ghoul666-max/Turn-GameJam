@@ -20,16 +20,87 @@ namespace Turn.View
         public float playerLavaDps = 10f;
         [Tooltip("玩家站在海洋浅水区每秒回复的生命（普通怪物不回血）")]
         public float shallowRegenPerSecond = 3f;
+        [Tooltip("工位困意 / 梦境减速 / 老板来电的参数（F1 数值面板的「位面机制」分组同步这些值）")]
+        public PlaneMechanicsSettings mechanics = new PlaneMechanicsSettings();
 
         public EnvironmentConfig ToConfig()
         {
-            return new EnvironmentConfig
+            var c = new EnvironmentConfig
             {
                 StartPlane = startMap,
                 DotTickInterval = dotTickInterval,
                 PlayerLavaDps = playerLavaDps,
                 ShallowRegenPerSecond = shallowRegenPerSecond,
             };
+            if (mechanics != null) mechanics.ApplyTo(c);
+            return c;
+        }
+    }
+
+    /// <summary>关卡参数（Inspector + F1 数值面板）。一关 = 一组位面，存活够时间翻页进下一关，最后一组通过 = 胜利。</summary>
+    [Serializable]
+    public sealed class LevelSettings
+    {
+        [Tooltip("数据版本。旧存档里没有这一组时读出来是 0，此时忽略、使用 Inspector 数值。")]
+        [HideInInspector] public int version = 1;
+        [Tooltip("每关（每组位面）需要存活的秒数。0 = 不会过关（无尽测试）。")]
+        [Min(0f)] public float surviveSeconds = 300f;
+
+        public LevelConfig ToConfig()
+        {
+            return new LevelConfig { SurviveSeconds = surviveSeconds };
+        }
+    }
+
+    /// <summary>工位 / 梦境的位面机制参数（Inspector + F1 数值面板）。默认值 = 策划书。</summary>
+    [Serializable]
+    public sealed class PlaneMechanicsSettings
+    {
+        [Tooltip("数据版本。旧存档里没有这一组时读出来是 0，此时整组忽略、使用 Inspector 数值。")]
+        [HideInInspector] public int version = 1;
+
+        [Header("工位 · 困意")]
+        [Tooltip("连续停留超过多少秒开始掉血")]
+        [Min(0f)] public float drowsyDelay = 5f;
+        [Tooltip("困意每秒伤害")]
+        [Min(0f)] public float drowsyDps = 4f;
+        [Tooltip("从进入工位到画面最暗 / 眼皮合到最紧的秒数（纯表现）")]
+        [Min(0.1f)] public float drowsyDarkenTime = 10f;
+
+        [Header("梦境 · 减速")]
+        [Tooltip("每隔多少秒叠一层减速")]
+        [Min(0.05f)] public float dreamSlowInterval = 2f;
+        [Tooltip("每层减速比例（0.05 = 5%）")]
+        [UnityEngine.Range(0f, 0.5f)] public float dreamSlowPerStack = 0.05f;
+        [Tooltip("减速上限（0.4 = 40%，移速 4.2 → 2.52）")]
+        [UnityEngine.Range(0f, 0.95f)] public float dreamSlowMax = 0.4f;
+
+        [Header("梦境 · 老板来电")]
+        [Tooltip("预警时长（秒）")]
+        [Min(0.05f)] public float phoneWarning = 0.8f;
+        [Tooltip("砸落半径")]
+        [Min(0.1f)] public float phoneRadius = 2.5f;
+        [Tooltip("砸中伤害（只伤玩家）")]
+        [Min(0f)] public float phoneDamage = 25f;
+        [Tooltip("两次来电的最短间隔（秒）")]
+        [Min(0.5f)] public float phoneIntervalMin = 4f;
+        [Tooltip("两次来电的最长间隔（秒）")]
+        [Min(0.5f)] public float phoneIntervalMax = 6f;
+
+        public void ApplyTo(EnvironmentConfig c)
+        {
+            if (c == null || version <= 0) return;
+            c.DrowsyDelay = drowsyDelay;
+            c.DrowsyDps = drowsyDps;
+            c.DrowsyDarkenTime = drowsyDarkenTime;
+            c.DreamSlowInterval = dreamSlowInterval;
+            c.DreamSlowPerStack = dreamSlowPerStack;
+            c.DreamSlowMax = dreamSlowMax;
+            c.PhoneWarning = phoneWarning;
+            c.PhoneRadius = phoneRadius;
+            c.PhoneDamage = phoneDamage;
+            c.PhoneIntervalMin = phoneIntervalMin;
+            c.PhoneIntervalMax = Mathf.Max(phoneIntervalMin, phoneIntervalMax);
         }
     }
 
@@ -74,6 +145,9 @@ namespace Turn.View
         [Header("环境参数")]
         [SerializeField] private EnvironmentSettings environment = new EnvironmentSettings();
 
+        [Header("关卡")]
+        [SerializeField] private LevelSettings level = new LevelSettings();
+
         [Header("水池 / 岩浆池")]
         [Tooltip("勾选：海洋的浅水池完全复制火山岩浆池的大小、形状、位置（一一对应）。只需要编辑 / 随机生成 LavaGrid。")]
         [SerializeField] private bool shareTerrainShape = true;
@@ -89,6 +163,7 @@ namespace Turn.View
         private float _lavaShowTimer = -1f;
 
         public EnvironmentSettings Environment { get { return environment; } }
+        public LevelSettings Level { get { return level; } }
         public float TerrainCellSize { get { return environment.terrainCellSize; } }
         public WorldBounds Bounds { get { return worldBounds; } }
 
