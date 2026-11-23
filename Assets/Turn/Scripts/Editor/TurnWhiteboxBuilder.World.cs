@@ -294,6 +294,13 @@ namespace Turn.EditorTools
             mapManager.Apply(PlaneId.Volcano); // 场景里同样只有一张图是激活的
             ApplyMaterialInScene(scene);
 
+            // ---- 音频：有素材就自动挂上 TurnAudio 并填好槽位 ----
+            if (AssetDatabase.IsValidFolder(TurnAudioSetup.AudioDir))
+            {
+                int missingAudio;
+                TurnAudioSetup.Apply(gmGo, out missingAudio);
+            }
+
             Directory.CreateDirectory(SceneDir);
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddToBuildSettings(ScenePath);

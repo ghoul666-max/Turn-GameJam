@@ -7295,6 +7295,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1133113360}
   - component: {fileID: 1133113359}
+  - component: {fileID: 1133113361}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -7351,6 +7352,115 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1133113361
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1133113358}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fda822c784ab52047874a3caebc0569c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Turn.View.TurnAudio
+  masterVolume: 1
+  musicVolume: 0.6
+  musicCrossfade: 0.6
+  volcanoMusic: {fileID: 8300000, guid: e5265b89df7910e4f9a0663c9b350502, type: 3}
+  oceanMusic: {fileID: 8300000, guid: 2d08c64deb787704da71d5c6cdaa2f1a, type: 3}
+  officeMusic: {fileID: 8300000, guid: b452beffdf8c3d94dad7d2855015df0b, type: 3}
+  dreamMusic: {fileID: 8300000, guid: 85bac8b445285ba49bc1f286fe7a7b83, type: 3}
+  primalMusic: {fileID: 8300000, guid: 361465e88e721154b8653c6a4af82d66, type: 3}
+  futureMusic: {fileID: 8300000, guid: 795ebe8891bae6f4dbb4fd2a682d3438, type: 3}
+  titleMusic: {fileID: 8300000, guid: c9610b1788f388a47b62f5a391eb21ca, type: 3}
+  roll:
+    clip: {fileID: 8300000, guid: 5144b7fdc37ec5d43bbb5d208b00f0a3, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  rollRejected:
+    clip: {fileID: 8300000, guid: ef7fbb37ef8984f47b9da733017aeb95, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.2
+  playerHurt:
+    clip: {fileID: 8300000, guid: 0ac00a0da94eb70479df16596a344cb1, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.15
+  damageBlocked:
+    clip: {fileID: 8300000, guid: 81243b566c6392d4986b3f7813dd8a9f, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.15
+  playerDeath:
+    clip: {fileID: 8300000, guid: deaa4c597922bc84999c4cb94587adcd, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  shot:
+    clip: {fileID: 8300000, guid: 368556dc77076874fb668c41f054cbca, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.05
+  ammoEmpty:
+    clip: {fileID: 8300000, guid: 20cba1a58380b8c4bbc4c675b10746d9, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  monsterDeath:
+    clip: {fileID: 8300000, guid: d82c6475716338f4e9746942ef6a90e8, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.05
+  orbPickup:
+    clip: {fileID: 8300000, guid: e056de4ada3d3c544a26988a76795b7f, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.05
+  levelUp:
+    clip: {fileID: 8300000, guid: 5a8142c8b3eb9f54bb413f5478cac3d1, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  lavaEruption:
+    clip: {fileID: 8300000, guid: a65159011c6a1b24097b238a4ce59545, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  sharkAppear:
+    clip: {fileID: 8300000, guid: b991670ace3b95c4ebb2d563148b9d4f, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  shockwave:
+    clip: {fileID: 8300000, guid: d6b57c369deb1704dbc86c3ec5e0aa06, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  phoneWarning:
+    clip: {fileID: 8300000, guid: 9fe4e8b95cb119443a1def813335e1ef, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  phoneLand:
+    clip: {fileID: 8300000, guid: b6097fd0eb0a20049b503e1b34ab5c2e, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  drowsyLoop: {fileID: 0}
+  drowsyVolume: 0.8
+  pageTurn:
+    clip: {fileID: 8300000, guid: 7cd2a063afc37954182c2769f81c3166, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  victory:
+    clip: {fileID: 8300000, guid: 632168ea8fc5ae54ea46116787c147bd, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
 --- !u!1 &1136955925
 GameObject:
   m_ObjectHideFlags: 0

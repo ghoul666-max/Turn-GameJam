@@ -125,9 +125,9 @@ namespace Turn.View
             _levelPair = _firstPair;
             _levelChosen = true;
             ResetTotals();
+            if (_audio != null) _audio.PlayTitleMusic(); // 先进标题模式，开局事件就不会先响一下位面曲
             StartNewRun();
             if (_flow != null) _flow.ShowTitle();
-            if (_audio != null) _audio.PlayTitleMusic();
         }
 
         // ---------------- 流程（标题 / 暂停 / 结算的按钮与快捷键都走这里） ----------------
@@ -137,7 +137,7 @@ namespace Turn.View
             if (_audio != null)
             {
                 _audio.PlayPageTurn();
-                _audio.PlayPlaneMusic(); // 封面翻开 = 真正开局：标题曲换回本关位面曲
+                _audio.PlayPlaneMusic(); // 标题曲 → 当前位面曲
             }
         }
 
@@ -162,9 +162,9 @@ namespace Turn.View
 
         private void ReturnToTitle()
         {
+            if (_audio != null) _audio.PlayTitleMusic();
             RestartFromFirstLevel();
             if (_flow != null) _flow.ShowTitle();
-            if (_audio != null) _audio.PlayTitleMusic();
         }
 
         private void ShowResult(bool victory)

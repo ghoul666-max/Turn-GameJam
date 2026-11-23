@@ -11,7 +11,7 @@
 | --- | --- |
 | 一次性音效 | **17 个槽位全部接好**（事件驱动，代码零改动即可发声） |
 | 背景音乐 | **6 个位面 + 1 首标题 = 7 首已齐**；6 个位面槽 + 交叉淡入已实现 |
-| 标题页音乐 | **已实现**：`titleMusic` 槽 + `PlayTitleMusic()` / `PlayPlaneMusic()`，标题→开局自动换曲 |
+| 标题页音乐 | **已实现**：`titleMusic` 槽 + `PlayTitleMusic()` / `PlayPlaneMusic()` + `_titleMode`（开局不会先响一下位面曲） |
 | 工位困意 | 循环音槽 `drowsyLoop` 已实现，音量自动跟 `Environment.Drowsiness` |
 | 版权风险 | Kenney = CC0（免署名）；Incompetech = **CC BY 4.0，必须署名** |
 
@@ -64,16 +64,19 @@ Music by Kevin MacLeod (incompetech.com), licensed under CC BY 4.0.
 
 ## 2. 文件应该放哪
 
-Unity 内目标路径（都在 `Assets/Turn/` 下，符合分工归属）：
+**素材已经入库**（2026-11-23）：`Assets/Turn/Audio/` 共 108 个文件（含 `.meta`），随仓库分发，B 拉取后可直接在场景里引用，不用再手动拷。
 
 ```
 Assets/Turn/Audio/
   SFX/01-roll/forceField_000.ogg
   SFX/02-rollRejected/error_003.ogg
-  ...（18 个文件夹，编号 = 槽位顺序）
-  BGM/battle__Volatile Reaction.mp3
-  BGM/ambient_office__Meditation Impromptu 01.mp3
+  ...（18 个槽位文件夹，编号 = 槽位顺序）
+  BGM/title__Funkorama.mp3
+  BGM/volcano__Volatile Reaction.mp3
+  ...（6 位面 + 1 标题，共 7 首，前缀 = 槽位字段名）
 ```
+
+自动装配：`Editor/TurnWhiteboxBuilder.World.cs` 在白模生成时会调 `Editor/TurnAudioSetup.Apply(gmGo, out missingAudio)`，只要 `Assets/Turn/Audio` 存在就自动挂 `TurnAudio` 并填满槽位（缺几个音频会返回在 `missingAudio` 里）。
 
 导入参数：
 
@@ -138,11 +141,11 @@ Assets/Turn/Audio/
 | `primalMusic` | `primal__Killers.mp3` | 原始位面要凶 |
 | `futureMusic` | `future__Digital Lemonade.mp3` | 电子轻快，贴"未来" |
 
-### 标题页音乐（已实现）
+### 标题页音乐（已实现，2026-11-23 最终版）
 
-- `TurnAudio`：`titleMusic` 字段（L55）+ `PlayTitleMusic()`（L214）+ `PlayPlaneMusic()`（L220），内部共用 `PlayMusic(clip)`（L225）走同一套 A/B 交叉淡入。
-- `GameManager`：`Start()` 显示标题后调 `PlayTitleMusic()`（L130）；封面翻开时 `OnTitleOpened()` 调 `PlayPlaneMusic()`（L140）把标题曲换回关卡曲；`ReturnToTitle()`（L167）回标题时重新起标题曲。
-- 未填 `titleMusic` 时行为与之前完全一致（标题静音），不会报错。
+- `TurnAudio`：`titleMusic` 字段（L55）+ `_titleMode` 标志（L93）；`PlayTitleMusic()`（L160）进标题模式并播放，`PlayPlaneMusic()`（L168）退出标题模式并切回当前位面曲；`PlayMusicFor()`（L224）在标题模式下直接 return，所以开局 / 切位面事件不会先响一下位面曲。三者共用 `PlayMusic(clip)`（L230）的 A/B 交叉淡入。
+- `GameManager`：`Start()` **先**调 `PlayTitleMusic()`（L128）再 `ShowTitle()`（L130），避免开局瞬间漏出位面曲；封面翻开时 `OnTitleOpened()` 调 `PlayPlaneMusic()`（L140）；`ReturnToTitle()`（L165）重新进标题模式。
+- 未填 `titleMusic` 时 `PlayTitleMusic()` 直接 return：标题静音、位面曲照常，不会报错。
 
 ---
 
@@ -186,10 +189,11 @@ Assets/Turn/Audio/
 | 环境循环 | 除困意外全无（岩浆咕嘟、海浪、空调） | Sonniss GDC 包最全，但整包数 GB，按需取 |
 | `SoundCue` 多变体 | 每个槽只支持单 clip | 需要随机变体时改成 `AudioClip[]`（A 的文件） |
 | B 侧事件改名 | 会静默失效 | 改 `Events.Combat.cs` 必须同步 `TurnAudio.Bind()` |
-| 音乐版权 | 5 首全是 CC BY | 上线前务必完成 §1.2 署名 |
+| 音乐版权 | 7 首全是 CC BY | 上线前务必完成 §1.2 署名 |
 
 ---
 
 ## 9. 变更记录
 
 - 2026-11-23：建立本文件；素材落地 `D:\BGM`（Kenney 37 SFX + Incompetech 5 BGM），并核对 `TurnAudio.cs` 的 17 槽 / 6 位面音乐 / 困意循环。
+- 2026-11-23（深夜）：BGM 补到 7 首（6 位面 + 标题），文件名改为按槽位前缀；标题音乐定稿为 `_titleMode` 版本；`Assets/Turn/Audio/`（108 文件）与 `Editor/TurnAudioSetup.cs` 入库，白模生成时自动装配音频。
