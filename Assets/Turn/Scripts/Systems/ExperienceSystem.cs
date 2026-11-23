@@ -35,8 +35,12 @@ namespace Turn.Systems
             PlayerState player = _ctx.Player.State;
             if (player.Alive)
             {
-                float magnetSq = _config.MagnetRadius * _config.MagnetRadius;
-                float pickupSq = _config.PickupRadius * _config.PickupRadius;
+                int level = _ctx.Progression.GetLevel(BuildIds.Query(BuildId.B12));
+                float rangeScale = 1f + level * _ctx.Config.Upgrades.ExperienceMagnetPerLevel;
+                float magnetRadius = _config.MagnetRadius * rangeScale;
+                float pickupRadius = _config.PickupRadius * rangeScale;
+                float magnetSq = magnetRadius * magnetRadius;
+                float pickupSq = pickupRadius * pickupRadius;
 
                 for (int i = 0; i < _active.Count; i++)
                 {

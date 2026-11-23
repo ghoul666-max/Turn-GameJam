@@ -33,6 +33,7 @@ namespace Turn.View
         private readonly Dictionary<int, ExperienceOrb> _orbs = new Dictionary<int, ExperienceOrb>();
         private readonly HashSet<int> _seen = new HashSet<int>();
         private readonly List<int> _stale = new List<int>();
+        private readonly List<GameObject> _rockWarnings = new List<GameObject>();
 
         public EntityViewSync(ITurnContext ctx, Refs refs)
         {
@@ -41,6 +42,8 @@ namespace Turn.View
             ctx.Events.Subscribe<MonsterDamagedEvent>(OnMonsterDamaged);
             ctx.Events.Subscribe<MonsterDiedEvent>(OnMonsterDied);
             ctx.Events.Subscribe<PlaneSwitchedEvent>(OnMapSwitched);
+            ctx.Events.Subscribe<RockImpactWarnedEvent>(OnRockImpactWarned);
+            ctx.Events.Subscribe<LaserAttackWarnedEvent>(OnLaserAttackWarned);
         }
 
         public void Dispose()
@@ -48,6 +51,11 @@ namespace Turn.View
             _ctx.Events.Unsubscribe<MonsterDamagedEvent>(OnMonsterDamaged);
             _ctx.Events.Unsubscribe<MonsterDiedEvent>(OnMonsterDied);
             _ctx.Events.Unsubscribe<PlaneSwitchedEvent>(OnMapSwitched);
+            _ctx.Events.Unsubscribe<RockImpactWarnedEvent>(OnRockImpactWarned);
+            _ctx.Events.Unsubscribe<LaserAttackWarnedEvent>(OnLaserAttackWarned);
+            for (int i = 0; i < _rockWarnings.Count; i++)
+                if (_rockWarnings[i] != null) Object.Destroy(_rockWarnings[i]);
+            _rockWarnings.Clear();
             ClearContainer(_refs.MonsterContainer);
             ClearContainer(_refs.SharkContainer);
             ClearContainer(_refs.ProjectileContainer);
@@ -68,6 +76,7 @@ namespace Turn.View
 
         public void Sync()
         {
+            _rockWarnings.RemoveAll(item => item == null);
             SyncMonsters();
             SyncSharks();
             SyncProjectiles();
@@ -155,9 +164,10 @@ namespace Turn.View
                 if (!_projectiles.TryGetValue(e.Id, out view))
                 {
                     Projectile prefab = e.Form == PlaneId.Volcano ? _refs.FireballPrefab : _refs.HarpoonPrefab;
+                    if (prefab == null) prefab = _refs.FireballPrefab ?? _refs.HarpoonPrefab;
                     if (prefab == null) continue;
                     view = Object.Instantiate(prefab, ViewMath.ToWorld(e.Position), Quaternion.identity, _refs.ProjectileContainer);
-                    view.name = (e.Form == PlaneId.Volcano ? "Fireball_" : "Harpoon_") + e.Id;
+                    view.name = (e.Enemy ? "Enemy_" + e.EnemyKind + "_" : e.Form == PlaneId.Volcano ? "Fireball_" : "Projectile_") + e.Id;
                     view.Init(e);
                     _projectiles.Add(e.Id, view);
                 }
@@ -232,9 +242,51 @@ namespace Turn.View
             }
         }
 
+        private void OnRockImpactWarned(RockImpactWarnedEvent evt)
+        {
+            if (_ctx.Plane.Active != evt.Plane) return;
+            GameObject warning = new GameObject("RockImpactWarning");
+            warning.transform.position = ViewMath.ToWorld(evt.Position);
+            float radius = Mathf.Max(.1f, _ctx.Config.Monster.RockImpactRadius);
+            var renderer = warning.AddComponent<LineRenderer>();
+            renderer.useWorldSpace = false;
+            renderer.loop = true;
+            renderer.positionCount = 33;
+            renderer.widthMultiplier = .035f;
+            renderer.startColor = renderer.endColor = new Color(1f, .25f, .12f, .9f);
+            renderer.sortingOrder = 200;
+            for (int i = 0; i < renderer.positionCount; i++)
+            {
+                float angle = i * Mathf.PI * 2f / (renderer.positionCount - 1);
+                renderer.SetPosition(i, new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f));
+            }
+            _rockWarnings.Add(warning);
+            Object.Destroy(warning, Mathf.Max(.01f, evt.WarningSeconds));
+        }
+
+        private void OnLaserAttackWarned(LaserAttackWarnedEvent evt)
+        {
+            if (_ctx.Plane.Active != evt.Plane) return;
+            GameObject warning = new GameObject("LaserAttackWarning");
+            warning.transform.position = ViewMath.ToWorld(evt.Origin);
+            var line = warning.AddComponent<LineRenderer>();
+            line.useWorldSpace = false;
+            line.positionCount = 2;
+            line.widthMultiplier = Mathf.Max(.035f, _ctx.Config.Monster.LaserWidth);
+            line.startColor = line.endColor = new Color(1f, .08f, .08f, .9f);
+            line.sortingOrder = 200;
+            line.SetPosition(0, Vector3.zero);
+            line.SetPosition(1, new Vector3(evt.Direction.X * evt.Range, evt.Direction.Y * evt.Range, 0f));
+            _rockWarnings.Add(warning);
+            Object.Destroy(warning, Mathf.Max(.01f, evt.WarningSeconds + _ctx.Config.Monster.LaserDuration));
+        }
+
         /// <summary>地图切换：现存的每一只怪物原地换皮，实例 / 坐标 / 血量 / Buff 全部保留。</summary>
         private void OnMapSwitched(PlaneSwitchedEvent evt)
         {
+            for (int i = 0; i < _rockWarnings.Count; i++)
+                if (_rockWarnings[i] != null) Object.Destroy(_rockWarnings[i]);
+            _rockWarnings.Clear();
             foreach (KeyValuePair<int, MonsterController> pair in _monsters)
             {
                 if (pair.Value != null) pair.Value.SetSkin(evt.To);

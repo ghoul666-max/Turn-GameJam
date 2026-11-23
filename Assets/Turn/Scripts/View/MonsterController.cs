@@ -24,6 +24,30 @@ namespace Turn.View
         public float lavaHitDamage = 20f;
         [Tooltip("死亡掉落的经验值")]
         [Min(0)] public int xp = 1;
+        [Tooltip("按 MonsterKind 顺序配置全部怪物原型，长度应为 13；缺项使用策划默认值")]
+        public MonsterArchetype[] archetypes = Turn.Monsters.MonsterCatalog.CreateDefaults();
+        [Header("怪物攻击/特殊行为")]
+        public float splitInterval = 3f;
+        public int bugletLimitPerParent = 6;
+        public float bubbleSpeed = 3f;
+        public float enemyProjectileLifetime = 3f;
+        public float enemyProjectileRadius = .22f;
+        public float stoneRecovery = .5f;
+        public float chargeSpeed = 5.5f;
+        public float chargeDuration = .8f;
+        public float robotChargeSpeed = 4.8f;
+        public float robotKnockbackDistance = 1.5f;
+        public float boarChargeSpeed = 5f;
+        public float boarStunDuration = 2f;
+        public float dataWormExplosionRadius = 1f;
+        public float alarmAuraRadius = 2f;
+        public float laserDuration = 1f;
+        public float laserWarning = .4f;
+        public float laserWidth = .18f;
+        public int codeBurstShots = 3;
+        public float codeShotInterval = .18f;
+        public float rockWarning = .3f;
+        public float rockImpactRadius = .7f;
 
         public MonsterConfig ToConfig()
         {
@@ -39,7 +63,39 @@ namespace Turn.View
                 Radius = radius,
                 LavaHitDamage = lavaHitDamage,
                 Xp = xp,
+                Archetypes = NormalizeArchetypes(archetypes),
+                SplitInterval = splitInterval,
+                BugletLimitPerParent = bugletLimitPerParent,
+                BubbleSpeed = bubbleSpeed,
+                EnemyProjectileLifetime = enemyProjectileLifetime,
+                EnemyProjectileRadius = enemyProjectileRadius,
+                StoneRecovery = stoneRecovery,
+                ChargeSpeed = chargeSpeed,
+                ChargeDuration = chargeDuration,
+                RobotChargeSpeed = robotChargeSpeed,
+                RobotKnockbackDistance = robotKnockbackDistance,
+                BoarChargeSpeed = boarChargeSpeed,
+                BoarStunDuration = boarStunDuration,
+                DataWormExplosionRadius = dataWormExplosionRadius,
+                AlarmAuraRadius = alarmAuraRadius,
+                LaserDuration = laserDuration,
+                LaserWarning = laserWarning,
+                LaserWidth = laserWidth,
+                CodeBurstShots = codeBurstShots,
+                CodeShotInterval = codeShotInterval,
+                RockWarning = rockWarning,
+                RockImpactRadius = rockImpactRadius,
             };
+        }
+        private static MonsterArchetype[] NormalizeArchetypes(MonsterArchetype[] configured)
+        {
+            MonsterArchetype[] defaults = Turn.Monsters.MonsterCatalog.CreateDefaults();
+            if (configured == null) return defaults;
+            var result = new MonsterArchetype[defaults.Length];
+            for (int i = 0; i < result.Length; i++)
+                result[i] = i < configured.Length && configured[i] != null && configured[i].MaxHp > 0f
+                    ? configured[i] : defaults[i];
+            return result;
         }
     }
 
@@ -74,6 +130,10 @@ namespace Turn.View
         [SerializeField] private bool burning;
         [SerializeField] private bool penaltySpawned;
         [SerializeField] private PlaneId skin;
+        [SerializeField] private MonsterKind kind;
+        [SerializeField] private int attackPhase;
+        [SerializeField] private float slowLeft;
+        [SerializeField] private float laserWarningLeft;
 
         private Color _volcanoColor = Color.white;
         private Color _oceanColor = Color.white;
@@ -107,6 +167,10 @@ namespace Turn.View
             hp = e.Hp;
             burning = e.Burning;
             penaltySpawned = e.Penalty;
+            kind = e.Kind;
+            attackPhase = e.AiPhase;
+            slowLeft = e.SlowLeft;
+            laserWarningLeft = e.Kind == MonsterKind.FutureSoldier && e.AiPhase == 1 ? e.AiTimer : 0f;
 
             bool flip = e.Velocity.X < -0.01f;
             if (volcanoRenderer != null) volcanoRenderer.flipX = flip;

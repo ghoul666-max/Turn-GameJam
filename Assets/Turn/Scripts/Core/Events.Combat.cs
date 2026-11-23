@@ -20,6 +20,16 @@ namespace Turn.Core
 
     public struct MonsterDiedEvent { public int MonsterId; public Vec2 Position; }
 
+    /// <summary>玩家武器击杀已确认；鲨鱼/环境/持续伤害不触发。</summary>
+    public struct WeaponKillConfirmedEvent { public int MonsterId; public PlaneId Form; }
+
+    /// <summary>投石野人已经锁定落点；表现层只用它画阴影预警。</summary>
+    public struct RockImpactWarnedEvent { public Vec2 Position; public PlaneId Plane; public float WarningSeconds; }
+    /// <summary>未来战士已锁定激光方向；表现层显示红线预警。</summary>
+    public struct LaserAttackWarnedEvent { public Vec2 Origin; public Vec2 Direction; public PlaneId Plane; public float WarningSeconds; public float Range; }
+    /// <summary>维修机器人已命中玩家；由 A 侧玩家系统决定是否及如何应用位移。</summary>
+    public struct RobotKnockbackHitEvent { public int MonsterId; public Vec2 Direction; public float Distance; public PlaneId Plane; }
+
     public struct PenaltySpawnedEvent { public int Count; }
 
     public struct OrbCollectedEvent { public int Value; }

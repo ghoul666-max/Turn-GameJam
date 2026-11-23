@@ -53,8 +53,22 @@ namespace Turn.Systems
         public void DamageMonster(MonsterEntity monster, float amount, DamageSource source)
         {
             if (monster == null || !monster.Alive || amount <= 0f) return;
-
+            if (source == DamageSource.Weapon)
+            {
+                IProgressionSystem builds = _ctx.Progression;
+                int damageLevel = builds.GetLevel(BuildIds.Query(BuildId.B01));
+                amount *= 1f + damageLevel * _ctx.Config.Upgrades.DamagePerLevel;
+                int hazardLevel = builds.GetLevel(BuildIds.Query(BuildId.B10));
+                if (hazardLevel > 0 && _ctx.Environment.IsHazard(monster.Position))
+                    amount *= 1f + hazardLevel * _ctx.Config.Upgrades.HazardDamagePerLevel;
+            }
+            float applied = MathF.Min(monster.Hp, amount);
             monster.Hp -= amount;
+            if (source == DamageSource.Weapon && applied > 0f)
+            {
+                int level = _ctx.Progression.GetLevel(BuildIds.Query(BuildId.B07));
+                if (level > 0) HealPlayer(applied * level * _ctx.Config.Upgrades.LifestealPerLevel);
+            }
             _ctx.Events.Publish(new MonsterDamagedEvent
             {
                 MonsterId = monster.Id,
@@ -62,15 +76,21 @@ namespace Turn.Systems
                 Amount = amount,
                 Source = source,
             });
-            if (monster.Hp <= 0f) Kill(monster);
+            if (monster.Hp <= 0f) Kill(monster, source);
         }
 
-        private void Kill(MonsterEntity monster)
+        private void Kill(MonsterEntity monster, DamageSource source)
         {
             monster.Hp = 0f;
             _ctx.Monsters.Despawn(monster);
-            _ctx.Experience.SpawnOrb(monster.Position, _ctx.Config.Monster.Xp);
+            _ctx.Experience.SpawnOrb(monster.Position, monster.XpValue);
             _ctx.Progression.AddKill();
+            if (source == DamageSource.Weapon)
+            {
+                int refund = _ctx.Progression.GetLevel(BuildIds.Query(BuildId.B11));
+                if (refund > 0)
+                    _ctx.Events.Publish(new WeaponKillConfirmedEvent { MonsterId = monster.Id, Form = monster.Form });
+            }
             _ctx.Events.Publish(new MonsterDiedEvent { MonsterId = monster.Id, Position = monster.Position });
         }
     }

@@ -11,6 +11,12 @@ internal static class Program
         MonsterBoundaryClamp();
         ProjectileLifetimeAndPlane();
         ProjectileRangeAndExpiry();
+        EnemyProjectilePlaneCollision();
+        SweptEnemyProjectileCollision();
+        SweptPlayerProjectileCollision();
+        FireballSplashAndHarpoonFalloff();
+        PaintbrushPoisonZone();
+        PoisonZoneStopsAtConfiguredDuration();
         Console.WriteLine("Combat cross-plane checks passed.");
     }
 
@@ -91,6 +97,102 @@ internal static class Program
         ProjectileEntity active = ctx.Projectiles.Spawn(PlaneId.Ocean, m.Position, Vec2.Zero, 0.2f, 10f, 1, 10f);
         ctx.Projectiles.Tick(0.01f);
         Check(m.Hp < m.MaxHp, "same-plane projectile hits");
+    }
+
+    private static void EnemyProjectilePlaneCollision()
+    {
+        ITurnContext ctx = NewWorld();
+        PlayerState player = ctx.Player.State;
+        float hp = player.Hp;
+        ProjectileEntity p = ctx.Projectiles.SpawnEnemy(PlaneId.Volcano, player.Position, Vec2.Zero, 0.2f, 7f, 2f, 5f, EnemyProjectileKind.Bubble);
+        ctx.Plane.Switch();
+        ctx.Projectiles.OnPlaneSwitched(PlaneId.Volcano, PlaneId.Ocean);
+        ctx.Projectiles.Tick(0.1f);
+        Check(p.Alive && Near(player.Hp, hp), "enemy projectile cannot hit player across planes");
+        ctx.Plane.Switch();
+        ctx.Projectiles.OnPlaneSwitched(PlaneId.Ocean, PlaneId.Volcano);
+        ctx.Projectiles.Tick(0.1f);
+        Check(!p.Alive && player.Hp < hp, "enemy projectile hits on original plane");
+    }
+
+    private static void SweptEnemyProjectileCollision()
+    {
+        ITurnContext ctx = NewWorld();
+        PlayerState player = ctx.Player.State;
+        float hp = player.Hp;
+        ctx.Projectiles.SpawnEnemy(PlaneId.Volcano, player.Position + new Vec2(-2f, 0f),
+            new Vec2(20f, 0f), 0.15f, 7f, 2f, 10f, EnemyProjectileKind.Laser);
+        ctx.Projectiles.Tick(0.2f);
+        Check(player.Hp < hp, "high speed enemy projectile swept collision");
+    }
+
+    private static void SweptPlayerProjectileCollision()
+    {
+        ITurnContext ctx = NewWorld();
+        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(3f, 0f), false);
+        float hp = m.Hp;
+        ctx.Projectiles.Spawn(PlaneId.Volcano, Vec2.Zero, new Vec2(20f, 0f), .15f, 7f, 1, 10f);
+        ctx.Projectiles.Tick(.3f);
+        Check(m.Hp < hp, "high speed player projectile swept collision");
+    }
+
+    private static void FireballSplashAndHarpoonFalloff()
+    {
+        ITurnContext ctx = NewWorldWithForms();
+        MonsterEntity a = ctx.Monsters.Spawn(new Vec2(2f, 0), false);
+        MonsterEntity b = ctx.Monsters.Spawn(new Vec2(2.7f, 0), false);
+        ProjectileEntity fire = ctx.Projectiles.Spawn(PlaneId.Volcano, a.Position, Vec2.Zero, .2f, 10f, 1, 5f);
+        ctx.Projectiles.Tick(.01f);
+        Check(!fire.Alive && a.Hp < a.MaxHp && b.Hp < b.MaxHp, "fireball splash hits adjacent monster");
+        Check(a.Burning && b.Burning, "fireball applies burn in splash");
+
+        ctx.Plane.Switch();
+        ctx.Monsters.SwapPlane(PlaneId.Volcano, PlaneId.Ocean);
+        MonsterEntity c = ctx.Monsters.Spawn(new Vec2(4f, 0), false);
+        ProjectileEntity harpoon = ctx.Projectiles.Spawn(PlaneId.Ocean, a.Position, Vec2.Zero, 1f, 10f, 2, 5f);
+        float aHp = a.Hp, bHp = b.Hp;
+        ctx.Projectiles.Tick(.01f);
+        Check(Near(aHp - a.Hp, 10f) && Near(bHp - b.Hp, 7f), "harpoon second hit loses 30 percent");
+    }
+
+    private static void PaintbrushPoisonZone()
+    {
+        ITurnContext ctx = NewWorldWithForms();
+        ctx.Plane.EnterPair(PlanePairId.OfficeDream);
+        ctx.Plane.Switch();
+        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(2f, 0), false);
+        ctx.Projectiles.Spawn(PlaneId.Dream, m.Position, Vec2.Zero, .2f, 1f, 1, 5f);
+        ctx.Projectiles.Tick(.01f);
+        float hp = m.Hp;
+        ctx.Projectiles.Tick(.5f);
+        Check(m.Hp < hp, "paintbrush zone damages monster over time");
+    }
+
+    private static void PoisonZoneStopsAtConfiguredDuration()
+    {
+        ITurnContext ctx = NewWorldWithForms();
+        ctx.Plane.EnterPair(PlanePairId.OfficeDream);
+        ctx.Plane.Switch();
+        ctx.Config.Forms[(int)PlaneId.Dream].PoisonDuration = .5f;
+        ctx.Config.Forms[(int)PlaneId.Dream].PoisonDps = 4f;
+        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(2f, 0f), false);
+        ctx.Projectiles.Spawn(PlaneId.Dream, m.Position, Vec2.Zero, .2f, 1f, 1, 5f);
+        ctx.Projectiles.Tick(.01f);
+        float hp = m.Hp;
+        ctx.Projectiles.Tick(.7f);
+        Check(Near(hp - m.Hp, 2f), "poison zone stops at exactly configured duration");
+        ctx.Projectiles.Tick(.7f);
+        Check(Near(hp - m.Hp, 2f), "expired poison zone does not reapply");
+    }
+
+    private static ITurnContext NewWorldWithForms()
+    {
+        var config = new TurnConfig();
+        config.Spawn.InitialCount = 0;
+        config.Forms[(int)PlaneId.Volcano] = new WeaponFormConfig { Map = PlaneId.Volcano, SplashRadius = 1.2f, BurnDps = 6f, BurnDuration = 2f };
+        config.Forms[(int)PlaneId.Ocean] = new WeaponFormConfig { Map = PlaneId.Ocean, HarpoonFalloff = .3f };
+        config.Forms[(int)PlaneId.Dream] = new WeaponFormConfig { Map = PlaneId.Dream, SplashRadius = 1.2f, PoisonDps = 5f, PoisonDuration = 3f };
+        return TurnFactory.Create(config, 123);
     }
 
     private static bool Near(float a, float b) => Math.Abs(a - b) < 0.001f;

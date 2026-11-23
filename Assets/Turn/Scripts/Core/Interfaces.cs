@@ -171,6 +171,8 @@ namespace Turn.Core
         void Despawn(MonsterEntity monster);
         /// <summary>施加 / 刷新灼烧。每秒伤害取较大值，持续时间重置。</summary>
         void ApplyBurn(MonsterEntity monster, float dps, float duration);
+        /// <summary>程序B：对怪物施加速度倍率（0.7 表示减速 30%）并刷新持续时间。</summary>
+        void ApplySlow(MonsterEntity monster, float factor, float duration);
         void Tick(float dt);
         /// <summary>与圆相交的存活怪物（结果先清空）。</summary>
         void QueryCircle(Vec2 center, float radius, List<MonsterEntity> results);
@@ -255,6 +257,8 @@ namespace Turn.Core
     {
         IReadOnlyList<ProjectileEntity> Active { get; }
         ProjectileEntity Spawn(PlaneId form, Vec2 position, Vec2 velocity, float radius, float damage, int pierce, float maxDistance);
+        /// <summary>程序B：生成属于指定发射位面的敌方投射物；切位面不销毁，但仅在所属位面伤害玩家。</summary>
+        ProjectileEntity SpawnEnemy(PlaneId plane, Vec2 position, Vec2 velocity, float radius, float damage, float lifetime, float maxDistance, EnemyProjectileKind kind);
         void Tick(float dt);
         /// <summary>
         /// 翻滚第 6b 步：已飞出的投射物（玩家的与敌方的）不销毁，存活时间 ×1.6（B19 再加），

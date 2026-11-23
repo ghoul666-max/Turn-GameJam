@@ -98,7 +98,7 @@ namespace Turn.View
                 view.button.gameObject.SetActive(has);
                 if (!has) continue;
                 UpgradeOption o = list[i];
-                if (view.title != null) view.title.text = (i + 1) + ". " + o.Name + "   Lv " + o.FromLevel + " → " + o.ToLevel;
+                if (view.title != null) view.title.text = (i + 1) + ". [" + o.Build + " · " + o.Rarity + "] " + o.Name + "   Lv " + o.FromLevel + " → " + o.ToLevel;
                 if (view.description != null) view.description.text = o.Description;
             }
         }

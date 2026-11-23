@@ -10,12 +10,17 @@ namespace Turn.View
     {
         [Tooltip("弹匣容量（火球与鱼叉共用，“扩容弹匣”词条在此基础上增加）")]
         [Min(1)] public int magazineSize = 6;
+        [Tooltip("按 Volcano/Ocean/Office/Dream/Primal/Future 顺序的各武器基础弹匣容量")]
+        public int[] planeCapacities = { 8, 8, 8, 8, 1, 1 };
         [Tooltip("每次发射消耗的弹药")]
         [Min(1)] public int ammoPerShot = 1;
         [Tooltip("装填参数：开局弹药，-1 = 满弹匣。之后唯一的装填方式是成功翻滚（立即装满），没有自动恢复、没有换弹键。")]
         public int initialAmmo = -1;
         [Tooltip("攻击间隔（秒）")]
         public float fireInterval = 0.6f;
+        public float[] planeFireIntervals = { .7f, .9f, .45f, .6f, 2f, 2f };
+        public float[] planeTargetRanges = { 6f, 8f, 5f, 6f, 10f, 12f };
+        public float[] planeAttackRanges = { 6f, 8f, 5f, 6f, 10f, 12f };
         [Tooltip("自动索敌范围（世界单位）")]
         public float targetRange = 8f;
         [Tooltip("攻击范围：子弹最远飞行距离（世界单位）")]
@@ -30,9 +35,17 @@ namespace Turn.View
             return new WeaponConfig
             {
                 MagazineSize = magazineSize,
+                PlaneCapacities = planeCapacities != null && planeCapacities.Length == PlaneIds.Count
+                    ? (int[])planeCapacities.Clone() : new[] { 8, 8, 8, 8, 1, 1 },
                 AmmoPerShot = ammoPerShot,
                 InitialAmmo = initialAmmo,
                 FireInterval = fireInterval,
+                PlaneFireIntervals = planeFireIntervals != null && planeFireIntervals.Length == PlaneIds.Count
+                    ? (float[])planeFireIntervals.Clone() : new[] { .7f, .9f, .45f, .6f, 2f, 2f },
+                PlaneTargetRanges = planeTargetRanges != null && planeTargetRanges.Length == PlaneIds.Count
+                    ? (float[])planeTargetRanges.Clone() : new[] { 6f, 8f, 5f, 6f, 10f, 12f },
+                PlaneAttackRanges = planeAttackRanges != null && planeAttackRanges.Length == PlaneIds.Count
+                    ? (float[])planeAttackRanges.Clone() : new[] { 6f, 8f, 5f, 6f, 10f, 12f },
                 TargetRange = targetRange,
                 AttackRange = attackRange,
                 // 旧的数值面板存档里没有这两个字段时读出来是 0，回退到默认值
@@ -56,6 +69,11 @@ namespace Turn.View
         public float radius = 0.25f;
         [Tooltip("可击中的怪物数")]
         [Min(1)] public int pierce = 1;
+        [Min(0f)] public float splashRadius = 1.2f;
+        [Min(0f)] public float burnDps = 6f, burnDuration = 2f;
+        [Min(0f)] public float poisonDps = 5f, poisonDuration = 3f;
+        [Min(1)] public int poisonMaxStacks = 3;
+        [Range(0f, 1f)] public float harpoonFalloff = .30f;
 
         public WeaponFormConfig ToConfig(PlaneId map)
         {
@@ -67,6 +85,9 @@ namespace Turn.View
                 Damage = damage,
                 Radius = radius,
                 Pierce = pierce,
+                SplashRadius = splashRadius, BurnDps = burnDps, BurnDuration = burnDuration,
+                PoisonDps = poisonDps, PoisonDuration = poisonDuration,
+                PoisonMaxStacks = poisonMaxStacks, HarpoonFalloff = harpoonFalloff,
             };
         }
     }
@@ -87,7 +108,27 @@ namespace Turn.View
         [Header("海洋武器：鱼叉")]
         [SerializeField] private WeaponFormSettings harpoon = new WeaponFormSettings
         {
-            displayName = "鱼叉", projectileSpeed = 13f, damage = 15f, radius = 0.2f, pierce = 2,
+            displayName = "鱼叉", projectileSpeed = 12f, damage = 24f, radius = 0.2f, pierce = 2,
+        };
+        [Header("工位武器：键盘")]
+        [SerializeField] private WeaponFormSettings keyboard = new WeaponFormSettings
+        {
+            displayName = "键盘", projectileSpeed = 11f, damage = 8f, pierce = 1,
+        };
+        [Header("梦境武器：画笔")]
+        [SerializeField] private WeaponFormSettings paintbrush = new WeaponFormSettings
+        {
+            displayName = "画笔", projectileSpeed = 8f, damage = 12f, pierce = 1, poisonDps = 5f, poisonDuration = 3f,
+        };
+        [Header("原始武器：弩")]
+        [SerializeField] private WeaponFormSettings crossbow = new WeaponFormSettings
+        {
+            displayName = "弩", projectileSpeed = 18f, damage = 45f, pierce = 3,
+        };
+        [Header("未来武器：激光")]
+        [SerializeField] private WeaponFormSettings laser = new WeaponFormSettings
+        {
+            displayName = "激光枪", projectileSpeed = 12f, damage = 38f, pierce = 1, splashRadius = 1.2f,
         };
 
         [Header("显示部件")]
@@ -108,6 +149,10 @@ namespace Turn.View
         {
             if (map == PlaneId.Volcano) return fireball;
             if (map == PlaneId.Ocean) return harpoon;
+            if (map == PlaneId.Office) return keyboard;
+            if (map == PlaneId.Dream) return paintbrush;
+            if (map == PlaneId.Primal) return crossbow;
+            if (map == PlaneId.Future) return laser;
             return null;
         }
 

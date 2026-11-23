@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Turn.Core;
 
 namespace Turn.View
 {
@@ -243,6 +244,40 @@ namespace Turn.View
             }
             if (Section("fireball", "火球（火山地图）")) Projectile("fb", d.fireball);
             if (Section("harpoon", "鱼叉（海洋地图）")) Projectile("hp", d.harpoon);
+            if (Section("keyboard", "键盘（工位地图）")) Projectile("kb", d.keyboard);
+            if (Section("paintbrush", "画笔（梦境地图）")) Projectile("pb", d.paintbrush);
+            if (Section("crossbow", "弩（原始地图）")) Projectile("cb", d.crossbow);
+            if (Section("laser", "激光枪（未来地图）")) Projectile("ls", d.laser);
+            if (Section("builds", "Build 池（B01-B19）"))
+            {
+                d.battleVersion = 1;
+                UpgradeSettings u = d.upgrades;
+                if (u != null)
+                {
+                    u.optionCount = I("build.options", "每次升级候选数量", u.optionCount, 1, 8);
+                    u.commonWeight = I("build.common", "普通权重", u.commonWeight, 0, 100);
+                    u.rareWeight = I("build.rare", "稀有权重", u.rareWeight, 0, 100);
+                    u.epicWeight = I("build.epic", "史诗权重", u.epicWeight, 0, 100);
+                    if (u.buildMaxLevels != null)
+                        for (int i = 0; i < u.buildMaxLevels.Length; i++)
+                            u.buildMaxLevels[i] = I("build.max" + i, "B" + (i + 1).ToString("00") + " 上限", u.buildMaxLevels[i], 0, 10);
+                    u.damagePerLevel = F("build.damage", "B01 每层伤害提升", u.damagePerLevel, 0f, 1f);
+                    u.fireIntervalReductionPerLevel = F("build.speed", "B02 每层攻速提升", u.fireIntervalReductionPerLevel, 0f, .5f);
+                    u.criticalChancePerLevel = F("build.crit", "B08 每层暴击率", u.criticalChancePerLevel, 0f, 1f);
+                    u.hazardDamagePerLevel = F("build.hazard", "B10 每层地形增伤", u.hazardDamagePerLevel, 0f, 2f);
+                    u.projectileLifetimeBonusPerLevel = F("build.linger", "B19 每层弹幕延寿", u.projectileLifetimeBonusPerLevel, 0f, 2f);
+                }
+            }
+            if (Section("experience", "经验曲线"))
+            {
+                ExperienceSettings e = d.experience;
+                if (e != null)
+                {
+                    e.baseXpToLevel = I("xp.base", "首级经验", e.baseXpToLevel, 1, 100);
+                    e.xpGrowthPerLevel = I("xp.growth", "每级经验增长", e.xpGrowthPerLevel, 0, 100);
+                    e.magnetRadius = F("xp.magnet", "经验吸附半径", e.magnetRadius, 0f, 20f);
+                }
+            }
             if (Section("monster", "普通怪物"))
             {
                 MonsterSettings m = d.monster;
@@ -255,6 +290,32 @@ namespace Turn.View
                 m.radius = F("m.radius", "碰撞半径", m.radius, 0.05f, 2f);
                 m.lavaHitDamage = F("m.lava", "岩浆一次性伤害", m.lavaHitDamage, 0f, 200f);
                 m.xp = I("m.xp", "掉落经验", m.xp, 0, 20);
+                if (m.archetypes != null)
+                {
+                    for (int i = 0; i < m.archetypes.Length; i++)
+                    {
+                        MonsterArchetype a = m.archetypes[i];
+                        if (a == null) continue;
+                        string prefix = "m.type" + i;
+                        if (!Section(prefix, ((MonsterKind)i).ToString())) continue;
+                        a.MaxHp = F(prefix + ".hp", "最大生命", a.MaxHp, 1f, 500f);
+                        a.Speed = F(prefix + ".speed", "移动速度", a.Speed, 0f, 12f);
+                        a.Damage = F(prefix + ".damage", "攻击伤害", a.Damage, 0f, 100f);
+                        a.AttackInterval = F(prefix + ".interval", "攻击间隔", a.AttackInterval, .1f, 10f);
+                        a.Windup = F(prefix + ".windup", "攻击前摇", a.Windup, 0f, 5f);
+                        a.Range = F(prefix + ".range", "攻击范围", a.Range, 0f, 15f);
+                        a.Xp = I(prefix + ".xp", "击杀经验", a.Xp, 0, 100);
+                    }
+                }
+                m.splitInterval = F("m.splitSec", "虫崽分裂间隔", m.splitInterval, .1f, 20f);
+                m.bubbleSpeed = F("m.bubbleSpeed", "泡泡速度", m.bubbleSpeed, .1f, 20f);
+                m.enemyProjectileLifetime = F("m.enemyLife", "敌弹寿命", m.enemyProjectileLifetime, .1f, 20f);
+                m.rockWarning = F("m.rockWarn", "石块落点预警秒数", m.rockWarning, 0f, 3f);
+                m.rockImpactRadius = F("m.rockRadius", "石块落点伤害半径", m.rockImpactRadius, .1f, 5f);
+                m.laserWarning = F("m.laserWarn", "未来战士激光预警秒数", m.laserWarning, .05f, 3f);
+                m.laserDuration = F("m.laserDuration", "未来战士激光照射秒数", m.laserDuration, .1f, 5f);
+                m.laserWidth = F("m.laserWidth", "未来战士激光宽度", m.laserWidth, .01f, 2f);
+                m.robotKnockbackDistance = F("m.robotKnockback", "维修机器人击退距离", m.robotKnockbackDistance, 0f, 5f);
             }
             if (Section("shark", "鲨鱼（海洋地图）"))
             {
@@ -314,6 +375,13 @@ namespace Turn.View
             t.damage = F(key + ".dmg", "伤害", t.damage, 0f, 200f);
             t.radius = F(key + ".radius", "判定半径", t.radius, 0.02f, 2f);
             t.pierce = I(key + ".pierce", "可击中怪物数（穿透）", t.pierce, 1, 20);
+            t.splashRadius = F(key + ".area", "爆炸/毒区半径", t.splashRadius, 0f, 8f);
+            t.burnDps = F(key + ".burn", "灼烧每秒伤害", t.burnDps, 0f, 30f);
+            t.burnDuration = F(key + ".burnSec", "灼烧秒数", t.burnDuration, 0f, 15f);
+            t.poisonDps = F(key + ".poison", "毒区每秒伤害", t.poisonDps, 0f, 30f);
+            t.poisonDuration = F(key + ".poisonSec", "毒区秒数", t.poisonDuration, 0f, 15f);
+            t.poisonMaxStacks = I(key + ".poisonStack", "毒区最大叠层", t.poisonMaxStacks, 1, 10);
+            t.harpoonFalloff = F(key + ".falloff", "鱼叉穿透后伤害衰减", t.harpoonFalloff, 0f, 1f);
         }
 
         private bool Section(string key, string title)

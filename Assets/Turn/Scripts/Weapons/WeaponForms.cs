@@ -16,6 +16,10 @@ namespace Turn.Weapons
             {
                 case PlaneId.Volcano: return new FireballForm();
                 case PlaneId.Ocean: return new HarpoonForm();
+                case PlaneId.Office: return new KeyboardForm();
+                case PlaneId.Dream: return new PaintbrushForm();
+                case PlaneId.Primal: return new CrossbowForm();
+                case PlaneId.Future: return new LaserForm();
                 default: return null;
             }
         }
@@ -25,6 +29,11 @@ namespace Turn.Weapons
         {
             Vec2 dir = (fire.Target.Position - fire.Origin).Normalized;
             if (dir.SqrMagnitude < 0.5f) dir = Vec2.Right;
+            FireStraight(fire, form, dir);
+        }
+
+        public static void FireStraight(WeaponFireContext fire, PlaneId form, Vec2 dir)
+        {
             fire.World.Projectiles.Spawn(form, fire.Origin, dir * fire.Form.ProjectileSpeed,
                 fire.Form.Radius, fire.Form.Damage, fire.Form.Pierce, fire.AttackRange);
         }
@@ -52,5 +61,42 @@ namespace Turn.Weapons
             if (fire.Target == null) return;
             WeaponForms.FireStraight(fire, PlaneId.Ocean);
         }
+    }
+
+    /// <summary>工位键盘：每次攻击三枚扇形字符弹。</summary>
+    public sealed class KeyboardForm : IWeaponForm
+    {
+        public PlaneId Map { get { return PlaneId.Office; } }
+        public void Fire(WeaponFireContext fire)
+        {
+            if (fire.Target == null) return;
+            Vec2 dir = (fire.Target.Position - fire.Origin).Normalized;
+            if (dir.SqrMagnitude < 0.5f) dir = Vec2.Right;
+            float radians = 15f * (System.MathF.PI / 180f);
+            for (int i = -1; i <= 1; i++)
+            {
+                float a = i * radians;
+                WeaponForms.FireStraight(fire, Map, new Vec2(dir.X * System.MathF.Cos(a) - dir.Y * System.MathF.Sin(a),
+                    dir.X * System.MathF.Sin(a) + dir.Y * System.MathF.Cos(a)));
+            }
+        }
+    }
+
+    public sealed class PaintbrushForm : IWeaponForm
+    {
+        public PlaneId Map { get { return PlaneId.Dream; } }
+        public void Fire(WeaponFireContext fire) { if (fire.Target != null) WeaponForms.FireStraight(fire, Map); }
+    }
+
+    public sealed class CrossbowForm : IWeaponForm
+    {
+        public PlaneId Map { get { return PlaneId.Primal; } }
+        public void Fire(WeaponFireContext fire) { if (fire.Target != null) WeaponForms.FireStraight(fire, Map); }
+    }
+
+    public sealed class LaserForm : IWeaponForm
+    {
+        public PlaneId Map { get { return PlaneId.Future; } }
+        public void Fire(WeaponFireContext fire) { if (fire.Target != null) WeaponForms.FireStraight(fire, Map); }
     }
 }

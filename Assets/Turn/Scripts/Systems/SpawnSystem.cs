@@ -51,7 +51,7 @@ namespace Turn.Systems
         public int SpawnPenalty(int count)
         {
             count = Math.Max(0, count);
-            for (int i = 0; i < count; i++) _ctx.Monsters.Spawn(PenaltyPosition(), true);
+            for (int i = 0; i < count; i++) _ctx.Monsters.Spawn(FreePosition(PenaltyPosition()), true);
             if (count > 0) _ctx.Events.Publish(new PenaltySpawnedEvent { Count = count });
             return count;
         }
@@ -60,7 +60,7 @@ namespace Turn.Systems
 
         private void SpawnRegular()
         {
-            _ctx.Monsters.Spawn(RegularPosition(), false);
+            _ctx.Monsters.Spawn(FreePosition(RegularPosition()), false);
         }
 
         /// <summary>当前地图的刷怪点里离玩家不小于 MinDistance 的随机一个；没有可用点时在玩家周围的圆环上找。</summary>
@@ -121,6 +121,21 @@ namespace Turn.Systems
                 }
             }
             return best;
+        }
+
+        private Vec2 FreePosition(Vec2 desired)
+        {
+            Vec2 player = _ctx.Player.State.Position;
+            float radius = _ctx.Config.Monster.Radius;
+            for (int attempt = 0; attempt < 12; attempt++)
+            {
+                Vec2 point = attempt == 0 ? desired : RingPosition(player, _spawn.MinDistance, _spawn.MaxDistance);
+                point = _ctx.Bounds.Clamp(point, radius);
+                if (!_ctx.Obstacles.Overlaps(point, radius, ObstacleMask.Units) &&
+                    Vec2.SqrDistance(point, player) >= (radius + _ctx.Player.Config.Radius) * (radius + _ctx.Player.Config.Radius))
+                    return point;
+            }
+            return _ctx.Bounds.Clamp(desired, radius);
         }
 
         private float NextAngle()

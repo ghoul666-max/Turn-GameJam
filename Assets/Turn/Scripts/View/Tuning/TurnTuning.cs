@@ -13,6 +13,13 @@ namespace Turn.View
         public float damage = 12f;
         public float radius = 0.25f;
         public int pierce = 1;
+        /// <summary>旧存档缺少该字段时为 0，只保留原有的速度、伤害和穿透覆盖。</summary>
+        public int version = 1;
+        public float splashRadius = 1.2f;
+        public float burnDps = 6f, burnDuration = 2f;
+        public float poisonDps = 5f, poisonDuration = 3f;
+        public int poisonMaxStacks = 3;
+        public float harpoonFalloff = .30f;
 
         public static ProjectileTuning From(WeaponFormSettings s)
         {
@@ -22,6 +29,13 @@ namespace Turn.View
             t.damage = s.damage;
             t.radius = s.radius;
             t.pierce = s.pierce;
+            t.splashRadius = s.splashRadius;
+            t.burnDps = s.burnDps;
+            t.burnDuration = s.burnDuration;
+            t.poisonDps = s.poisonDps;
+            t.poisonDuration = s.poisonDuration;
+            t.poisonMaxStacks = s.poisonMaxStacks;
+            t.harpoonFalloff = s.harpoonFalloff;
             return t;
         }
 
@@ -32,6 +46,14 @@ namespace Turn.View
             c.Damage = damage;
             c.Radius = radius;
             c.Pierce = Mathf.Max(1, pierce);
+            if (version <= 0) return;
+            c.SplashRadius = Mathf.Max(0f, splashRadius);
+            c.BurnDps = Mathf.Max(0f, burnDps);
+            c.BurnDuration = Mathf.Max(0f, burnDuration);
+            c.PoisonDps = Mathf.Max(0f, poisonDps);
+            c.PoisonDuration = Mathf.Max(0f, poisonDuration);
+            c.PoisonMaxStacks = Mathf.Max(1, poisonMaxStacks);
+            c.HarpoonFalloff = Mathf.Clamp01(harpoonFalloff);
         }
     }
 
@@ -46,7 +68,15 @@ namespace Turn.View
         public RollSettings roll = new RollSettings();
         public WeaponSettings weapon = new WeaponSettings();
         public ProjectileTuning fireball = new ProjectileTuning();
-        public ProjectileTuning harpoon = new ProjectileTuning { projectileSpeed = 13f, damage = 15f, radius = 0.2f, pierce = 2 };
+        public ProjectileTuning harpoon = new ProjectileTuning { projectileSpeed = 12f, damage = 24f, radius = 0.2f, pierce = 2 };
+        public ProjectileTuning keyboard = new ProjectileTuning { projectileSpeed = 11f, damage = 8f };
+        public ProjectileTuning paintbrush = new ProjectileTuning { projectileSpeed = 8f, damage = 12f };
+        public ProjectileTuning crossbow = new ProjectileTuning { projectileSpeed = 18f, damage = 45f, pierce = 3 };
+        public ProjectileTuning laser = new ProjectileTuning { projectileSpeed = 12f, damage = 38f };
+        public UpgradeSettings upgrades = new UpgradeSettings();
+        public ExperienceSettings experience = new ExperienceSettings();
+        /// <summary>只有明确捕获或编辑战斗词条数值后才覆盖 Inspector；旧存档为 0。</summary>
+        public int battleVersion;
         public MonsterSettings monster = new MonsterSettings();
         public SharkSettings shark = new SharkSettings();
         public SpawnSettings spawn = new SpawnSettings();
@@ -61,7 +91,8 @@ namespace Turn.View
         }
 
         /// <summary>从场景组件 / Prefab 上的 Inspector 参数拷贝一份（深拷贝，之后改面板不会改到组件）。</summary>
-        public static TurnTuningData Capture(PlayerController player, WeaponController weapon, SpawnManager spawn, MapManager map)
+        public static TurnTuningData Capture(PlayerController player, WeaponController weapon, SpawnManager spawn, MapManager map,
+            UpgradeManager upgrade = null)
         {
             var d = new TurnTuningData();
             if (player != null)
@@ -74,6 +105,10 @@ namespace Turn.View
                 d.weapon = Copy(weapon.Settings);
                 d.fireball = ProjectileTuning.From(weapon.GetForm(PlaneId.Volcano));
                 d.harpoon = ProjectileTuning.From(weapon.GetForm(PlaneId.Ocean));
+                d.keyboard = ProjectileTuning.From(weapon.GetForm(PlaneId.Office));
+                d.paintbrush = ProjectileTuning.From(weapon.GetForm(PlaneId.Dream));
+                d.crossbow = ProjectileTuning.From(weapon.GetForm(PlaneId.Primal));
+                d.laser = ProjectileTuning.From(weapon.GetForm(PlaneId.Future));
             }
             if (spawn != null)
             {
@@ -81,6 +116,12 @@ namespace Turn.View
                 d.penalty = Copy(spawn.Penalty);
                 if (spawn.MonsterPrefab != null) d.monster = Copy(spawn.MonsterPrefab.Settings);
                 if (spawn.SharkPrefab != null) d.shark = Copy(spawn.SharkPrefab.Settings);
+            }
+            if (upgrade != null)
+            {
+                d.upgrades = Copy(upgrade.Upgrades);
+                d.experience = Copy(upgrade.Experience);
+                d.battleVersion = 1;
             }
             if (map != null)
             {
@@ -100,6 +141,13 @@ namespace Turn.View
             if (weapon != null) c.Weapon = weapon.ToConfig();
             if (fireball != null) fireball.ApplyTo(c.Forms[(int)PlaneId.Volcano]);
             if (harpoon != null) harpoon.ApplyTo(c.Forms[(int)PlaneId.Ocean]);
+            if (keyboard != null) keyboard.ApplyTo(c.Forms[(int)PlaneId.Office]);
+            if (paintbrush != null) paintbrush.ApplyTo(c.Forms[(int)PlaneId.Dream]);
+            if (crossbow != null) crossbow.ApplyTo(c.Forms[(int)PlaneId.Primal]);
+            if (laser != null) laser.ApplyTo(c.Forms[(int)PlaneId.Future]);
+            if (battleVersion > 0 && upgrades != null && upgrades.buildMaxLevels != null && upgrades.buildMaxLevels.Length == BuildIds.Count)
+                c.Upgrades = upgrades.ToConfig();
+            if (battleVersion > 0 && experience != null && experience.baseXpToLevel > 0) c.Experience = experience.ToConfig();
             if (monster != null) c.Monster = monster.ToConfig();
             if (shark != null) c.Shark = shark.ToConfig();
             if (spawn != null) c.Spawn = spawn.ToConfig();
@@ -213,13 +261,13 @@ namespace Turn.View
         ///   有存档且启用 → 用面板数值覆盖 Inspector 读到的配置。
         /// </summary>
         public static void ApplyOrCapture(TurnConfig config, PlayerController player, WeaponController weapon,
-            SpawnManager spawn, MapManager map)
+            SpawnManager spawn, MapManager map, UpgradeManager upgrade = null)
         {
             TurnTuningFile file = Load();
             if (file == null)
             {
                 file = new TurnTuningFile();
-                file.values = TurnTuningData.Capture(player, weapon, spawn, map);
+                file.values = TurnTuningData.Capture(player, weapon, spawn, map, upgrade);
                 file.defaults = file.values.Clone();
                 Save(file);
                 return;

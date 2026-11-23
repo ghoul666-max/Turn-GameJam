@@ -9,5 +9,6 @@
     <Compile Include="../../Assets/Turn/Scripts/Core/*.cs" Link="Core/%(Filename)%(Extension)" />
     <Compile Include="../../Assets/Turn/Scripts/Systems/*.cs" Link="Systems/%(Filename)%(Extension)" />
     <Compile Include="../../Assets/Turn/Scripts/Weapons/*.cs" Link="Weapons/%(Filename)%(Extension)" />
+    <Compile Include="../../Assets/Turn/Scripts/Monsters/*.cs" Link="Monsters/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

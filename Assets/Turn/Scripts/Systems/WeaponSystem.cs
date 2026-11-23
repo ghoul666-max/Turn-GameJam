@@ -20,6 +20,7 @@ namespace Turn.Systems
         private readonly IWeaponForm[] _behaviors = new IWeaponForm[PlaneIds.Count];
         private readonly UpgradeConfig _upgrades;
         private bool _emptyAnnounced;
+        private int _pendingKillRefund;
 
         public int Ammo { get; private set; }
         public float FireTimer { get; private set; }
@@ -39,15 +40,29 @@ namespace Turn.Systems
 
             Ammo = config.InitialAmmo < 0 ? Capacity : Math.Min(config.InitialAmmo, Capacity);
             FireTimer = config.FireInterval;
+            _ctx.Events.Subscribe<WeaponKillConfirmedEvent>(OnWeaponKillConfirmed);
+        }
+
+        private float PlaneValue(float[] values, float fallback)
+        {
+            int index = (int)Form;
+            return values != null && index >= 0 && index < values.Length && values[index] > 0f
+                ? values[index] : fallback;
         }
 
         public PlaneId Form { get { return _ctx.Plane.Active; } }
+        private int BuildLevel(BuildId id) { return _ctx.Progression.GetLevel(BuildIds.Query(id)); }
         public WeaponFormConfig CurrentForm { get { return _forms[(int)Form]; } }
 
-        /// <summary>容量 = 基础 + 扩容词条等级 × 每级增加（两种形态共用）。</summary>
+        /// <summary>两侧共用基础弹匣；装填只允许成功翻滚调用。</summary>
         public int Capacity
         {
-            get { return Math.Max(1, _config.MagazineSize + _ctx.Progression.GetLevel(UpgradeId.Magazine) * _upgrades.MagazinePerLevel); }
+            get
+            {
+                int index = (int)Form;
+                return index >= 0 && index < _config.PlaneCapacities.Length
+                    ? Math.Max(1, _config.PlaneCapacities[index]) : Math.Max(1, _config.MagazineSize);
+            }
         }
 
         public void Reload()
@@ -57,8 +72,20 @@ namespace Turn.Systems
             _ctx.Events.Publish(new MagazineReloadedEvent { Ammo = Ammo, Capacity = Capacity });
         }
 
+        private void OnWeaponKillConfirmed(WeaponKillConfirmedEvent evt)
+        {
+            if (evt.Form == PlaneId.Primal || evt.Form == PlaneId.Future) return;
+            _pendingKillRefund += BuildLevel(BuildId.B11) * Math.Max(0, _upgrades.KillAmmoRefundPerLevel);
+        }
+
         public void Tick(float dt)
         {
+            if (_pendingKillRefund > 0)
+            {
+                Ammo = Math.Min(Capacity, Ammo + _pendingKillRefund);
+                _pendingKillRefund = 0;
+                _emptyAnnounced = false;
+            }
             PlayerState player = _ctx.Player.State;
             if (!player.Alive) return;
 
@@ -78,7 +105,10 @@ namespace Turn.Systems
                 return;
             }
 
-            MonsterEntity target = _ctx.Monsters.GetNearest(player.Position, _config.TargetRange);
+            float baseInterval = PlaneValue(_config.PlaneFireIntervals, _config.FireInterval);
+            float targetRange = PlaneValue(_config.PlaneTargetRanges, _config.TargetRange) *
+                (1f + BuildLevel(BuildId.B05) * _upgrades.TargetRangePerLevel);
+            MonsterEntity target = _ctx.Monsters.GetNearest(player.Position, targetRange);
             if (target == null)
             {
                 FireTimer = 0f; // 有目标进入范围时立刻开火
@@ -88,17 +118,41 @@ namespace Turn.Systems
             IWeaponForm behavior = _behaviors[(int)Form];
             if (behavior == null) return;
 
-            behavior.Fire(new WeaponFireContext
+            int extra = BuildLevel(BuildId.B03) * Math.Max(0, _upgrades.ExtraProjectilePerLevel);
+            float speedScale = 1f + BuildLevel(BuildId.B04) * _upgrades.ProjectileSpeedPerLevel;
+            var boosted = new WeaponFormConfig
             {
-                World = _ctx,
-                Form = CurrentForm,
-                Origin = player.Position,
-                Target = target,
-                AttackRange = _config.AttackRange,
-            });
+                Map = CurrentForm.Map, Name = CurrentForm.Name,
+                ProjectileSpeed = CurrentForm.ProjectileSpeed * speedScale,
+                Damage = CurrentForm.Damage,
+                Radius = CurrentForm.Radius, Pierce = CurrentForm.Pierce,
+                SplashRadius = CurrentForm.SplashRadius, BurnDps = CurrentForm.BurnDps,
+                BurnDuration = CurrentForm.BurnDuration, PoisonDps = CurrentForm.PoisonDps,
+                PoisonDuration = CurrentForm.PoisonDuration, PoisonMaxStacks = CurrentForm.PoisonMaxStacks,
+                HarpoonFalloff = CurrentForm.HarpoonFalloff,
+            };
+            Vec2 direction = (target.Position - player.Position).Normalized;
+            if (direction.SqrMagnitude < 0.5f) direction = Vec2.Right;
+            var shotContext = new WeaponFireContext
+            {
+                World = _ctx, Form = boosted, Origin = player.Position, Target = target,
+                AttackRange = PlaneValue(_config.PlaneAttackRanges, _config.AttackRange),
+            };
+            behavior.Fire(shotContext);
+            for (int shot = 0; shot < extra; shot++)
+            {
+                float offset = (shot - (extra - 1) * .5f) * _upgrades.MultiShotSpreadDegrees;
+                // 单枚额外投射也有散布，避免与主弹完全重合。
+                if (extra == 1) offset = _upgrades.MultiShotSpreadDegrees;
+                float angle = offset * (MathF.PI / 180f);
+                Vec2 aimed = new Vec2(direction.X * MathF.Cos(angle) - direction.Y * MathF.Sin(angle),
+                    direction.X * MathF.Sin(angle) + direction.Y * MathF.Cos(angle));
+                WeaponForms.FireStraight(shotContext, Form, aimed);
+            }
 
             Ammo -= cost;
-            FireTimer = MathF.Max(0.05f, _config.FireInterval);
+            float intervalScale = 1f - BuildLevel(BuildId.B02) * _upgrades.FireIntervalReductionPerLevel;
+            FireTimer = MathF.Max(_upgrades.MinFireInterval, baseInterval * MathF.Max(0f, intervalScale));
             _ctx.Events.Publish(new ShotFiredEvent
             {
                 Form = Form,
