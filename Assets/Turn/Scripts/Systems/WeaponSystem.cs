@@ -6,7 +6,8 @@ using Turn.Weapons;
 namespace Turn.Systems
 {
     /// <summary>
-    /// 武器（新策划案 11/24）：当前装备的那一把（ILoadoutSystem.Equipped）自动索敌、自动攻击，每把武器独立弹药。
+    /// 武器（11/24 亚空间策划案 + 11/25 双武器策划案）：当前生效的那一把（ILoadoutSystem.Equipped）自动索敌、自动攻击，
+    /// 每把武器独立弹药（方案 A 两把主武器各算各的）。还没实现的主武器（_weapons 里为 null）不会被选到出战，这里也全部安全跳过。
     /// 硬性规则：
     ///   · 弹药打空自动停止攻击，没有任何随时间恢复弹药的逻辑；
     ///   · Reload() 是唯一的装填入口，唯一调用方是 RollSystem（退出亚空间时，补满当前武器）；
@@ -24,6 +25,13 @@ namespace Turn.Systems
         private readonly WeaponBehavior[] _weapons = new WeaponBehavior[WeaponKinds.Count];
         private readonly int[] _ammo = new int[WeaponKinds.Count];
         private readonly bool[] _emptyAnnounced = new bool[WeaponKinds.Count];
+        private readonly CrossbowWeapon _crossbow;
+        private readonly PokerWeapon _poker;
+        private readonly ShurikenWeapon _shuriken;
+        private readonly StaplerWeapon _stapler;
+        private readonly SwordWeapon _sword;
+        private readonly List<WeaponField> _fields = new List<WeaponField>();
+        private static readonly List<PlayingCard> NoCards = new List<PlayingCard>();
         private float _hasteLeft;
         private float _haste;
 
@@ -36,8 +44,21 @@ namespace Turn.Systems
             _weapons[(int)WeaponKind.WaterGun] = new WaterGunWeapon(_kit);
             _weapons[(int)WeaponKind.Spear] = new SpearWeapon(_kit);
             _weapons[(int)WeaponKind.Blade] = new BladeWeapon(_kit);
+            _weapons[(int)WeaponKind.Palm] = new PalmWeapon(_kit);
+            _crossbow = new CrossbowWeapon(_kit);
+            _weapons[(int)WeaponKind.Crossbow] = _crossbow;
+            _poker = new PokerWeapon(_kit);
+            _weapons[(int)WeaponKind.Poker] = _poker;
+            _shuriken = new ShurikenWeapon(_kit);
+            _weapons[(int)WeaponKind.Shuriken] = _shuriken;
+            _stapler = new StaplerWeapon(_kit);
+            _weapons[(int)WeaponKind.Stapler] = _stapler;
+            _sword = new SwordWeapon(_kit);
+            _weapons[(int)WeaponKind.Sword] = _sword;
+            // 新增主武器：写一个 WeaponBehavior 并在这里登记，Supports 自动跟着变
             for (int i = 0; i < _ammo.Length; i++)
             {
+                if (_weapons[i] == null) continue;
                 int cap = BaseCapacity(_weapons[i]);
                 _ammo[i] = initialAmmo < 0 ? cap : Math.Min(initialAmmo, cap);
             }
@@ -48,12 +69,53 @@ namespace Turn.Systems
         }
 
         public WeaponKind Current { get { return _ctx.Loadout.Equipped; } }
+
+        public bool Supports(WeaponKind weapon)
+        {
+            return WeaponKinds.IsValid(weapon) && _weapons[(int)weapon] != null;
+        }
+
+        private WeaponBehavior Behavior(WeaponKind weapon)
+        {
+            return WeaponKinds.IsValid(weapon) ? _weapons[(int)weapon] : null;
+        }
         public int Ammo { get { return _ammo[(int)Current]; } }
         public int Capacity { get { return CapacityOf(Current); } }
         public IReadOnlyList<WaterMark> Puddles { get { return _kit.Puddles; } }
 
-        public int TotalBladeMarks { get { return SumMarks(false); } }
-        public int TotalSpearMarks { get { return SumMarks(true); } }
+        public int TotalBladeMarks { get { return SumMarks(0); } }
+        public int TotalSpearMarks { get { return SumMarks(1); } }
+        public int TotalPalmMarks { get { return SumMarks(2); } }
+        public int KillingIntent { get { return _crossbow != null ? _crossbow.Intent : 0; } }
+        public IReadOnlyList<PlayingCard> Hand { get { return _poker != null ? _poker.Hand : NoCards; } }
+        public int ShieldCharges { get { return _poker != null ? _poker.Shield : 0; } }
+        public float JokerBonus { get { return _poker != null ? _poker.JokerBonus : 0f; } }
+        public int DeckSize { get { return _poker != null ? _poker.DeckSize : 0; } }
+        public int TotalStapleMarks { get { return SumMarks(3); } }
+        public int SwordBonusCharges { get { return _sword != null ? _sword.BonusCharges : 0; } }
+
+        public IReadOnlyList<WeaponField> Fields
+        {
+            get
+            {
+                _fields.Clear();
+                for (int i = 0; i < _weapons.Length; i++)
+                    if (_weapons[i] != null) _weapons[i].CollectFields(_fields);
+                return _fields;
+            }
+        }
+
+        public void DebugAddCard(PlayingCard card)
+        {
+            if (_poker != null) _poker.DebugAddCard(card);
+        }
+
+        public bool AbsorbPlayerHit()
+        {
+            for (int i = 0; i < _weapons.Length; i++)
+                if (_weapons[i] != null && _weapons[i].AbsorbPlayerHit()) return true;
+            return false;
+        }
 
         public int AmmoOf(WeaponKind weapon)
         {
@@ -63,19 +125,24 @@ namespace Turn.Systems
         /// <summary>弹药上限 = 基础 × (1 + 扩容词条)。</summary>
         public int CapacityOf(WeaponKind weapon)
         {
-            if (!WeaponKinds.IsValid(weapon)) return 0;
-            WeaponBehavior w = _weapons[(int)weapon];
+            WeaponBehavior w = Behavior(weapon);
+            if (w == null) return 0;
             return Math.Max(1, (int)MathF.Round(w.BaseAmmo * (1f + _kit.Value(w.AmmoBuild))));
         }
 
         private static int BaseCapacity(WeaponBehavior w) { return Math.Max(1, w.BaseAmmo); }
 
-        private int SumMarks(bool spear)
+        /// <summary>0 剑气 / 1 矛 / 2 掌印 / 3 钉痕。</summary>
+        private int SumMarks(int kind)
         {
             int total = 0;
             IReadOnlyList<MonsterEntity> all = _ctx.Monsters.Active;
             for (int i = 0; i < all.Count; i++)
-                if (all[i].Alive) total += spear ? all[i].SpearMarks : all[i].BladeMarks;
+            {
+                MonsterEntity m = all[i];
+                if (!m.Alive) continue;
+                total += kind == 0 ? m.BladeMarks : kind == 1 ? m.SpearMarks : kind == 2 ? m.PalmMarks : m.StapleMarks;
+            }
             return total;
         }
 
@@ -89,9 +156,14 @@ namespace Turn.Systems
 
         public void Tick(float dt)
         {
+            // 留在场上的东西（手里剑、梅花裂隙）：不管当前是哪把都要结算
+            for (int i = 0; i < _weapons.Length; i++)
+                if (_weapons[i] != null) _weapons[i].TickAlways(dt);
+
             WeaponKind kind = Current;
             int index = (int)kind;
-            WeaponBehavior weapon = _weapons[index];
+            WeaponBehavior weapon = Behavior(kind);
+            if (weapon == null) return;
 
             if (_kit.PendingRefund > 0)
             {
@@ -124,9 +196,9 @@ namespace Turn.Systems
             }
 
             MonsterEntity target = _ctx.Monsters.GetNearest(player.Position, weapon.TargetRange);
-            if (target == null)
+            if (weapon.NeedsTarget && (target == null || !weapon.WantsToFire(player.Position, target)))
             {
-                FireTimer = 0f; // 有目标进入范围时立刻开火
+                FireTimer = 0f; // 有目标进入范围（掌：进入面向的扇形）时立刻开火
                 return;
             }
 
@@ -138,29 +210,29 @@ namespace Turn.Systems
             {
                 Weapon = kind,
                 Origin = player.Position,
-                Direction = WeaponKit.Direction(player.Position, target.Position),
+                Direction = target != null ? WeaponKit.Direction(player.Position, target.Position) : player.Facing,
                 AmmoLeft = _ammo[index],
             });
         }
 
         public bool OnProjectileHit(ProjectileEntity projectile, MonsterEntity monster)
         {
-            if (projectile == null || monster == null || !WeaponKinds.IsValid(projectile.Weapon)) return false;
-            return _weapons[(int)projectile.Weapon].OnHit(projectile, monster);
+            WeaponBehavior w = projectile != null && monster != null ? Behavior(projectile.Weapon) : null;
+            return w != null && w.OnHit(projectile, monster);
         }
 
         public void OnProjectileEnded(ProjectileEntity projectile)
         {
-            if (projectile == null || !WeaponKinds.IsValid(projectile.Weapon)) return;
-            _weapons[(int)projectile.Weapon].OnEnded(projectile);
+            WeaponBehavior w = projectile != null ? Behavior(projectile.Weapon) : null;
+            if (w != null) w.OnEnded(projectile);
         }
 
         // ---------------- 翻滚：爆发 / 清空 ----------------
 
         private void OnSubspaceEntered(SubspaceEnteredEvent evt)
         {
-            if (!WeaponKinds.IsValid(evt.Weapon)) return;
-            WeaponBehavior weapon = _weapons[(int)evt.Weapon];
+            WeaponBehavior weapon = Behavior(evt.Weapon);
+            if (weapon == null) return;
             weapon.Burst();
             _kit.BurstRing(weapon.BurstRingBuild);
         }
@@ -174,9 +246,11 @@ namespace Turn.Systems
             {
                 all[i].SpearMarks = 0;
                 all[i].BladeMarks = 0;
+                all[i].PalmMarks = 0;
             }
-            // 翻滚结束后的短时间内攻速提升
-            WeaponBehavior weapon = _weapons[(int)Current];
+            // 翻滚结束后的短时间内攻速提升（方案 A：切换后的那把）
+            WeaponBehavior weapon = Behavior(Current);
+            if (weapon == null) return;
             float haste = _kit.Value(weapon.PostHasteBuild);
             if (haste > 0f)
             {
@@ -189,11 +263,16 @@ namespace Turn.Systems
         private void OnPlayerDamaged(PlayerDamagedEvent evt)
         {
             if (!_ctx.Player.State.Alive) return;
-            _weapons[(int)Current].OnHurt();
+            WeaponBehavior weapon = Behavior(Current);
+            if (weapon != null) weapon.OnHurt();
         }
 
         private void OnWeaponEquipped(WeaponEquippedEvent evt)
         {
+            WeaponBehavior from = Behavior(evt.From);
+            WeaponBehavior to = Behavior(evt.To);
+            if (from != null) from.OnUnequipped(evt.ByRoll);
+            if (to != null) to.OnEquipped(evt.ByRoll);
             FireTimer = 0f;
             _hasteLeft = 0f;
             _haste = 0f;

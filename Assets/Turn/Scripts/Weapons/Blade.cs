@@ -21,10 +21,10 @@ namespace Turn.Weapons
 
         public override WeaponKind Kind { get { return WeaponKind.Blade; } }
         public override int BaseAmmo { get { return Cfg.Ammo; } }
-        public override BuildId AmmoBuild { get { return BuildId.BladeAmmo; } }
-        public override BuildId RateBuild { get { return BuildId.BladeRate; } }
-        public override BuildId PostHasteBuild { get { return BuildId.BladePostHaste; } }
-        public override BuildId BurstRingBuild { get { return BuildId.BladeBurstRing; } }
+        public override BuildId? AmmoBuild { get { return BuildId.BladeAmmo; } }
+        public override BuildId? RateBuild { get { return BuildId.BladeRate; } }
+        public override BuildId? PostHasteBuild { get { return BuildId.BladePostHaste; } }
+        public override BuildId? BurstRingBuild { get { return BuildId.BladeBurstRing; } }
         public override float BaseInterval { get { return Cfg.FireInterval; } }
         public override float TargetRange { get { return Range; } }
 

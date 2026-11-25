@@ -29,6 +29,30 @@ namespace Turn.Core
     /// <summary>爆发词条：以玩家为中心的一圈百分比伤害。</summary>
     public struct BurstRingEvent { public Vec2 Position; public float Radius; public int Hits; }
 
+    /// <summary>掌：一次扇形掌击（立即结算）。HalfAngle 为弧度。</summary>
+    public struct PalmStrikeEvent { public Vec2 Origin; public Vec2 Direction; public float HalfAngle; public float Range; public int Hits; }
+
+    /// <summary>爆发 · 掌：天降掌落下。Delay = 第几段（0 第一段，&gt; 0 第二段的表现延迟，现实秒）。</summary>
+    public struct PalmSkyFellEvent { public Vec2 Center; public float Radius; public float Delay; public int Hits; }
+
+    /// <summary>弩：敌人被击退撞上障碍物 / 地图边缘（眩晕 + 杀气）。Intent = 撞墙后的杀气层数。</summary>
+    public struct WallSlammedEvent { public int MonsterId; public Vec2 Position; public int Intent; }
+
+    /// <summary>副武器 · 引力黑洞：一个引力点把怪物拉向中心（Secondary = 次级引力点）。</summary>
+    public struct GravityPulledEvent { public Vec2 Center; public float Radius; public int Pulled; public bool Secondary; }
+
+    /// <summary>副武器 · 引力黑洞「坍缩」：聚拢结束时中心爆炸。</summary>
+    public struct GravityBlastEvent { public Vec2 Center; public float Radius; public int Hits; }
+
+    /// <summary>副武器 · 空间锚：记录了一个新锚点。</summary>
+    public struct AnchorRecordedEvent { public Vec2 Position; }
+
+    /// <summary>副武器 · 空间锚：一段连线斩击（立即结算）。</summary>
+    public struct AnchorSlashedEvent { public Vec2 From; public Vec2 To; public float Width; public int Hits; }
+
+    /// <summary>副武器 · 浮游炮：数量变化（Split = 分裂，false = 合体）。</summary>
+    public struct DronesChangedEvent { public int From; public int To; public bool Split; }
+
     public struct MonsterSpawnedEvent { public int MonsterId; public bool Penalty; public int Rank; }
 
     public struct MonsterDamagedEvent { public int MonsterId; public Vec2 Position; public float Amount; public DamageSource Source; public bool Critical; }
@@ -64,4 +88,50 @@ namespace Turn.Core
 
     /// <summary>玩家靠近，宝箱打开（三选一会在 Session 的下一步弹出）。</summary>
     public struct ChestOpenedEvent { public int ChestId; public Vec2 Position; }
+
+    // ---------------- 11/25 第二批：扑克牌 / 手里剑 / 时间沙漏 / WASD ----------------
+
+    /// <summary>扑克牌抽到一张牌（进头顶手牌）。</summary>
+    public struct CardDrawnEvent { public PlayingCard Card; public int HandCount; }
+
+    /// <summary>翻滚爆发打出一张牌（按出牌顺序；Position = 效果中心）。</summary>
+    public struct CardPlayedEvent { public PlayingCard Card; public Vec2 Position; public float Multiplier; }
+
+    /// <summary>黑桃炸弹落下。</summary>
+    public struct SpadeBombEvent { public Vec2 Center; public float Radius; public int Hits; }
+
+    /// <summary>方片护盾挡下一次伤害（Left = 剩余层数）。</summary>
+    public struct ShieldBlockedEvent { public Vec2 Position; public int Left; public float BurstRadius; }
+
+    /// <summary>手里剑回收：一枚的路径。</summary>
+    public struct ShurikenRecalledEvent { public Vec2 From; public Vec2 To; public float Width; public int Hits; }
+
+    /// <summary>时间沙漏：翻滚把全场敌人移速重置回基础值。</summary>
+    public struct HourglassResetEvent { public Vec2 Position; public float BlastRadius; public int Hits; }
+
+    /// <summary>WASD 按键判定（Burst = 翻滚时的四向齐发）。</summary>
+    public struct WasdStrikeEvent { public Vec2 Center; public float Radius; public bool Burst; public int Hits; }
+
+    // ---------------- 11/25 第三批：订书机 / 剑 / 强磁铁 / 光标 ----------------
+
+    /// <summary>订书机：一组怪被钉合（Count = 组内数量）。</summary>
+    public struct StapledEvent { public Vec2 Position; public int Count; }
+
+    /// <summary>订书机爆发：一只带钉痕的怪散射次级钉。</summary>
+    public struct StapleScatterEvent { public Vec2 Position; public int Marks; public int Count; }
+
+    /// <summary>剑：一次突进（常态 / 受伤后撤）。</summary>
+    public struct SwordDashEvent { public Vec2 From; public Vec2 To; public float Width; public int Hits; }
+
+    /// <summary>剑爆发：影子沿一条剑痕复刻刺击（Index = 第几条，表现按 ShadowSpeed 依次播放）。</summary>
+    public struct ShadowStrikeEvent { public Vec2 From; public Vec2 To; public float Width; public int Index; public float Delay; public int Hits; }
+
+    /// <summary>强磁铁：放下一个磁极（Positive = 正极）。</summary>
+    public struct MagnetPoleEvent { public Vec2 Position; public bool Positive; }
+
+    /// <summary>强磁铁：两极对撞（路径 + 中点爆炸）。</summary>
+    public struct MagnetCollideEvent { public Vec2 From; public Vec2 To; public Vec2 Center; public float Width; public float BlastRadius; public int Hits; }
+
+    /// <summary>光标：降维打击（Outline = 选区边界的拷贝）。</summary>
+    public struct CursorStrikeEvent { public Vec2[] Outline; public float Thickness; public int Hits; }
 }

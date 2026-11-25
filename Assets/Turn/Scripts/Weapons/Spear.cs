@@ -29,10 +29,10 @@ namespace Turn.Weapons
 
         public override WeaponKind Kind { get { return WeaponKind.Spear; } }
         public override int BaseAmmo { get { return Cfg.Ammo; } }
-        public override BuildId AmmoBuild { get { return BuildId.SpearAmmo; } }
-        public override BuildId RateBuild { get { return BuildId.SpearRate; } }
-        public override BuildId PostHasteBuild { get { return BuildId.SpearPostHaste; } }
-        public override BuildId BurstRingBuild { get { return BuildId.SpearBurstRing; } }
+        public override BuildId? AmmoBuild { get { return BuildId.SpearAmmo; } }
+        public override BuildId? RateBuild { get { return BuildId.SpearRate; } }
+        public override BuildId? PostHasteBuild { get { return BuildId.SpearPostHaste; } }
+        public override BuildId? BurstRingBuild { get { return BuildId.SpearBurstRing; } }
         public override float BaseInterval { get { return Cfg.FireInterval; } }
         public override float TargetRange { get { return Cfg.Range; } }
 

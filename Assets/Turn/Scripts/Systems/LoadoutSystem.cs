@@ -3,71 +3,65 @@ using Turn.Core;
 namespace Turn.Systems
 {
     /// <summary>
-    /// 武器装备与解锁（程序A，新策划案 11/24：同一时刻只用一把武器，波次解锁新武器）。
-    /// 开局装备 LoadoutConfig.StartWeapon（它总是已解锁）；收到 WaveStartedEvent 时，
-    /// 把 UnlockWaves 不超过当前波次的武器解锁并逐个发布 WeaponUnlockedEvent。
-    /// 换武器只能走 Equip（程序B 的升级 / 宝箱选项调用；调试 F6 也走这里），亚空间里不能换。
-    /// 本系统只管「装备的是哪一把」，弹药 / 攻击 / 印记都在程序B 的 WeaponSystem。
+    /// 出战配置（程序A，11/25 双武器策划案）：出战前在选择页选定（LoadoutConfig），局内不按波次解锁。
+    ///   · 方案 A 双主武器：Equipped = 当前生效，Standby = 待切换；翻滚爆发后 RollSystem 调 SwapMains 互换（发布 WeaponEquippedEvent，ByRoll = true）。
+    ///     两把必须不同：配置里相同时，第二把自动换成下一把不同的。
+    ///   · 方案 B 主 + 副：Equipped = 唯一主武器，Standby = Equipped，Sub = 副武器（None = 不带）。
+    /// 本系统只管「带了什么、现在用哪把」，弹药 / 攻击 / 印记都在 WeaponSystem，副武器行为在 SubWeaponSystem。
     /// </summary>
     public sealed class LoadoutSystem : ILoadoutSystem
     {
         private readonly ITurnContext _ctx;
-        private readonly LoadoutConfig _config;
-        private readonly bool[] _unlocked = new bool[WeaponKinds.Count];
 
+        public LoadoutScheme Scheme { get; private set; }
         public WeaponKind Equipped { get; private set; }
-        public int UnlockedCount { get; private set; }
+        public WeaponKind Standby { get; private set; }
+        public SubWeaponKind Sub { get; private set; }
 
         public LoadoutSystem(ITurnContext ctx, LoadoutConfig config)
         {
             _ctx = ctx;
-            _config = config ?? new LoadoutConfig();
-            Equipped = WeaponKinds.IsValid(_config.StartWeapon) ? _config.StartWeapon : WeaponKind.WaterGun;
-            _unlocked[(int)Equipped] = true;
-            UnlockedCount = 1;
-            // 开局（第 1 波）就该解锁的武器直接解锁，不发事件（还没有人订阅）
-            for (int i = 0; i < _unlocked.Length; i++)
+            config = config ?? new LoadoutConfig();
+            Scheme = config.Scheme;
+            Equipped = WeaponKinds.IsValid(config.Main) ? config.Main : WeaponKind.WaterGun;
+            if (Scheme == LoadoutScheme.DualMain)
             {
-                if (!_unlocked[i] && UnlockWave((WeaponKind)i) <= 1)
-                {
-                    _unlocked[i] = true;
-                    UnlockedCount++;
-                }
+                WeaponKind second = WeaponKinds.IsValid(config.SecondMain) ? config.SecondMain : WeaponKind.Spear;
+                if (second == Equipped) second = (WeaponKind)(((int)Equipped + 1) % WeaponKinds.Count);
+                Standby = second;
+                Sub = SubWeaponKind.None;
             }
-            ctx.Events.Subscribe<WaveStartedEvent>(OnWaveStarted);
+            else
+            {
+                Standby = Equipped;
+                Sub = SubWeaponKinds.IsValid(config.Sub) ? config.Sub : SubWeaponKind.None;
+            }
         }
 
-        public bool IsUnlocked(WeaponKind weapon)
+        public bool Carries(WeaponKind weapon)
         {
-            return WeaponKinds.IsValid(weapon) && _unlocked[(int)weapon];
+            return weapon == Equipped || (Scheme == LoadoutScheme.DualMain && weapon == Standby);
+        }
+
+        public void SwapMains()
+        {
+            if (Scheme != LoadoutScheme.DualMain || Standby == Equipped) return;
+            WeaponKind from = Equipped;
+            Equipped = Standby;
+            Standby = from;
+            _ctx.Events.Publish(new WeaponEquippedEvent { From = from, To = Equipped, ByRoll = true });
         }
 
         public bool Equip(WeaponKind weapon)
         {
-            if (!IsUnlocked(weapon) || weapon == Equipped) return false;
+            if (!WeaponKinds.IsValid(weapon) || weapon == Equipped) return false;
             if (_ctx.Player.State.InSubspace) return false;
             WeaponKind from = Equipped;
+            if (Scheme == LoadoutScheme.DualMain && weapon == Standby) Standby = from;
+            else if (Scheme != LoadoutScheme.DualMain) Standby = weapon;
             Equipped = weapon;
-            _ctx.Events.Publish(new WeaponEquippedEvent { From = from, To = weapon });
+            _ctx.Events.Publish(new WeaponEquippedEvent { From = from, To = weapon, ByRoll = false });
             return true;
-        }
-
-        private int UnlockWave(WeaponKind weapon)
-        {
-            int[] waves = _config.UnlockWaves;
-            int i = (int)weapon;
-            return waves != null && i >= 0 && i < waves.Length ? waves[i] : int.MaxValue;
-        }
-
-        private void OnWaveStarted(WaveStartedEvent evt)
-        {
-            for (int i = 0; i < _unlocked.Length; i++)
-            {
-                if (_unlocked[i] || UnlockWave((WeaponKind)i) > evt.Wave) continue;
-                _unlocked[i] = true;
-                UnlockedCount++;
-                _ctx.Events.Publish(new WeaponUnlockedEvent { Weapon = (WeaponKind)i, Wave = evt.Wave });
-            }
         }
     }
 }

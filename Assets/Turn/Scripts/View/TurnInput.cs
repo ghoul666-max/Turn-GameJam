@@ -166,7 +166,7 @@ namespace Turn.View
             }
         }
 
-        /// <summary>升级面板快捷键：按 1/2/3 返回 0/1/2，否则 -1。</summary>
+        /// <summary>数字快捷键：按 1–5 返回 0–4，否则 -1（升级面板用 1–3，出战选择页用 1–5）。</summary>
         public static int ChoicePressed
         {
             get
@@ -177,11 +177,25 @@ namespace Turn.View
                 if (kb.digit1Key.wasPressedThisFrame || kb.numpad1Key.wasPressedThisFrame) return 0;
                 if (kb.digit2Key.wasPressedThisFrame || kb.numpad2Key.wasPressedThisFrame) return 1;
                 if (kb.digit3Key.wasPressedThisFrame || kb.numpad3Key.wasPressedThisFrame) return 2;
+                if (kb.digit4Key.wasPressedThisFrame || kb.numpad4Key.wasPressedThisFrame) return 3;
+                if (kb.digit5Key.wasPressedThisFrame || kb.numpad5Key.wasPressedThisFrame) return 4;
+                if (kb.digit6Key.wasPressedThisFrame || kb.numpad6Key.wasPressedThisFrame) return 5;
+                if (kb.digit7Key.wasPressedThisFrame || kb.numpad7Key.wasPressedThisFrame) return 6;
+                if (kb.digit8Key.wasPressedThisFrame || kb.numpad8Key.wasPressedThisFrame) return 7;
+                if (kb.digit9Key.wasPressedThisFrame || kb.numpad9Key.wasPressedThisFrame) return 8;
+                if (kb.digit0Key.wasPressedThisFrame || kb.numpad0Key.wasPressedThisFrame) return 9;
                 return -1;
 #else
                 if (Input.GetKeyDown(KeyCode.Alpha1)) return 0;
                 if (Input.GetKeyDown(KeyCode.Alpha2)) return 1;
                 if (Input.GetKeyDown(KeyCode.Alpha3)) return 2;
+                if (Input.GetKeyDown(KeyCode.Alpha4)) return 3;
+                if (Input.GetKeyDown(KeyCode.Alpha5)) return 4;
+                if (Input.GetKeyDown(KeyCode.Alpha6)) return 5;
+                if (Input.GetKeyDown(KeyCode.Alpha7)) return 6;
+                if (Input.GetKeyDown(KeyCode.Alpha8)) return 7;
+                if (Input.GetKeyDown(KeyCode.Alpha9)) return 8;
+                if (Input.GetKeyDown(KeyCode.Alpha0)) return 9;
                 return -1;
 #endif
             }

@@ -53,24 +53,12 @@ namespace Turn.View
         public bool endless = true;
         [Tooltip("每一波的时长（秒）。策划书没给，暂定 30")]
         [Min(0f)] public float waveSeconds = 30f;
-        [Tooltip("投矛在第几波解锁（策划书没给，暂定 4）")]
-        [Min(1)] public int spearUnlockWave = 4;
-        [Tooltip("陌刀在第几波解锁（策划书没给，暂定 8）")]
-        [Min(1)] public int bladeUnlockWave = 8;
         [Tooltip("旧流程：每关（每组位面）需要存活的秒数。只在关掉「无尽」时生效。0 = 不会过关。")]
         [Min(0f)] public float surviveSeconds = 300f;
 
         public LevelConfig ToConfig()
         {
             return new LevelConfig { Endless = endless, WaveSeconds = waveSeconds, SurviveSeconds = surviveSeconds };
-        }
-
-        /// <summary>开局武器固定为水枪（策划）；投矛 / 陌刀按波次解锁。</summary>
-        public void ApplyLoadout(LoadoutConfig c)
-        {
-            if (c == null) return;
-            c.StartWeapon = WeaponKind.WaterGun;
-            c.UnlockWaves = new[] { 1, Mathf.Max(1, spearUnlockWave), Mathf.Max(1, bladeUnlockWave) };
         }
 
         /// <summary>version 1 的旧存档（亚空间之前）：只保留 surviveSeconds，新字段换成默认值。</summary>
@@ -80,8 +68,6 @@ namespace Turn.View
             var fresh = new LevelSettings { surviveSeconds = surviveSeconds };
             endless = fresh.endless;
             waveSeconds = fresh.waveSeconds;
-            spearUnlockWave = fresh.spearUnlockWave;
-            bladeUnlockWave = fresh.bladeUnlockWave;
             version = 2;
         }
     }

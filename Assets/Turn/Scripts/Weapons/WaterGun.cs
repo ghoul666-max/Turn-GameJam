@@ -22,10 +22,10 @@ namespace Turn.Weapons
 
         public override WeaponKind Kind { get { return WeaponKind.WaterGun; } }
         public override int BaseAmmo { get { return Cfg.Ammo; } }
-        public override BuildId AmmoBuild { get { return BuildId.WaterAmmo; } }
-        public override BuildId RateBuild { get { return BuildId.WaterRate; } }
-        public override BuildId PostHasteBuild { get { return BuildId.WaterPostHaste; } }
-        public override BuildId BurstRingBuild { get { return BuildId.WaterBurstRing; } }
+        public override BuildId? AmmoBuild { get { return BuildId.WaterAmmo; } }
+        public override BuildId? RateBuild { get { return BuildId.WaterRate; } }
+        public override BuildId? PostHasteBuild { get { return BuildId.WaterPostHaste; } }
+        public override BuildId? BurstRingBuild { get { return BuildId.WaterBurstRing; } }
         public override float BaseInterval { get { return Cfg.FireInterval; } }
         public override float TargetRange { get { return Cfg.Range; } }
 

@@ -74,11 +74,11 @@ namespace Turn.Core
     /// 玩家移速修正的来源。每个来源一个倍率（1 = 不影响），多个来源相乘。
     /// 只能在末尾追加。
     /// </summary>
-    public enum PlayerSpeedSource { DreamSlow = 0 }
+    public enum PlayerSpeedSource { DreamSlow = 0, AnchorBoost = 1, CursorHaste = 2 }
 
     public static class PlayerSpeedSources
     {
-        public const int Count = 1;
+        public const int Count = 3;
     }
 
     /// <summary>地形类型。存进网格时按 byte 存。</summary>
@@ -101,7 +101,8 @@ namespace Turn.Core
 
     /// <summary>伤害来源：用来区分表现，以及在测试时确认无敌帧挡住了哪一种伤害。</summary>
     /// Weapon = 常态空间的武器攻击（铺垫）；Burst = 翻滚爆发；Poison = 毒腐体的毒潭；Laser = 狙击械激光。
-    public enum DamageSource { Weapon, Burn, Lava, Monster, Shark, Shockwave, Drowsy, Phone, Burst, Poison, Laser }
+    /// SubWeapon = 副武器（浮游炮 / 引力黑洞 / 空间锚）。
+    public enum DamageSource { Weapon, Burn, Lava, Monster, Shark, Shockwave, Drowsy, Phone, Burst, Poison, Laser, SubWeapon }
 
     /// <summary>玩家动画状态（表现层据此驱动 Animator 的 State 参数）。</summary>
     public enum PlayerAnimState { Idle = 0, Move = 1, Roll = 2, Hurt = 3, Death = 4 }
@@ -116,14 +117,14 @@ namespace Turn.Core
     }
 
     /// <summary>
-    /// 武器种类（新策划案 · 三把武器）。同一时刻只装备一把；每把武器独立的弹药上限、攻速、翻滚冷却。
-    /// 数值会被 Unity 序列化，只能在末尾追加。
+    /// 主武器种类。数值会被 Unity 序列化，只能在末尾追加。
+    /// 水枪 / 投矛 / 陌刀（11/24 策划案），掌 / 弩（11/25 双武器策划案）。
     /// </summary>
-    public enum WeaponKind { WaterGun = 0, Spear = 1, Blade = 2 }
+    public enum WeaponKind { WaterGun = 0, Spear = 1, Blade = 2, Palm = 3, Crossbow = 4, Poker = 5, Shuriken = 6, Stapler = 7, Sword = 8 }
 
     public static class WeaponKinds
     {
-        public const int Count = 3;
+        public const int Count = 9;
 
         public static bool IsValid(WeaponKind kind) { return (int)kind >= 0 && (int)kind < Count; }
 
@@ -134,8 +135,55 @@ namespace Turn.Core
                 case WeaponKind.WaterGun: return "水枪";
                 case WeaponKind.Spear: return "投矛";
                 case WeaponKind.Blade: return "陌刀";
+                case WeaponKind.Palm: return "掌";
+                case WeaponKind.Crossbow: return "弩";
+                case WeaponKind.Poker: return "扑克牌";
+                case WeaponKind.Shuriken: return "手里剑";
+                case WeaponKind.Stapler: return "订书机";
+                case WeaponKind.Sword: return "剑";
                 default: return kind.ToString();
             }
+        }
+    }
+
+    /// <summary>副武器种类（方案 B 携带）。None = 不带副武器。只能在末尾追加。</summary>
+    public enum SubWeaponKind { None = 0, Drones = 1, GravityWell = 2, SpaceAnchor = 3, Hourglass = 4, Wasd = 5, Magnet = 6, Cursor = 7 }
+
+    public static class SubWeaponKinds
+    {
+        /// <summary>含 None 的总数（数组按 (int)SubWeaponKind 下标）。</summary>
+        public const int Count = 8;
+
+        public static bool IsValid(SubWeaponKind kind) { return (int)kind >= 0 && (int)kind < Count; }
+
+        public static string DisplayName(SubWeaponKind kind)
+        {
+            switch (kind)
+            {
+                case SubWeaponKind.None: return "无";
+                case SubWeaponKind.Drones: return "浮游炮";
+                case SubWeaponKind.GravityWell: return "引力黑洞";
+                case SubWeaponKind.SpaceAnchor: return "空间锚";
+                case SubWeaponKind.Hourglass: return "时间沙漏";
+                case SubWeaponKind.Wasd: return "WASD";
+                case SubWeaponKind.Magnet: return "强磁铁";
+                case SubWeaponKind.Cursor: return "光标";
+                default: return kind.ToString();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 出战方案（11/25 双武器策划案，二选一、互斥）。
+    /// DualMain：两把主武器，翻滚爆发后自动切到另一把；MainAndSub：一把主武器 + 一把常驻副武器（不切换）。
+    /// </summary>
+    public enum LoadoutScheme { DualMain = 0, MainAndSub = 1 }
+
+    public static class LoadoutSchemes
+    {
+        public static string DisplayName(LoadoutScheme scheme)
+        {
+            return scheme == LoadoutScheme.DualMain ? "双主武器" : "主武器 + 副武器";
         }
     }
 }

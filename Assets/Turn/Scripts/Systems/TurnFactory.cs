@@ -26,6 +26,7 @@ namespace Turn.Systems
         public IExperienceSystem Experience { get; internal set; }
         public IProgressionSystem Progression { get; internal set; }
         public ILoadoutSystem Loadout { get; internal set; }
+        public ISubWeaponSystem SubWeapons { get; internal set; }
     }
 
     /// <summary>唯一的组装点：要替换某个系统的实现，只改这里。</summary>
@@ -52,6 +53,7 @@ namespace Turn.Systems
             ctx.Environment = new EnvironmentSystem(ctx, config.Environment, config.Monster);
             ctx.Spawner = new SpawnSystem(ctx, config.Horde);
             ctx.Weapons = new WeaponSystem(ctx, config.Arsenal, config.Weapon.InitialAmmo);
+            ctx.SubWeapons = new SubWeaponSystem(ctx, config.Arsenal);
             ctx.Projectiles = new ProjectileSystem(ctx);
             ctx.Experience = new ExperienceSystem(ctx, config.Experience);
             ctx.Session = new SessionSystem(ctx);

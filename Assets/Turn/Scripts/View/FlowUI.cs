@@ -8,8 +8,9 @@ namespace Turn.View
     /// <summary>
     /// 流程界面（程序A）：标题页、暂停菜单、胜利 / 失败结算。由 GameManager 自动挂上，运行时自己搭 UI，场景里不需要摆东西；
     /// 想改标题文字就在编辑器里给 GameManager 手动加上本组件再改 Inspector。
-    ///   · 标题页：一本“绘本封面”，Space / Enter / 点按钮开始 → 武器选择页 → 选好后封面像翻页一样往左翻开，露出这一局；
-    ///   · 武器选择页（正式入口）：三张武器卡，点卡片 / 按 1 2 3 直接选，或 ← → 切换 + Space / Enter 确认；
+    ///   · 标题页：一本“绘本封面”，Space / Enter / 点按钮开始 → 出战选择页 → 选好后封面像翻页一样往左翻开，露出这一局；
+    ///   · 出战选择页（正式入口，11/25 双武器策划案）：方案（双主武器 / 主 + 副）→ 主武器 → 第二把主武器或副武器，
+    ///     每一页由 GameManager 用 ShowSelectPage 填卡片；点卡片 / 按数字直接选，或 ← → 切换 + Space / Enter 确认，Esc 返回上一步；
     ///     结算界面的「换武器重开」也会打开它（不经过封面）；
     ///   · 暂停（Esc / P）：继续 / 重打本关（R）/ 回到标题（T）；
     ///   · 结算：失败 → 重打本关（R / Enter）；胜利 → 从第一关开始（R / Enter）；都可以回到标题（T）。
@@ -48,39 +49,54 @@ namespace Turn.View
 
         private Action _onStart;
         private Action _onOpenSelect;
-        private Action<int> _onWeaponChosen;
+        private Action<int> _onCardChosen;
         private Action _onResume;
         private Action _onRestartLevel;
         private Action _onRestartFromFirst;
         private Action _onTitle;
 
         public bool IsTitleOpen { get; private set; }
-        /// <summary>武器选择页是否打开（标题流程里打开时 IsTitleOpen 也仍为 true）。</summary>
+        /// <summary>选择页是否打开（标题流程里打开时 IsTitleOpen 也仍为 true）。</summary>
         public bool IsSelectOpen { get { return _select != null && _select.activeSelf; } }
-        /// <summary>当前高亮的武器卡（0..2）。</summary>
+        /// <summary>当前高亮的卡片下标。</summary>
         public int SelectHighlight { get { return _selectHighlight; } }
+        /// <summary>当前这一页有几张卡。</summary>
+        public int SelectCount { get { return _selectCount; } }
+
+        /// <summary>选择页上的一张卡（出战方案 / 主武器 / 副武器）。Enabled = false 显示为灰色「开发中」，不能选。</summary>
+        public struct SelectCard
+        {
+            public string Title;
+            public string Body;
+            public Color Color;
+            public bool Enabled;
+        }
+
+        /// <summary>一页最多几张卡；超过 5 张时分两行排。</summary>
+        public const int MaxSelectCards = 10;
 
         private GameObject _select;
         private Text _selectHeader;
-        private readonly Image[] _selectCards = new Image[3];
-        private readonly Image[] _selectStripes = new Image[3];
-        private readonly Text[] _selectTitles = new Text[3];
-        private readonly Text[] _selectBodies = new Text[3];
-        private readonly Color[] _selectColors = { Color.white, Color.white, Color.white };
+        private Text _selectHint;
+        private readonly Image[] _selectCards = new Image[MaxSelectCards];
+        private readonly Button[] _selectButtons = new Button[MaxSelectCards];
+        private readonly Image[] _selectStripes = new Image[MaxSelectCards];
+        private readonly Text[] _selectTitles = new Text[MaxSelectCards];
+        private readonly Text[] _selectBodies = new Text[MaxSelectCards];
+        private readonly SelectCard[] _selectData = new SelectCard[MaxSelectCards];
+        private int _selectCount;
         private int _selectHighlight;
-        public bool IsPauseOpen { get { return _pause != null && _pause.activeSelf; } }
-        public bool IsResultOpen { get { return _result != null && _result.activeSelf; } }
 
         /// <summary>
-        /// onOpenSelect：标题页点「开始」时调用，由 GameManager 填好武器数据后调 ShowWeaponSelect；传 null = 不用选择页，直接开局。
-        /// onWeaponChosen：在选择页选定了第 index 把武器。
+        /// onOpenSelect：标题页点「开始」/ 结算界面点「换武器重开」时调用，由 GameManager 填好第一页后调 ShowSelectPage；传 null = 不用选择页，直接开局。
+        /// onCardChosen：在选择页点了第 index 张卡（GameManager 决定翻到下一页还是 FinishSelect）。
         /// </summary>
         public void Setup(Action onStart, Action onResume, Action onRestartLevel, Action onRestartFromFirst, Action onTitle,
-            Action onOpenSelect = null, Action<int> onWeaponChosen = null)
+            Action onOpenSelect = null, Action<int> onCardChosen = null)
         {
             _onStart = onStart;
             _onOpenSelect = onOpenSelect;
-            _onWeaponChosen = onWeaponChosen;
+            _onCardChosen = onCardChosen;
             _onResume = onResume;
             _onRestartLevel = onRestartLevel;
             _onRestartFromFirst = onRestartFromFirst;
@@ -112,7 +128,7 @@ namespace Turn.View
             if (!IsTitleOpen || _opening != null || IsSelectOpen) return;
             if (_onOpenSelect != null)
             {
-                _onOpenSelect(); // GameManager 填数据并调 ShowWeaponSelect
+                _onOpenSelect(); // GameManager 填第一页并调 ShowSelectPage
                 if (IsSelectOpen) return;
             }
             OpenCoverNow();
@@ -126,25 +142,47 @@ namespace Turn.View
             _opening = StartCoroutine(OpenCover());
         }
 
-        // ---------------- 武器选择 ----------------
+        // ---------------- 出战选择（方案 → 主武器 → 第二主武器 / 副武器） ----------------
 
-        /// <summary>打开武器选择页。titles / bodies / colors 各 3 项（水枪 / 投矛 / 陌刀），highlight = 默认高亮的那张。</summary>
-        public void ShowWeaponSelect(string header, string[] titles, string[] bodies, Color[] colors, int highlight)
+        /// <summary>显示选择页的一页（最多 MaxSelectCards 张卡）。highlight = 默认高亮的那张（不可选时自动跳到下一张可选的）。</summary>
+        public void ShowSelectPage(string header, string hint, SelectCard[] cards, int highlight)
         {
             EnsureUI();
             SetPause(false);
             HideResult();
+            _selectCount = cards != null ? Mathf.Min(cards.Length, MaxSelectCards) : 0;
             if (_selectHeader != null) _selectHeader.text = header;
-            for (int i = 0; i < 3; i++)
+            if (_selectHint != null) _selectHint.text = hint;
+            const float left = 0.04f, right = 0.96f, gap = 0.02f;
+            int rows = _selectCount > 5 ? 2 : 1;
+            int perRow = rows == 2 ? (_selectCount + 1) / 2 : Mathf.Max(1, _selectCount);
+            float width = _selectCount > 0 ? (right - left - gap * (perRow - 1)) / perRow : 0f;
+            for (int i = 0; i < MaxSelectCards; i++)
             {
-                _selectColors[i] = colors != null && i < colors.Length ? colors[i] : Color.white;
-                if (_selectTitles[i] != null) _selectTitles[i].text = titles != null && i < titles.Length ? titles[i] : "";
-                if (_selectBodies[i] != null) _selectBodies[i].text = bodies != null && i < bodies.Length ? bodies[i] : "";
-                if (_selectStripes[i] != null) _selectStripes[i].color = _selectColors[i];
+                bool shown = i < _selectCount;
+                _selectCards[i].gameObject.SetActive(shown);
+                if (!shown) continue;
+                SelectCard card = cards[i];
+                _selectData[i] = card;
+                int row = i / perRow;
+                float x0 = left + (i % perRow) * (width + gap);
+                // 一行：0.14–0.80；两行：上 0.48–0.80，下 0.12–0.45
+                float y0 = rows == 1 ? 0.14f : (row == 0 ? 0.48f : 0.12f);
+                float y1 = rows == 1 ? 0.8f : (row == 0 ? 0.8f : 0.45f);
+                Stretch(_selectCards[i].rectTransform, new Vector2(x0, y0), new Vector2(x0 + width, y1), Vector2.zero);
+                _selectTitles[i].text = card.Enabled ? card.Title : card.Title + "\n<size=24>（开发中）</size>";
+                _selectBodies[i].text = card.Body;
+                _selectBodies[i].fontSize = rows == 2 ? 15 : (_selectCount >= 5 ? 21 : (_selectCount >= 4 ? 23 : 26));
+                _selectTitles[i].fontSize = rows == 2 ? 30 : (_selectCount >= 4 ? 42 : 52);
+                _selectStripes[i].color = card.Enabled ? card.Color : new Color(0.6f, 0.6f, 0.6f, 1f);
+                _selectButtons[i].interactable = card.Enabled;
+                Color ink = card.Enabled ? InkColor : new Color(InkColor.r, InkColor.g, InkColor.b, 0.45f);
+                _selectTitles[i].color = ink;
+                _selectBodies[i].color = ink;
             }
             _select.SetActive(true);
             _select.transform.SetAsLastSibling();
-            HighlightWeapon(highlight);
+            HighlightCard(highlight, 1);
         }
 
         public void HideWeaponSelect()
@@ -152,26 +190,37 @@ namespace Turn.View
             if (_select != null) _select.SetActive(false);
         }
 
-        /// <summary>高亮第 index 张卡（循环）。</summary>
-        public void HighlightWeapon(int index)
+        /// <summary>高亮第 index 张卡（循环）；不可选的卡沿 direction 方向跳过。</summary>
+        public void HighlightCard(int index, int direction)
         {
-            _selectHighlight = ((index % 3) + 3) % 3;
-            for (int i = 0; i < 3; i++)
+            if (_selectCount <= 0) return;
+            int dir = direction >= 0 ? 1 : -1;
+            int i = ((index % _selectCount) + _selectCount) % _selectCount;
+            for (int tries = 0; tries < _selectCount && !_selectData[i].Enabled; tries++)
+                i = ((i + dir) % _selectCount + _selectCount) % _selectCount;
+            _selectHighlight = i;
+            for (int k = 0; k < _selectCount; k++)
             {
-                if (_selectCards[i] == null) continue;
-                bool on = i == _selectHighlight;
-                _selectCards[i].color = on ? Color.Lerp(PaperColor, _selectColors[i], 0.28f) : PaperColor;
-                _selectCards[i].rectTransform.localScale = on ? new Vector3(1.04f, 1.04f, 1f) : Vector3.one;
+                bool on = k == _selectHighlight && _selectData[k].Enabled;
+                Color baseColor = _selectData[k].Enabled ? PaperColor : new Color(0.78f, 0.76f, 0.72f, 1f);
+                _selectCards[k].color = on ? Color.Lerp(PaperColor, _selectData[k].Color, 0.28f) : baseColor;
+                _selectCards[k].rectTransform.localScale = on ? new Vector3(1.04f, 1.04f, 1f) : Vector3.one;
             }
         }
 
-        /// <summary>选定第 index 把武器：关掉选择页 → 回调 → 如果是从标题页来的，接着翻开封面。</summary>
-        public void ChooseWeapon(int index)
+        /// <summary>点了第 index 张卡：不可选的忽略；可选的交给 GameManager（翻下一页或 FinishSelect）。</summary>
+        public void ChooseCard(int index)
         {
-            if (!IsSelectOpen || index < 0 || index > 2) return;
+            if (!IsSelectOpen || index < 0 || index >= _selectCount || !_selectData[index].Enabled) return;
+            _selectHighlight = index;
+            if (_onCardChosen != null) _onCardChosen(index);
+        }
+
+        /// <summary>选完了：关掉选择页；如果是从标题页来的，接着翻开封面。</summary>
+        public void FinishSelect()
+        {
             bool fromTitle = IsTitleOpen;
             HideWeaponSelect();
-            if (_onWeaponChosen != null) _onWeaponChosen(index);
             if (fromTitle) OpenCoverNow();
         }
 
@@ -265,41 +314,42 @@ namespace Turn.View
             Stretch(dim.rectTransform, Vector2.zero, Vector2.one, Vector2.zero);
             _select = dim.gameObject;
 
-            _selectHeader = MakeText("Header", dim.rectTransform, "选择武器", 64, FontStyle.Bold);
+            _selectHeader = MakeText("Header", dim.rectTransform, "选择出战方案", 64, FontStyle.Bold);
             _selectHeader.color = PaperColor;
             Stretch(_selectHeader.rectTransform, new Vector2(0f, 0.84f), new Vector2(1f, 0.96f), Vector2.zero);
 
-            Text hint = MakeText("Hint", dim.rectTransform, "点卡片 / 按 1 2 3 直接选择      ← → 切换，Space / Enter 确认", 26, FontStyle.Normal);
-            hint.color = new Color(PaperColor.r, PaperColor.g, PaperColor.b, 0.7f);
-            Stretch(hint.rectTransform, new Vector2(0f, 0.04f), new Vector2(1f, 0.1f), Vector2.zero);
+            _selectHint = MakeText("Hint", dim.rectTransform, "", 26, FontStyle.Normal);
+            _selectHint.color = new Color(PaperColor.r, PaperColor.g, PaperColor.b, 0.7f);
+            Stretch(_selectHint.rectTransform, new Vector2(0f, 0.04f), new Vector2(1f, 0.1f), Vector2.zero);
 
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < MaxSelectCards; i++)
             {
                 int index = i;
-                float x0 = 0.05f + i * 0.31f;
                 Image card = MakeImage("Card" + i, dim.rectTransform, PaperColor, true);
-                Stretch(card.rectTransform, new Vector2(x0, 0.14f), new Vector2(x0 + 0.28f, 0.8f), Vector2.zero);
                 _selectCards[i] = card;
                 var button = card.gameObject.AddComponent<Button>();
                 ColorBlock colors = button.colors;
                 colors.highlightedColor = new Color(1.08f, 1.08f, 1.08f, 1f);
                 colors.pressedColor = new Color(0.85f, 0.85f, 0.85f, 1f);
+                colors.disabledColor = new Color(1f, 1f, 1f, 1f);
                 button.colors = colors;
-                button.onClick.AddListener(() => ChooseWeapon(index));
+                button.onClick.AddListener(() => ChooseCard(index));
+                _selectButtons[i] = button;
 
                 Image stripe = MakeImage("Stripe", card.rectTransform, Color.white, false);
-                Stretch(stripe.rectTransform, new Vector2(0f, 0.9f), new Vector2(1f, 1f), Vector2.zero);
+                Stretch(stripe.rectTransform, new Vector2(0f, 0.92f), new Vector2(1f, 1f), Vector2.zero);
                 _selectStripes[i] = stripe;
 
                 Text title = MakeText("Title", card.rectTransform, "", 52, FontStyle.Bold);
-                Stretch(title.rectTransform, new Vector2(0f, 0.74f), new Vector2(1f, 0.89f), Vector2.zero);
+                Stretch(title.rectTransform, new Vector2(0f, 0.74f), new Vector2(1f, 0.91f), Vector2.zero);
                 _selectTitles[i] = title;
 
                 Text body = MakeText("Body", card.rectTransform, "", 26, FontStyle.Normal);
                 body.alignment = TextAnchor.UpperLeft;
-                body.lineSpacing = 1.15f;
+                body.lineSpacing = 1.12f;
                 Stretch(body.rectTransform, new Vector2(0.07f, 0.04f), new Vector2(0.93f, 0.72f), Vector2.zero);
                 _selectBodies[i] = body;
+                card.gameObject.SetActive(false);
             }
             _select.SetActive(false);
         }

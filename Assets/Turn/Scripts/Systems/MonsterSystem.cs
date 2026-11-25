@@ -18,7 +18,7 @@ namespace Turn.Systems
     /// 位置 / 存活 / 计时 / 状态字段只有这里能写；生命由 CombatSystem 写；印记由 WeaponSystem 写。
     /// 亚空间里 SessionSystem 不调用 Tick：敌人停止移动、停止攻击，毒潭也暂停。
     /// </summary>
-    public sealed partial class MonsterSystem : IMonsterSystem
+    public sealed class MonsterSystem : IMonsterSystem
     {
         public const float SeparationStrength = 0.5f;
         public const float MaxSeparationStep = 0.2f;
@@ -27,6 +27,7 @@ namespace Turn.Systems
         private readonly HordeConfig _horde;
         private readonly List<MonsterEntity> _active = new List<MonsterEntity>();
         private readonly List<PoisonPool> _pools = new List<PoisonPool>();
+        private float _timeSlow = 1f;
         private int _nextId = 1;
         private int _nextPoolId = 1;
         private float _poolTimer;
@@ -157,6 +158,30 @@ namespace Turn.Systems
             monster.StunLeft = MathF.Max(monster.StunLeft, duration);
         }
 
+        public float Knockback(MonsterEntity monster, Vec2 direction, float distance)
+        {
+            if (monster == null || !monster.Alive || distance <= 0f || direction.SqrMagnitude < 0.0001f) return 0f;
+            Vec2 dir = direction.Normalized;
+            int steps = Math.Max(1, (int)MathF.Ceiling(distance / 0.25f));
+            float step = distance / steps;
+            Vec2 start = monster.Position;
+            Vec2 p = start;
+            for (int i = 0; i < steps; i++)
+            {
+                Vec2 next = _ctx.Bounds.Clamp(_ctx.Obstacles.ResolveMove(p, p + dir * step, monster.Radius, ObstacleMask.Units), monster.Radius);
+                // 被挡住（贴边滑动后在击退方向上几乎没前进）：停在这里
+                if (((next.X - p.X) * dir.X + (next.Y - p.Y) * dir.Y) < step * 0.5f)
+                {
+                    p = next;
+                    break;
+                }
+                p = next;
+            }
+            monster.Position = p;
+            Vec2 moved = p - start;
+            return MathF.Max(0f, moved.X * dir.X + moved.Y * dir.Y);
+        }
+
         // ---------------- 每步更新 ----------------
 
         public void Tick(float dt)
@@ -164,7 +189,9 @@ namespace Turn.Systems
             Compact();
             PlayerState player = _ctx.Player.State;
             BuildConfig builds = _ctx.Config.Builds;
-            float speedCurse = 1f + MathF.Max(0f, builds.HasteSpeed) * _ctx.Progression.CurseStacks(ChestCurse.Haste);
+            // 时间沙漏：全场敌人移速倍率（其他副武器为 1）
+            _timeSlow = _ctx.SubWeapons != null ? MathF.Max(0f, _ctx.SubWeapons.MonsterSpeedMultiplier) : 1f;
+            float speedCurse = (1f + MathF.Max(0f, builds.HasteSpeed) * _ctx.Progression.CurseStacks(ChestCurse.Haste)) * _timeSlow;
             float damageCurse = 1f + MathF.Max(0f, builds.FuryDamage) * _ctx.Progression.CurseStacks(ChestCurse.Fury);
 
             int count = _active.Count;
@@ -289,7 +316,7 @@ namespace Turn.Systems
                 m.TargetPosition = Vec2.Zero; // X 用作「本次冲锋已撞过」的标记
             }
             // 冲锋
-            Vec2 velocity = m.AttackDirection * MathF.Max(0f, _horde.ChargeSpeed) * m.SlowFactor;
+            Vec2 velocity = m.AttackDirection * MathF.Max(0f, _horde.ChargeSpeed) * m.SlowFactor * _timeSlow;
             float reach = m.Radius + _ctx.Player.Config.Radius;
             if (m.TargetPosition.X < 0.5f && Vec2.SqrDistance(m.Position, player.Position) <= reach * reach)
             {

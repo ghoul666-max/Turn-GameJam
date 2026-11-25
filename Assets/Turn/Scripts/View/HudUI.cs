@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Turn.Core;
@@ -38,9 +39,8 @@ namespace Turn.View
         private float _flashTimer;
         private float _rejectTimer;
         private float _hurtTimer;
-        /// <summary>新武器解锁提示的剩余显示时间（现实秒）。</summary>
-        private float _unlockTimer;
-        private WeaponKind _unlockWeapon;
+        /// <summary>双主武器切换提示的剩余显示时间（现实秒）。</summary>
+        private float _switchTimer;
 
         public const float FlashTime = 0.35f;
 
@@ -59,10 +59,10 @@ namespace Turn.View
             ctx.Events.Subscribe<RollRejectedEvent>(OnRollRejected);
             ctx.Events.Subscribe<PlayerDamagedEvent>(OnPlayerDamaged);
             ctx.Events.Subscribe<PhaseChangedEvent>(OnPhaseChanged);
-            ctx.Events.Subscribe<WeaponUnlockedEvent>(OnWeaponUnlocked);
+            ctx.Events.Subscribe<WeaponEquippedEvent>(OnWeaponEquipped);
             _flashTimer = 0f;
             _rejectTimer = 0f;
-            _unlockTimer = 0f;
+            _switchTimer = 0f;
             _hurtTimer = 0f;
             SetPaused(false);
             if (defeatPanel != null) defeatPanel.SetActive(false);
@@ -75,7 +75,7 @@ namespace Turn.View
             _ctx.Events.Unsubscribe<RollRejectedEvent>(OnRollRejected);
             _ctx.Events.Unsubscribe<PlayerDamagedEvent>(OnPlayerDamaged);
             _ctx.Events.Unsubscribe<PhaseChangedEvent>(OnPhaseChanged);
-            _ctx.Events.Unsubscribe<WeaponUnlockedEvent>(OnWeaponUnlocked);
+            _ctx.Events.Unsubscribe<WeaponEquippedEvent>(OnWeaponEquipped);
             _ctx = null;
         }
 
@@ -112,10 +112,9 @@ namespace Turn.View
             _hurtTimer = 0.25f;
         }
 
-        private void OnWeaponUnlocked(WeaponUnlockedEvent evt)
+        private void OnWeaponEquipped(WeaponEquippedEvent evt)
         {
-            _unlockWeapon = evt.Weapon;
-            _unlockTimer = 3f;
+            _switchTimer = 1.5f;
         }
 
         private void OnPhaseChanged(PhaseChangedEvent evt)
@@ -160,9 +159,55 @@ namespace Turn.View
                 for (int i = 0; i < cells; i++) sb.Append(i < filled ? "■" : "□");
                 sb.Append("  ").Append(w.Ammo).Append('/').Append(w.Capacity);
                 // 铺垫进度：当前武器的痕迹 / 印记
-                if (w.Current == WeaponKind.WaterGun) sb.Append("   水渍 ").Append(w.Puddles.Count);
-                else if (w.Current == WeaponKind.Spear) sb.Append("   矛印记 ").Append(w.TotalSpearMarks);
-                else sb.Append("   剑气印记 ").Append(w.TotalBladeMarks).Append("（斩击 +").Append(Mathf.RoundToInt(w.TotalBladeMarks * _ctx.Config.Arsenal.Blade.MarkBonus * 100f)).Append("%）");
+                switch (w.Current)
+                {
+                    case WeaponKind.WaterGun: sb.Append("   水渍 ").Append(w.Puddles.Count); break;
+                    case WeaponKind.Spear: sb.Append("   矛印记 ").Append(w.TotalSpearMarks); break;
+                    case WeaponKind.Blade:
+                        sb.Append("   剑气印记 ").Append(w.TotalBladeMarks).Append("（斩击 +")
+                          .Append(Mathf.RoundToInt(w.TotalBladeMarks * _ctx.Config.Arsenal.Blade.MarkBonus * 100f)).Append("%）");
+                        break;
+                    case WeaponKind.Palm: sb.Append("   掌印 ").Append(w.TotalPalmMarks); break;
+                    case WeaponKind.Crossbow: sb.Append("   杀气 ").Append(w.KillingIntent); break;
+                    case WeaponKind.Poker:
+                        sb.Append("   手牌");
+                        for (int i = 0; i < w.Hand.Count; i++) sb.Append(' ').Append(w.Hand[i].Label);
+                        if (w.Hand.Count == 0) sb.Append(" —");
+                        break;
+                    case WeaponKind.Shuriken:
+                    {
+                        int stars = 0, orbit = 0;
+                        IReadOnlyList<WeaponField> fields = w.Fields;
+                        for (int i = 0; i < fields.Count; i++)
+                        {
+                            if (fields[i].Kind == WeaponFieldKind.Shuriken) stars++;
+                            else if (fields[i].Kind == WeaponFieldKind.OrbitShuriken) orbit++;
+                        }
+                        sb.Append("   场上手里剑 ").Append(stars);
+                        if (orbit > 0) sb.Append("  环绕 ").Append(orbit);
+                        break;
+                    }
+                    case WeaponKind.Stapler: sb.Append("   钉痕 ").Append(w.TotalStapleMarks); break;
+                    case WeaponKind.Sword:
+                    {
+                        int trails = 0;
+                        IReadOnlyList<WeaponField> fields = w.Fields;
+                        for (int i = 0; i < fields.Count; i++) if (fields[i].Kind == WeaponFieldKind.SwordTrail) trails++;
+                        sb.Append("   剑痕 ").Append(trails);
+                        if (w.SwordBonusCharges > 0) sb.Append("  突进上限 +").Append(w.SwordBonusCharges);
+                        break;
+                    }
+                }
+                // 扑克牌的护盾 / 大小王加成：不管当前是哪把都显示（方案 A 切走后护盾还在）
+                if (w.ShieldCharges > 0) sb.Append("   ♦护盾 ").Append(w.ShieldCharges);
+                if (w.JokerBonus > 0f) sb.Append("   王牌 +").Append(Mathf.RoundToInt(w.JokerBonus * 100f)).Append('%');
+                // 副武器状态
+                ISubWeaponSystem sub = _ctx.SubWeapons;
+                if (sub.Kind == SubWeaponKind.Drones) sb.Append("   浮游炮 ×").Append(sub.UnitCount);
+                else if (sub.Kind == SubWeaponKind.SpaceAnchor) sb.Append("   锚点 ").Append(sub.Anchors.Count);
+                else if (sub.Kind == SubWeaponKind.Hourglass) sb.Append("   敌人移速 ").Append(Mathf.RoundToInt(sub.MonsterSpeedMultiplier * 100f)).Append('%');
+                else if (sub.Kind == SubWeaponKind.Magnet) sb.Append(sub.Anchors.Count > 0 ? "   磁极：正极已放下（下次翻滚对撞）" : "   磁极：下次翻滚放正极");
+                else if (sub.Kind == SubWeaponKind.Cursor) sb.Append(sub.Trail.Count > 0 ? "   光标绘制中（下次翻滚打击）" : "   光标：下次翻滚开始绘制");
                 ammoText.text = sb.ToString();
                 ammoText.color = ViewMath.WeaponColor(w.Current);
             }
@@ -184,10 +229,15 @@ namespace Turn.View
             if (mapText != null)
             {
                 string wave = "第 " + _ctx.Session.Wave + " 波" + (_ctx.Session.WaveTimeLeft > 0f ? "  下一波 " + FormatTime(_ctx.Session.WaveTimeLeft) : "");
-                string weapon = "   武器：" + WeaponKinds.DisplayName(loadout.Equipped) + "（已解锁 " + loadout.UnlockedCount + "/" + WeaponKinds.Count + "）";
-                string unlock = _unlockTimer > 0f ? "   新武器解锁：" + WeaponKinds.DisplayName(_unlockWeapon) : "";
-                mapText.text = wave + weapon + unlock + (mechanics ? "   " + PlaneIds.DisplayName(map) + PlaneStatus(map) : "");
-                mapText.color = _unlockTimer > 0f ? new Color(1f, 0.85f, 0.3f, 1f) : (mechanics ? ViewMath.MapColor(map) : Color.white);
+                string weapon;
+                if (loadout.Scheme == LoadoutScheme.DualMain)
+                    weapon = "   主武器：" + WeaponKinds.DisplayName(loadout.Equipped) + "  ▶ 翻滚后切到 " + WeaponKinds.DisplayName(loadout.Standby);
+                else
+                    weapon = "   主武器：" + WeaponKinds.DisplayName(loadout.Equipped) + "   副武器：" +
+                             (loadout.Sub == SubWeaponKind.None ? "无" : SubWeaponKinds.DisplayName(loadout.Sub));
+                string switched = _switchTimer > 0f ? "   已切换！" : "";
+                mapText.text = wave + weapon + switched + (mechanics ? "   " + PlaneIds.DisplayName(map) + PlaneStatus(map) : "");
+                mapText.color = _switchTimer > 0f ? ViewMath.WeaponColor(loadout.Equipped) : (mechanics ? ViewMath.MapColor(map) : Color.white);
             }
             float ready;
             if (p.InSubspace)
@@ -215,7 +265,7 @@ namespace Turn.View
                 else rollText.text = "翻滚就绪 [Space]  → 亚空间爆发 + 补满弹药";
             }
             if (terrainText != null) terrainText.text = mechanics ? "脚下：" + TerrainName(p.Terrain) : "";
-            if (_unlockTimer > 0f) _unlockTimer -= dt;
+            if (_switchTimer > 0f) _switchTimer -= dt;
             if (statsText != null)
             {
                 float left = _ctx.Session.LevelTimeLeft;

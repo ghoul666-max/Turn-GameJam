@@ -160,7 +160,7 @@ namespace Turn.View
             if (battleVersion > 0 && experience != null && experience.baseXpToLevel > 0) c.Experience = experience.ToConfig();
             if (battleVersion >= CombatVersion)
             {
-                if (arsenal != null) c.Arsenal = Copy(arsenal);
+                if (arsenal != null) c.Arsenal = Copy(arsenal).Normalize();
                 if (horde != null) c.Horde = Copy(horde);
                 if (builds != null) c.Builds = Copy(builds);
             }
@@ -174,7 +174,6 @@ namespace Turn.View
             {
                 level.Upgrade();
                 c.Level = level.ToConfig();
-                level.ApplyLoadout(c.Loadout);
             }
         }
 
@@ -200,6 +199,26 @@ namespace Turn.View
             if (level != null && level.version == 1)
             {
                 level.Upgrade();
+                changed = true;
+            }
+            if (roll != null && roll.version == 2)
+            {
+                // 双武器之前的存档：补上掌 / 弩的翻滚冷却，其余保留
+                var fresh = new RollSettings();
+                roll.palmCooldown = fresh.palmCooldown;
+                roll.crossbowCooldown = fresh.crossbowCooldown;
+                roll.version = 3;
+                changed = true;
+            }
+            if (roll != null && roll.version == 3)
+            {
+                // 第二 / 三批武器之前的存档：补上扑克牌 / 手里剑 / 订书机 / 剑的翻滚冷却
+                var fresh = new RollSettings();
+                roll.pokerCooldown = fresh.pokerCooldown;
+                roll.shurikenCooldown = fresh.shurikenCooldown;
+                roll.staplerCooldown = fresh.staplerCooldown;
+                roll.swordCooldown = fresh.swordCooldown;
+                roll.version = fresh.version;
                 changed = true;
             }
             return changed;

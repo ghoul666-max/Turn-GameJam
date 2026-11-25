@@ -35,6 +35,15 @@ namespace Turn.Systems
             return p;
         }
 
+        public ProjectileEntity SpawnSubWeapon(SubWeaponKind sub, Vec2 position, Vec2 velocity, float radius, float damage, float maxDistance)
+        {
+            var p = Create(position, velocity, radius, damage, maxDistance);
+            p.SubOwner = sub;
+            float speed = MathF.Max(0.1f, velocity.Magnitude);
+            p.LifetimeLeft = p.DistanceLeft / speed + 1f;
+            return p;
+        }
+
         public ProjectileEntity SpawnEnemy(Vec2 position, Vec2 velocity, float radius, float damage, float lifetime, float maxDistance, EnemyProjectileKind kind)
         {
             var p = Create(position, velocity, radius, damage, maxDistance);
@@ -80,9 +89,19 @@ namespace Turn.Systems
                 }
                 Vec2 to = from + step;
 
-                // 遮挡物：停在遮挡物前结束
+                // 遮挡物：停在遮挡物前结束；可反弹的（爱心弹）按撞到的轴翻转速度
                 if (_ctx.Obstacles.SegmentBlocked(from, to, p.Radius, ObstacleMask.Projectiles))
                 {
+                    if (p.BouncesLeft > 0)
+                    {
+                        bool bx = _ctx.Obstacles.SegmentBlocked(from, from + new Vec2(step.X, 0f), p.Radius, ObstacleMask.Projectiles);
+                        bool by = _ctx.Obstacles.SegmentBlocked(from, from + new Vec2(0f, step.Y), p.Radius, ObstacleMask.Projectiles);
+                        if (!bx && !by) bx = by = true;
+                        p.Velocity = new Vec2(bx ? -p.Velocity.X : p.Velocity.X, by ? -p.Velocity.Y : p.Velocity.Y);
+                        p.BouncesLeft--;
+                        p.LifetimeLeft -= dt;
+                        continue;
+                    }
                     End(p);
                     continue;
                 }
@@ -95,6 +114,17 @@ namespace Turn.Systems
                 else TickPlayer(p, from);
                 if (!p.Alive) continue;
 
+                if (p.BouncesLeft > 0 && !lastStep && !_ctx.Bounds.Contains(p.Position, 0.5f))
+                {
+                    // 地图边缘反弹
+                    BoundsRect r = _ctx.Bounds.Rect;
+                    Vec2 v = p.Velocity;
+                    if (p.Position.X < r.Min.X + 0.5f || p.Position.X > r.Max.X - 0.5f) v = new Vec2(-v.X, v.Y);
+                    if (p.Position.Y < r.Min.Y + 0.5f || p.Position.Y > r.Max.Y - 0.5f) v = new Vec2(v.X, -v.Y);
+                    p.Velocity = v;
+                    p.Position = _ctx.Bounds.Clamp(p.Position, 0.5f);
+                    p.BouncesLeft--;
+                }
                 if (lastStep || p.DistanceLeft <= 0f || p.LifetimeLeft <= 0f || !_ctx.Bounds.Contains(p.Position, 0.5f)) End(p);
             }
 
@@ -111,7 +141,9 @@ namespace Turn.Systems
         {
             if (!p.Alive) return;
             p.Alive = false;
-            if (!p.Enemy) _ctx.Weapons.OnProjectileEnded(p);
+            if (p.Enemy) return;
+            if (p.SubOwner != SubWeaponKind.None) _ctx.SubWeapons.OnProjectileEnded(p);
+            else _ctx.Weapons.OnProjectileEnded(p);
         }
 
         private void TickEnemy(ProjectileEntity p, Vec2 from)
@@ -135,7 +167,7 @@ namespace Turn.Systems
                 MonsterEntity m = _hits[k];
                 if (!m.Alive || p.HitIds.Contains(m.Id)) continue;
                 p.HitIds.Add(m.Id);
-                bool keepFlying = _ctx.Weapons.OnProjectileHit(p, m);
+                bool keepFlying = p.SubOwner != SubWeaponKind.None ? _ctx.SubWeapons.OnProjectileHit(p, m) : _ctx.Weapons.OnProjectileHit(p, m);
                 if (!keepFlying)
                 {
                     p.Position = m.Position;

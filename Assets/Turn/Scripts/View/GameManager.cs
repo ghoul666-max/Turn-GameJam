@@ -49,13 +49,19 @@ namespace Turn.View
         [Tooltip("帧率低时一帧最多补几步")]
         [SerializeField] private int maxStepsPerFrame = 5;
 
-        [Header("武器选择")]
-        [Tooltip("开局（标题页之后）弹出武器选择页；关掉 = 直接用水枪开局")]
+        [Header("出战选择")]
+        [Tooltip("开局（标题页之后）弹出出战选择页（方案 → 主武器 → 第二主武器 / 副武器）；关掉 = 直接用水枪、不带副武器开局")]
         [SerializeField] private bool weaponSelect = true;
-        private WeaponKind _startWeapon = WeaponKind.WaterGun;
+        // 上一次的选择（选择页默认高亮它们；R 重开沿用）
+        private LoadoutScheme _scheme = LoadoutScheme.MainAndSub;
+        private WeaponKind _mainWeapon = WeaponKind.WaterGun;
+        private WeaponKind _secondWeapon = WeaponKind.Spear;
+        private SubWeaponKind _subWeapon = SubWeaponKind.None;
+        private SelectStep _selectStep;
+        private bool _selectFromTitle;
 
         [Header("调试快捷键（发布前取消勾选）")]
-        [Tooltip("F3 立刻通过本关 / F4 无敌开关 / F5 游戏速度 1× → 2× → 4× / F6 切到下一把已解锁的武器")]
+        [Tooltip("F3 立刻通过本关 / F4 无敌开关 / F5 游戏速度 1× → 2× → 4× / F6 换主武器（双主武器：立刻互换；主 + 副：换下一把）")]
         [SerializeField] private bool debugShortcuts = true;
         private bool _godMode;
         private float _debugSpeed = 1f;
@@ -72,6 +78,7 @@ namespace Turn.View
         private float _accumulator;
         private bool _paused;
         private TurnTuningPanel _tuning;
+        private BuildPickerPanel _buildPicker;
         private EnvironmentView _environmentView;
         private PageTurnView _pageTurn;
         private FlowUI _flow;
@@ -88,6 +95,12 @@ namespace Turn.View
         private float _totalTime;
         private int _totalKills;
         private int _totalRolls;
+
+        /// <summary>调试面板（F1 数值 / F7 强化词条）打开中：暂停模拟、屏蔽玩法输入。</summary>
+        private bool PanelOpen
+        {
+            get { return (_tuning != null && _tuning.IsOpen) || (_buildPicker != null && _buildPicker.IsOpen); }
+        }
 
         /// <summary>当前一局的系统上下文（调试 / 扩展用；表现层只读）。</summary>
         public ITurnContext Context { get { return _ctx; } }
@@ -106,6 +119,11 @@ namespace Turn.View
             _tuning = GetComponent<TurnTuningPanel>();
             if (_tuning == null) _tuning = gameObject.AddComponent<TurnTuningPanel>();
             _tuning.SetupInGame(StartNewRun, CaptureTuning);
+
+            // 调试 · 强化词条面板（F7）：直接加 / 减任意词条层数
+            _buildPicker = GetComponent<BuildPickerPanel>();
+            if (_buildPicker == null) _buildPicker = gameObject.AddComponent<BuildPickerPanel>();
+            _buildPicker.Setup(() => _ctx, () => _tuning != null && _tuning.IsOpen);
 
             // 位面机制表现（困意遮罩、老板来电）：没有手动挂就自动挂一个
             _environmentView = GetComponent<EnvironmentView>();
@@ -127,7 +145,7 @@ namespace Turn.View
             _flow = GetComponent<FlowUI>();
             if (_flow == null) _flow = gameObject.AddComponent<FlowUI>();
             _flow.Setup(OnTitleOpened, ResumeFromPause, RestartLevel, RestartFromFirstLevel, ReturnToTitle,
-                weaponSelect ? OpenWeaponSelect : (Action)null, OnWeaponChosen);
+                weaponSelect ? OpenWeaponSelect : (Action)null, OnSelectCard);
             if (hud != null) hud.UseBuiltInPanels = false;
 
             // 音效：没有手动挂就自动挂一个（自动挂的没有音频，要配音效请在编辑器里给 GameManager 加上 TurnAudio 组件）
@@ -172,15 +190,22 @@ namespace Turn.View
             if (p.InvincibleLeft < 0.25f) p.InvincibleLeft = 0.25f;
         }
 
-        /// <summary>F6：按 水枪 → 投矛 → 陌刀 的顺序切到下一把已解锁的武器（亚空间里 Equip 会拒绝）。</summary>
+        /// <summary>
+        /// F6 调试换武器：方案 A 立刻互换两把主武器（等于不翻滚手动切换）；方案 B 按顺序换成下一把已实现的主武器。亚空间里 Equip 会拒绝。
+        /// </summary>
         private void EquipNextUnlockedWeapon()
         {
             ILoadoutSystem loadout = _ctx.Loadout;
+            if (loadout.Scheme == LoadoutScheme.DualMain)
+            {
+                loadout.Equip(loadout.Standby);
+                return;
+            }
             int start = (int)loadout.Equipped;
             for (int i = 1; i < WeaponKinds.Count; i++)
             {
                 var next = (WeaponKind)((start + i) % WeaponKinds.Count);
-                if (loadout.IsUnlocked(next))
+                if (_ctx.Weapons.Supports(next))
                 {
                     loadout.Equip(next);
                     return;
@@ -192,7 +217,7 @@ namespace Turn.View
         private void ApplyTimeScale()
         {
             float scale = _debugSpeed;
-            bool frozen = _paused || (_tuning != null && _tuning.IsOpen);
+            bool frozen = _paused || PanelOpen;
             if (_ctx != null && !frozen && _ctx.Player.State.InSubspace)
             {
                 float s = _ctx.Config.Roll.SubspaceTimeScale;
@@ -236,51 +261,222 @@ namespace Turn.View
             }
         }
 
-        // ---------------- 武器选择（正式入口） ----------------
+        // ---------------- 出战选择（正式入口，11/25 双武器策划案） ----------------
 
-        /// <summary>打开武器选择页：卡片上的数值直接读这一局的配置（Inspector / F1 面板改了这里跟着变）。</summary>
+        private enum SelectStep { Scheme, Main, Second, Sub }
+
+        private const string SelectHint = "点卡片 / 按数字直接选      ← → 切换，Space / Enter 确认      Esc 返回上一步";
+
+        /// <summary>打开出战选择页的第一页（出战方案）。卡片上的数值直接读这一局的配置（Inspector / F1 面板改了这里跟着变）。</summary>
         private void OpenWeaponSelect()
         {
             if (_flow == null || _ctx == null) return;
-            TurnConfig c = _ctx.Config;
-            var titles = new string[WeaponKinds.Count];
-            var bodies = new string[WeaponKinds.Count];
-            var colors = new Color[WeaponKinds.Count];
-            for (int i = 0; i < WeaponKinds.Count; i++)
-            {
-                var w = (WeaponKind)i;
-                titles[i] = (i + 1) + "  " + WeaponKinds.DisplayName(w);
-                bodies[i] = WeaponCard(w, c);
-                colors[i] = ViewMath.WeaponColor(w);
-            }
-            string header = _flow.IsTitleOpen ? "选择武器" : "换武器重开";
-            _flow.ShowWeaponSelect(header, titles, bodies, colors, (int)_startWeapon);
+            _selectFromTitle = _flow.IsTitleOpen;
+            _selectStep = SelectStep.Scheme;
+            ShowSelectStep();
         }
 
-        private string WeaponCard(WeaponKind w, TurnConfig c)
+        private void ShowSelectStep()
         {
-            ArsenalConfig a = c.Arsenal;
+            string prefix = _selectFromTitle ? "" : "换装备重开 · ";
+            switch (_selectStep)
+            {
+                case SelectStep.Scheme:
+                {
+                    var cards = new FlowUI.SelectCard[2];
+                    cards[0] = new FlowUI.SelectCard
+                    {
+                        Title = "1  " + LoadoutSchemes.DisplayName(LoadoutScheme.DualMain), Enabled = true,
+                        Color = new Color(0.95f, 0.75f, 0.3f, 1f),
+                        Body = "携带 2 把主武器：当前生效 + 待切换。\n\n<b>翻滚</b>  触发当前主武器的爆发 → 自动切到另一把 → 补满弹药、清空所有铺垫。" +
+                               "\n\n两把主武器各算各的弹药、攻速、翻滚冷却和词条；升级时两把的词条一起进三选一。",
+                    };
+                    cards[1] = new FlowUI.SelectCard
+                    {
+                        Title = "2  " + LoadoutSchemes.DisplayName(LoadoutScheme.MainAndSub), Enabled = true,
+                        Color = new Color(0.45f, 0.85f, 0.75f, 1f),
+                        Body = "携带 1 把主武器 + 1 把副武器。\n\n<b>翻滚</b>  只触发主武器的爆发、不切换；补满弹药、清空铺垫，同时触发副武器的翻滚联动。" +
+                               "\n\n副武器全程常驻，有独立词条池，和主武器词条一起进三选一。",
+                    };
+                    _flow.ShowSelectPage(prefix + "第 1 / 3 步 · 选择出战方案", SelectHint, cards, (int)_scheme);
+                    break;
+                }
+                case SelectStep.Main:
+                case SelectStep.Second:
+                {
+                    bool second = _selectStep == SelectStep.Second;
+                    var cards = new FlowUI.SelectCard[WeaponKinds.Count];
+                    for (int i = 0; i < WeaponKinds.Count; i++)
+                    {
+                        var w = (WeaponKind)i;
+                        bool same = second && w == _mainWeapon;
+                        cards[i] = new FlowUI.SelectCard
+                        {
+                            Title = KeyLabel(i) + "  " + WeaponKinds.DisplayName(w),
+                            Body = same ? "（已选为第一把主武器）\n\n" + WeaponCard(w) : WeaponCard(w),
+                            Color = ViewMath.WeaponColor(w),
+                            Enabled = _ctx.Weapons.Supports(w) && !same,
+                        };
+                    }
+                    string header = !second
+                        ? (_scheme == LoadoutScheme.DualMain ? "第 2 / 3 步 · 选择第一把主武器（开局生效）" : "第 2 / 3 步 · 选择主武器")
+                        : "第 3 / 3 步 · 选择第二把主武器（第一次翻滚后切过来）";
+                    int highlight = second ? (_secondWeapon == _mainWeapon ? (int)_mainWeapon + 1 : (int)_secondWeapon) : (int)_mainWeapon;
+                    _flow.ShowSelectPage(prefix + header, SelectHint, cards, highlight);
+                    break;
+                }
+                default:
+                {
+                    var cards = new FlowUI.SelectCard[SubWeaponKinds.Count];
+                    for (int i = 0; i < SubWeaponKinds.Count; i++)
+                    {
+                        var k = (SubWeaponKind)i;
+                        cards[i] = new FlowUI.SelectCard
+                        {
+                            Title = KeyLabel(i) + "  " + (k == SubWeaponKind.None ? "不带副武器" : SubWeaponKinds.DisplayName(k)),
+                            Body = SubWeaponCard(k),
+                            Color = ViewMath.SubWeaponColor(k),
+                            Enabled = _ctx.SubWeapons.Supports(k),
+                        };
+                    }
+                    _flow.ShowSelectPage(prefix + "第 3 / 3 步 · 选择副武器", SelectHint, cards, (int)_subWeapon);
+                    break;
+                }
+            }
+        }
+
+        /// <summary>选择页点了第 index 张卡：翻到下一页，或者选完开局。</summary>
+        private void OnSelectCard(int index)
+        {
+            switch (_selectStep)
+            {
+                case SelectStep.Scheme:
+                    _scheme = index == 0 ? LoadoutScheme.DualMain : LoadoutScheme.MainAndSub;
+                    _selectStep = SelectStep.Main;
+                    ShowSelectStep();
+                    return;
+                case SelectStep.Main:
+                    _mainWeapon = (WeaponKind)index;
+                    _selectStep = _scheme == LoadoutScheme.DualMain ? SelectStep.Second : SelectStep.Sub;
+                    ShowSelectStep();
+                    return;
+                case SelectStep.Second:
+                    _secondWeapon = (WeaponKind)index;
+                    break;
+                default:
+                    _subWeapon = (SubWeaponKind)index;
+                    break;
+            }
+            // 选完：从头开一局新的（标题页来的会接着翻开封面；结算界面来的直接开始）
+            RestartFromFirstLevel();
+            _flow.FinishSelect();
+        }
+
+        /// <summary>Esc：返回上一页；第一页再按就关掉选择页（回到标题 / 结算界面）。</summary>
+        private void OnSelectBack()
+        {
+            switch (_selectStep)
+            {
+                case SelectStep.Main:
+                    _selectStep = SelectStep.Scheme;
+                    ShowSelectStep();
+                    return;
+                case SelectStep.Second:
+                case SelectStep.Sub:
+                    _selectStep = SelectStep.Main;
+                    ShowSelectStep();
+                    return;
+                default:
+                    _flow.HideWeaponSelect();
+                    _resultShown = false; // 从结算界面来的：重新显示结算
+                    return;
+            }
+        }
+
+        /// <summary>选择页卡片的数字键（第 10 张是 0）。</summary>
+        private static string KeyLabel(int index) { return index == 9 ? "0" : (index + 1).ToString(); }
+
+        /// <summary>主武器卡片。数值读这一局的配置。</summary>
+        private string WeaponCard(WeaponKind w)
+        {
+            ArsenalConfig a = _ctx.Config.Arsenal;
             float cd = _ctx.Roll.CooldownFor(w);
+            string roll = "\n翻滚冷却 " + Num(cd) + " 秒";
             switch (w)
             {
                 case WeaponKind.WaterGun:
-                    return "弹药 " + a.WaterGun.Ammo + " · " + Num(a.WaterGun.FireInterval) + " 秒/发 · 伤害 " + Num(a.WaterGun.Damage) +
-                           "\n翻滚冷却 " + Num(cd) + " 秒" +
+                    return "弹药 " + a.WaterGun.Ammo + " · " + Num(a.WaterGun.FireInterval) + " 秒/发 · 伤害 " + Num(a.WaterGun.Damage) + roll +
                            "\n\n<b>铺垫</b>  水弹落地或命中处留下一滩水渍，永久存在" +
-                           "\n\n<b>爆发</b>  全图水渍同时喷发喷泉（每滩 " + Num(a.WaterGun.FountainDamage) + "），重叠处伤害叠加" +
-                           "\n\n适合：边走边把一片地铺满，再翻滚";
+                           "\n\n<b>爆发</b>  全图水渍同时喷发喷泉（每滩 " + Num(a.WaterGun.FountainDamage) + "），重叠处伤害叠加";
                 case WeaponKind.Spear:
-                    return "弹药 " + a.Spear.Ammo + " · " + Num(a.Spear.FireInterval) + " 秒/发 · 伤害 " + Num(a.Spear.Damage) +
-                           "\n翻滚冷却 " + Num(cd) + " 秒" +
+                    return "弹药 " + a.Spear.Ammo + " · " + Num(a.Spear.FireInterval) + " 秒/发 · 伤害 " + Num(a.Spear.Damage) + roll +
                            "\n\n<b>铺垫</b>  长矛插在敌人身上叠矛印记；直接击杀则穿透下一个，印记一起带走" +
-                           "\n\n<b>爆发</b>  所有长矛向你回收，沿途穿刺（每根 " + Num(a.Spear.RecallDamage) + "）" +
-                           "\n\n适合：把敌人引到身前排成一线";
-                default:
-                    return "弹药 " + a.Blade.Ammo + " · " + Num(a.Blade.FireInterval) + " 秒/发 · 伤害 " + Num(a.Blade.Damage) +
-                           "\n翻滚冷却 " + Num(cd) + " 秒" +
+                           "\n\n<b>爆发</b>  所有长矛向你回收，沿途穿刺（每根 " + Num(a.Spear.RecallDamage) + "）";
+                case WeaponKind.Blade:
+                    return "弹药 " + a.Blade.Ammo + " · " + Num(a.Blade.FireInterval) + " 秒/发 · 伤害 " + Num(a.Blade.Damage) + roll +
                            "\n\n<b>铺垫</b>  " + Num(a.Blade.Angle) + "° 扇形剑气，命中的敌人各叠 1 层剑气印记" +
-                           "\n\n<b>爆发</b>  横贯全图的一刀斩（" + Num(a.Blade.SlashDamage) + "），全场每层印记 +" + Mathf.RoundToInt(a.Blade.MarkBonus * 100f) + "%" +
-                           "\n\n适合：攒满层数，一刀清屏";
+                           "\n\n<b>爆发</b>  横贯全图的一刀斩（" + Num(a.Blade.SlashDamage) + "），全场每层印记 +" + Mathf.RoundToInt(a.Blade.MarkBonus * 100f) + "%";
+                case WeaponKind.Palm:
+                    return "弹药 " + a.Palm.Ammo + " · " + Num(a.Palm.FireInterval) + " 秒/发 · 伤害 " + Num(a.Palm.Damage) + roll +
+                           "\n\n<b>铺垫</b>  朝面向方向 " + Num(a.Palm.Angle) + "° 扇形掌击，击退敌人（冲锋中的免疫），命中叠 1 层掌印" +
+                           "\n\n<b>爆发</b>  以自身为中心的天降掌（" + Num(a.Palm.SkyDamage) + "），每层掌印 +" + Mathf.RoundToInt(a.Palm.MarkBonus * 100f) + "%";
+                case WeaponKind.Poker:
+                    return "手牌上限 " + a.Poker.HandSize + " · " + Num(a.Poker.DrawInterval) + " 秒抽 1 张" + roll +
+                           "\n\n<b>常态</b>  不攻击，自动抽牌到头顶（1–K、大小王）" +
+                           "\n\n<b>爆发</b>  打出全部手牌：♥爱心弹（点数×" + a.Poker.HeartsPerPoint + " 发，会反弹）♠最密集处炸弹 ♦护盾（层数 = 点数）♣吸附裂隙；" +
+                           "小王 / 大王永久 +" + Mathf.RoundToInt(a.Poker.SmallJokerBonus * 100f) + "% / +" + Mathf.RoundToInt(a.Poker.BigJokerBonus * 100f) + "%（切换主武器清零）";
+                case WeaponKind.Shuriken:
+                    return "弹药 " + a.Shuriken.Ammo + " · " + Num(a.Shuriken.FireInterval) + " 秒/发 · 旋转 " + Num(a.Shuriken.SpinDamage) + "/" + Num(a.Shuriken.SpinInterval) + " 秒" + roll +
+                           "\n\n<b>铺垫</b>  手里剑飞出后停在原地旋转，持续伤害周围敌人，永久留存" +
+                           "\n\n<b>爆发</b>  全部高速回收，路径穿刺（每枚 " + Num(a.Shuriken.RecallDamage) + "）；双主武器方案下回收后环绕你旋转，直到下一次切换";
+                case WeaponKind.Stapler:
+                    return "弹药 " + a.Stapler.Ammo + " · " + Num(a.Stapler.FireInterval) + " 秒/发 · 伤害 " + Num(a.Stapler.Damage) + roll +
+                           "\n\n<b>铺垫</b>  订书钉击退敌人；被击退的撞到别的怪，就把沿途的钉合成一组（叠钉痕 + 减速，最多 " + a.Stapler.GroupMax + " 只）" +
+                           "\n\n<b>爆发</b>  每只带钉痕的怪向四周散射 " + a.Stapler.SecondaryCount + " 枚次级钉（可继续钉合），钉痕越多越痛";
+                case WeaponKind.Sword:
+                    return "弹药 " + a.Sword.Ammo + " · " + Num(a.Sword.FireInterval) + " 秒/次 · 伤害 " + Num(a.Sword.Damage) + roll +
+                           "\n\n<b>铺垫</b>  朝面向方向突进刺击（突进中无敌），路径留下剑痕" +
+                           "\n\n<b>爆发</b>  影子沿所有剑痕复刻刺击（" + Num(a.Sword.ShadowDamage) + "，每条剑痕 +" + Mathf.RoundToInt(a.Sword.TrailBonus * 100f) +
+                           "%）；影刺每击杀 1 名敌人永久 +1 突进次数（切换主武器清零）";
+                default:
+                    return "弹药 " + a.Crossbow.Ammo + " · 伤害 " + Num(a.Crossbow.Damage) + " · 穿透 " + a.Crossbow.Pierce + roll +
+                           "\n\n<b>常态</b>  重型弩箭强制击退；敌人撞墙眩晕，你获得 1 层杀气（每层弩伤害 +" + Mathf.RoundToInt(a.Crossbow.IntentBonus * 100f) +
+                           "%，无限叠加，切换主武器时清零）" +
+                           "\n\n<b>翻滚</b>  没有爆发，冷却特别短：高频翻滚补弹、驱动副武器 / 切换主武器";
+            }
+        }
+
+        private string SubWeaponCard(SubWeaponKind k)
+        {
+            ArsenalConfig a = _ctx.Config.Arsenal;
+            switch (k)
+            {
+                case SubWeaponKind.None:
+                    return "只带一把主武器。\n\n翻滚只触发主武器的爆发。";
+                case SubWeaponKind.Drones:
+                    return "环绕你飞行、自动攻击的小炮台（每台每发 " + Num(a.Drones.Damage) + "，" + Num(a.Drones.FireInterval) + " 秒/发）。" +
+                           "\n\n<b>翻滚</b>  盲盒：" + Mathf.RoundToInt(a.Drones.SplitChance * 100f) + "% 分裂（+" + a.Drones.SplitAdd + " 台），否则合体（−" +
+                           a.Drones.MergeRemove + " 台，最少 " + Mathf.Max(1, a.Drones.MinCount) + " 台）";
+                case SubWeaponKind.GravityWell:
+                    return "没有基础伤害。" +
+                           "\n\n<b>翻滚</b>  在翻滚前的站位生成半径 " + Num(a.Gravity.Radius) + " 的瞬时引力场，把周围怪物拉向中心——正好吃到主武器的爆发";
+                case SubWeaponKind.Hourglass:
+                    return "全场敌人移速随时间渐进衰减，最低降到 " + Mathf.RoundToInt(a.Hourglass.FloorSpeed * 100f) + "%。" +
+                           "\n\n<b>翻滚</b>  敌人移速立即重置回基础值，回到常态后重新开始减速——用翻滚时机把控节奏";
+                case SubWeaponKind.Wasd:
+                    return "按住移动键时，对应方向生成按键判定区（" + Num(a.Wasd.Damage) + "，每只敌人 " + Num(a.Wasd.HitCooldown) + " 秒最多 1 次），最多同时 2 个方向。" +
+                           "\n\n<b>翻滚</b>  W / A / S / D 四向齐发（" + Num(a.Wasd.BurstDamage) + "）";
+                case SubWeaponKind.Magnet:
+                    return "没有常态效果。" +
+                           "\n\n<b>翻滚</b>  奇数次留下正极，偶数次留下负极，两极对撞：路径穿刺（" + Num(a.Magnet.PathDamage) + "）+ 中点爆炸（" +
+                           Num(a.Magnet.BlastDamage) + "，眩晕）。在主武器爆发之前结算";
+                case SubWeaponKind.Cursor:
+                    return "没有常态效果。" +
+                           "\n\n<b>翻滚</b>  第一次翻滚开始绘制，你走过的路线就是选区边界；之后每次翻滚：选区内敌人受到降维打击（" +
+                           Num(a.Cursor.Damage) + "）并被压扁定身，然后自动开始下一轮绘制";
+                default:
+                    return "每次翻滚记录一个锚点。" +
+                           "\n\n<b>翻滚</b>  回溯到上一个锚点，连线斩击路径上所有敌人（" + Num(a.Anchor.SlashDamage) + "）；连续翻滚会在两点之间来回折返";
             }
         }
 
@@ -289,11 +485,12 @@ namespace Turn.View
             return Mathf.Approximately(v, Mathf.Round(v)) ? Mathf.RoundToInt(v).ToString() : v.ToString("0.##");
         }
 
-        /// <summary>选定武器：从头开一局新的（标题页来的会接着翻开封面；结算界面来的直接开始）。</summary>
-        private void OnWeaponChosen(int index)
+        /// <summary>出战装备的显示名（结算 / HUD 用）。</summary>
+        private string LoadoutName()
         {
-            _startWeapon = WeaponKinds.IsValid((WeaponKind)index) ? (WeaponKind)index : WeaponKind.WaterGun;
-            RestartFromFirstLevel();
+            ILoadoutSystem l = _ctx.Loadout;
+            if (l.Scheme == LoadoutScheme.DualMain) return WeaponKinds.DisplayName(l.Equipped) + " / " + WeaponKinds.DisplayName(l.Standby);
+            return l.Sub != SubWeaponKind.None ? WeaponKinds.DisplayName(l.Equipped) + " + " + SubWeaponKinds.DisplayName(l.Sub) : WeaponKinds.DisplayName(l.Equipped);
         }
 
         private void ResumeFromPause()
@@ -335,7 +532,7 @@ namespace Turn.View
             else
             {
                 string where = _ctx.Config.Level.Endless
-                    ? "第 " + _ctx.Session.Wave + " 波 · " + WeaponKinds.DisplayName(_ctx.Loadout.Equipped)
+                    ? "第 " + _ctx.Session.Wave + " 波 · " + LoadoutName()
                     : "第 " + ((int)_levelPair + 1) + " 关 · " + PlaneIds.DisplayName(_levelPair);
                 body = where + "\n\n存活 " + FormatTime(_ctx.Session.Time) +
                        "    等级 " + _ctx.Progression.Level + "    击杀 " + _ctx.Progression.Kills + "    翻滚 " + _ctx.Roll.RollCount + " 次";
@@ -403,8 +600,8 @@ namespace Turn.View
             TurnConfig config = TurnConfigReader.Read(player, weapon, mapManager, worldBounds, spawnManager, upgradeManager);
             // 数值面板：有存档且启用时覆盖 Inspector 数值；第一次运行时把 Inspector 数值记成存档
             TurnTuningStore.ApplyOrCapture(config, player, weapon, spawnManager, mapManager, upgradeManager);
-            // 开局武器 = 武器选择页选的那一把（它总是已解锁；其余武器按波次解锁）
-            config.Loadout.StartWeapon = _startWeapon;
+            // 出战配置 = 选择页的选择（局内不再按波次解锁）
+            config.Loadout = new LoadoutConfig { Scheme = _scheme, Main = _mainWeapon, SecondMain = _secondWeapon, Sub = _subWeapon };
             // 关卡：开局位面换成本关这一组的第一面（如果 Inspector 的开局位面就在这一组里，保留它，方便测试第二面）
             if (_levelChosen && PlaneIds.PairOf(config.Environment.StartPlane) != _levelPair)
             {
@@ -485,12 +682,13 @@ namespace Turn.View
             {
                 _ctx.Player.SetMoveInput(Vec2.Zero);
                 _accumulator = 0f;
-                if (_tuning != null && _tuning.IsOpen) return;
+                if (PanelOpen) return;
                 int pick = TurnInput.ChoicePressed;
                 int selectStep = TurnInput.SelectStepPressed;
-                if (pick >= 0) _flow.ChooseWeapon(pick);
-                else if (selectStep != 0) _flow.HighlightWeapon(_flow.SelectHighlight + selectStep);
-                else if (TurnInput.RollPressed || TurnInput.RestartPressed) _flow.ChooseWeapon(_flow.SelectHighlight);
+                if (pick >= 0) _flow.ChooseCard(pick);
+                else if (selectStep != 0) _flow.HighlightCard(_flow.SelectHighlight + selectStep, selectStep);
+                else if (TurnInput.RollPressed || TurnInput.RestartPressed) _flow.ChooseCard(_flow.SelectHighlight);
+                else if (TurnInput.PausePressed) OnSelectBack();
                 return;
             }
 
@@ -499,7 +697,7 @@ namespace Turn.View
             {
                 _ctx.Player.SetMoveInput(Vec2.Zero);
                 _accumulator = 0f;
-                if (!(_tuning != null && _tuning.IsOpen) && (TurnInput.RollPressed || TurnInput.RestartPressed)) _flow.StartFromTitle();
+                if (!PanelOpen && (TurnInput.RollPressed || TurnInput.RestartPressed)) _flow.StartFromTitle();
                 return;
             }
 
@@ -512,7 +710,7 @@ namespace Turn.View
             }
 
             // 数值面板打开时：暂停模拟、屏蔽玩法输入（面板里打字不会触发翻滚 / 选升级）
-            if (_tuning != null && _tuning.IsOpen)
+            if (PanelOpen)
             {
                 _ctx.Player.SetMoveInput(Vec2.Zero);
                 _accumulator = 0f;

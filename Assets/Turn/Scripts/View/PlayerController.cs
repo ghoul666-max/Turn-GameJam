@@ -26,12 +26,21 @@ namespace Turn.View
     public sealed class RollSettings
     {
         [Tooltip("数据版本。F1 数值面板的旧存档（亚空间之前）读出来不是 2，会换成默认值。")]
-        [HideInInspector] public int version = 2;
+        [HideInInspector] public int version = 4;
 
-        [Header("翻滚冷却（每把武器独立，从回到常态空间开始计）")]
+        [Header("翻滚冷却（每把主武器独立，从回到常态空间开始计；双主武器按切换后的那把）")]
         [Min(0f)] public float waterGunCooldown = 2f;
         [Min(0f)] public float spearCooldown = 2.5f;
         [Min(0f)] public float bladeCooldown = 3f;
+        [Tooltip("掌（策划书没给，暂定 2.5）")]
+        [Min(0f)] public float palmCooldown = 2.5f;
+        [Tooltip("弩：基础翻滚冷却显著短于其他主武器（暂定 1.2）")]
+        [Min(0f)] public float crossbowCooldown = 1.2f;
+        [Tooltip("扑克牌 / 手里剑 / 订书机 / 剑（策划书没给，暂定 2.5）")]
+        [Min(0f)] public float pokerCooldown = 2.5f;
+        [Min(0f)] public float shurikenCooldown = 2.5f;
+        [Min(0f)] public float staplerCooldown = 2.5f;
+        [Min(0f)] public float swordCooldown = 2.5f;
 
         [Header("亚空间")]
         [Tooltip("亚空间持续时长（现实秒，策划 1）。全程无敌，结束后补满弹药、清空印记")]
@@ -49,7 +58,11 @@ namespace Turn.View
         {
             return new RollConfig
             {
-                WeaponCooldowns = new[] { waterGunCooldown, spearCooldown, bladeCooldown },
+                WeaponCooldowns = new[]
+                {
+                    waterGunCooldown, spearCooldown, bladeCooldown, palmCooldown, crossbowCooldown,
+                    pokerCooldown, shurikenCooldown, staplerCooldown, swordCooldown,
+                },
                 Cooldown = waterGunCooldown,
                 SubspaceDuration = subspaceDuration,
                 SubspaceTimeScale = subspaceTimeScale,

@@ -35,9 +35,10 @@ namespace Turn.Core
     /// <summary>
     /// 进入亚空间（翻滚的瞬间）。这一刻就是「全图所有铺垫痕迹 / 印记同步爆发」的唯一时机：
     /// 程序B 的武器订阅它，在回调里立刻结算爆发伤害（经 ICombatSystem），不得修改 RollSystem / PlayerState。
-    /// Weapon = 翻滚时装备的武器（爆发按这把武器的规则结算）。Duration 为现实秒。
+    /// Weapon = 翻滚时生效的主武器（爆发按这把武器的规则结算）。RollOrigin = 翻滚前的站位。Duration 为现实秒。
+    /// 发布前副武器的 BeforeBurst 已经执行（例：引力黑洞先把怪拉到一起）。
     /// </summary>
-    public struct SubspaceEnteredEvent { public Vec2 Position; public WeaponKind Weapon; public float Duration; public float TimeScale; }
+    public struct SubspaceEnteredEvent { public Vec2 Position; public Vec2 RollOrigin; public WeaponKind Weapon; public float Duration; public float TimeScale; }
 
     /// <summary>
     /// 回到常态空间：弹药已经补满（Weapons.Reload 已执行），翻滚冷却已开始。
@@ -48,11 +49,14 @@ namespace Turn.Core
     /// <summary>新的一波开始（开局发布第 1 波）。只由 SessionSystem 发布。</summary>
     public struct WaveStartedEvent { public int Wave; }
 
-    /// <summary>达到指定波次，解锁了一把武器。只由 LoadoutSystem 发布。</summary>
-    public struct WeaponUnlockedEvent { public WeaponKind Weapon; public int Wave; }
+    /// <summary>
+    /// 当前生效的主武器换了。只由 LoadoutSystem 发布。
+    /// ByRoll = 双主武器方案里翻滚爆发后的自动切换；false = 调试 F6 等手动更换。
+    /// </summary>
+    public struct WeaponEquippedEvent { public WeaponKind From; public WeaponKind To; public bool ByRoll; }
 
-    /// <summary>换了武器。只由 LoadoutSystem 发布。</summary>
-    public struct WeaponEquippedEvent { public WeaponKind From; public WeaponKind To; }
+    /// <summary>玩家被瞬间移动（例：空间锚回溯）。只由 PlayerSystem 发布。</summary>
+    public struct PlayerTeleportedEvent { public Vec2 From; public Vec2 To; }
 
     /// <summary>冷却中按了空格：什么效果都没有发生。</summary>
     public struct RollRejectedEvent { public float CooldownLeft; }

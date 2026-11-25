@@ -84,6 +84,17 @@ namespace Turn.Systems
             _input = Vec2.ClampMagnitude(input, 1f);
         }
 
+        public void Teleport(Vec2 position)
+        {
+            PlayerState s = State;
+            Vec2 from = s.Position;
+            Vec2 to = _ctx.Bounds.Clamp(position, Config.Radius);
+            to = _ctx.Bounds.Clamp(_ctx.Obstacles.ResolveMove(to, to, Config.Radius, ObstacleMask.Units), Config.Radius);
+            s.Position = to;
+            _pendingKnockback = Vec2.Zero;
+            _ctx.Events.Publish(new PlayerTeleportedEvent { From = from, To = to });
+        }
+
         public void SetLevelStats(float maxHp, float moveSpeed)
         {
             PlayerState s = State;

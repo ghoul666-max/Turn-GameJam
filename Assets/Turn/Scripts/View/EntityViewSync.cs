@@ -212,7 +212,8 @@ namespace Turn.View
                 }
                 return First(_refs.FireballPrefab, _refs.HarpoonPrefab, null);
             }
-            if (e.Weapon == WeaponKind.Spear) return First(_refs.SpearPrefab, _refs.HarpoonPrefab, _refs.FireballPrefab);
+            if (e.SubOwner != SubWeaponKind.None) return First(_refs.WaterPrefab, _refs.FireballPrefab, _refs.HarpoonPrefab);
+            if (e.Weapon == WeaponKind.Spear || e.Weapon == WeaponKind.Crossbow) return First(_refs.SpearPrefab, _refs.HarpoonPrefab, _refs.FireballPrefab);
             return First(_refs.WaterPrefab, _refs.FireballPrefab, _refs.HarpoonPrefab);
         }
 
@@ -228,7 +229,8 @@ namespace Turn.View
 
         private static void TintPlaceholder(Projectile view, ProjectileEntity e)
         {
-            Color c = e.Enemy ? EnemyPlaceholderColor : ViewMath.WeaponColor(e.Weapon);
+            Color c = e.Enemy ? EnemyPlaceholderColor
+                : (e.SubOwner != SubWeaponKind.None ? ViewMath.SubWeaponColor(e.SubOwner) : ViewMath.WeaponColor(e.Weapon));
             SpriteRenderer[] renderers = view.GetComponentsInChildren<SpriteRenderer>(true);
             for (int r = 0; r < renderers.Length; r++)
             {
@@ -236,7 +238,11 @@ namespace Turn.View
                 renderers[r].color = new Color(c.r, c.g, c.b, old.a);
             }
             // 水弹比火球小一些
-            if (!e.Enemy && e.Weapon == WeaponKind.WaterGun) view.transform.localScale = Vector3.one * 0.7f;
+            if (!e.Enemy && e.SubOwner != SubWeaponKind.None) view.transform.localScale = Vector3.one * 0.45f;
+            else if (!e.Enemy && e.Weapon == WeaponKind.WaterGun) view.transform.localScale = Vector3.one * 0.7f;
+            else if (!e.Enemy && e.Weapon == WeaponKind.Crossbow) view.transform.localScale = new Vector3(1.4f, 1.2f, 1f);
+            else if (!e.Enemy && e.Weapon == WeaponKind.Poker) view.transform.localScale = Vector3.one * 0.5f;
+            else if (!e.Enemy && e.Weapon == WeaponKind.Stapler) view.transform.localScale = Vector3.one * (e.CarriedMarks == 1 ? 0.4f : 0.55f);
         }
 
         private void SyncOrbs()

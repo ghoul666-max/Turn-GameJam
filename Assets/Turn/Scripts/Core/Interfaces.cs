@@ -38,8 +38,10 @@ namespace Turn.Core
         IProjectileSystem Projectiles { get; }
         IExperienceSystem Experience { get; }
         IProgressionSystem Progression { get; }
-        /// <summary>当前装备的武器 + 按波次解锁（新策划案：同一时刻只用一把）。</summary>
+        /// <summary>出战配置：方案 A 双主武器 / 方案 B 主 + 副，当前生效的主武器。</summary>
         ILoadoutSystem Loadout { get; }
+        /// <summary>副武器（方案 B）。方案 A 或不带副武器时什么都不做。</summary>
+        ISubWeaponSystem SubWeapons { get; }
     }
 
     /// <summary>
@@ -133,6 +135,8 @@ namespace Turn.Core
         void Setup();
         /// <summary>每帧由输入层调用；长度会被限制在 1 以内。</summary>
         void SetMoveInput(Vec2 input);
+        /// <summary>瞬间移动到 position（经遮挡物修正 + 边界 Clamp），发布 PlayerTeleportedEvent。例：空间锚回溯。</summary>
+        void Teleport(Vec2 position);
         /// <summary>当前生效的移动速度 = 等级基础速度 × 所有来源的移速倍率之积。</summary>
         float MoveSpeed { get; }
         /// <summary>所有来源的移速倍率之积（1 = 不受影响）。</summary>
@@ -150,11 +154,13 @@ namespace Turn.Core
     }
 
     /// <summary>
-    /// 翻滚 = Turn：唯一的核心操作（新策划案 11/24）。
-    /// 进入：一次成功的 TryRoll 在同一个调用里 → 进入亚空间（全程无敌）→ 翻滚位移 → 发布 SubspaceEnteredEvent
-    ///      （全图印记 / 痕迹同步爆发的唯一时机，由程序B 的武器订阅结算）→ 发布 RollPerformedEvent。
+    /// 翻滚 = Turn：唯一的核心操作（11/24 亚空间策划案 + 11/25 双武器策划案）。
+    /// 进入（一次成功的 TryRoll 在同一个调用里按顺序完成）：
+    ///   进入亚空间（全程无敌）→ 翻滚位移 → 副武器 BeforeBurst（引力拉扯）→ 发布 SubspaceEnteredEvent（当前主武器爆发）
+    ///   → 副武器 AfterBurst（空间锚回溯 + 连线斩击）→ 方案 A：切到另一把主武器 → 发布 RollPerformedEvent。
     /// 持续：亚空间按现实时间持续 RollConfig.SubspaceDuration 秒（TickRealtime 计时，不受慢放影响）。
-    /// 退出：自动回到常态空间 → Weapons.Reload()（唯一装填入口）→ 发布 SubspaceExitedEvent（程序B 清空全部印记）→ 开启当前武器的翻滚冷却。
+    /// 退出：回到常态空间 → Weapons.Reload()（补满当前生效的主武器，唯一装填入口）→ 开启当前主武器的翻滚冷却
+    ///   → 发布 SubspaceExitedEvent（清空全部铺垫痕迹 / 印记）→ 副武器 OnSubspaceExited（浮游炮分裂 / 合体）。
     /// 任意弹药状态都能翻滚；冷却中 / 亚空间中调用什么都不做。
     /// </summary>
     public interface IRollSystem
@@ -176,20 +182,68 @@ namespace Turn.Core
         void Tick(float dt);
         /// <summary>现实时间：亚空间计时，到点自动退出。由 SessionSystem 每步调用。</summary>
         void TickRealtime(float realDt);
+        /// <summary>缩短当前的翻滚冷却（例：空间锚「时隙」）。不会低于 0。</summary>
+        void ReduceCooldown(float seconds);
     }
 
     /// <summary>
-    /// 武器装备与解锁（程序A，新策划案）。开局装备 LoadoutConfig.StartWeapon；
-    /// 达到 LoadoutConfig.UnlockWaves[武器] 波时解锁并发布 WeaponUnlockedEvent。同一时刻只装备一把。
-    /// 程序B 的 WeaponSystem 每步读 Equipped 决定当前武器；换武器的入口（升级 / 宝箱选项）由程序B 调 Equip。
+    /// 出战配置（程序A，11/25 双武器策划案）：出战前在选择页选定，局内不按波次解锁。
+    ///   · 方案 A（DualMain）：Equipped = 当前生效主武器，Standby = 待切换主武器；翻滚爆发后 RollSystem 调 SwapMains 互换。
+    ///   · 方案 B（MainAndSub）：Equipped = 唯一主武器（Standby 同 Equipped），Sub = 副武器。
+    /// WeaponSystem 每步读 Equipped；词条池读 Carries / Sub。
     /// </summary>
     public interface ILoadoutSystem
     {
+        LoadoutScheme Scheme { get; }
+        /// <summary>当前生效的主武器。</summary>
         WeaponKind Equipped { get; }
-        bool IsUnlocked(WeaponKind weapon);
-        int UnlockedCount { get; }
-        /// <summary>换成一把已解锁的武器并发布 WeaponEquippedEvent。未解锁、已经装备、或正处在亚空间时返回 false。</summary>
+        /// <summary>方案 A：下一次翻滚会切过去的主武器；方案 B：等于 Equipped。</summary>
+        WeaponKind Standby { get; }
+        /// <summary>方案 B 的副武器；方案 A 恒为 None。</summary>
+        SubWeaponKind Sub { get; }
+        /// <summary>这一局带着这把主武器吗（方案 A 两把都算）。</summary>
+        bool Carries(WeaponKind weapon);
+        /// <summary>方案 A：互换生效 / 待切换主武器并发布 WeaponEquippedEvent（ByRoll = true）。只应由 RollSystem 在翻滚爆发后调用；方案 B 什么都不做。</summary>
+        void SwapMains();
+        /// <summary>
+        /// 调试 / 测试：把当前生效的主武器换成 weapon（方案 A 里是另一把就互换，否则替换当前槽位）。亚空间里或已经是它时返回 false。
+        /// </summary>
         bool Equip(WeaponKind weapon);
+    }
+
+    /// <summary>
+    /// 副武器（11/25 双武器策划案，方案 B）：常驻生效，不参与武器切换，核心效果与翻滚强绑定。
+    /// 翻滚钩子只由 RollSystem 按固定顺序调用：BeforeBurst（主武器爆发前）→ AfterBurst（爆发后）→ OnSubspaceExited（回到常态后）。
+    /// 常驻行为（浮游炮攻击等）在 Tick 里，亚空间里 SessionSystem 不调用 Tick。
+    /// </summary>
+    public interface ISubWeaponSystem
+    {
+        SubWeaponKind Kind { get; }
+        /// <summary>这把副武器的行为是否已经实现（选择页据此禁用还没做完的）。None 恒为 true。</summary>
+        bool Supports(SubWeaponKind kind);
+        /// <summary>翻滚：主武器爆发之前。rollOrigin = 翻滚前的站位。</summary>
+        void BeforeBurst(Vec2 rollOrigin);
+        /// <summary>翻滚：主武器爆发之后（仍在进入亚空间的同一个调用里）。</summary>
+        void AfterBurst(Vec2 rollOrigin);
+        /// <summary>回到常态空间之后。</summary>
+        void OnSubspaceExited();
+        void Tick(float dt);
+        /// <summary>表现层用：浮游炮的台数（其他副武器为 0）。</summary>
+        int UnitCount { get; }
+        /// <summary>表现层用：环绕的小单位位置（浮游炮）。</summary>
+        IReadOnlyList<Vec2> Satellites { get; }
+        /// <summary>表现层用：已记录的锚点（空间锚，最新的在最后）/ 场上的磁极（强磁铁）。</summary>
+        IReadOnlyList<Vec2> Anchors { get; }
+        /// <summary>表现层用：光标正在绘制的轨迹（选区边界）。</summary>
+        IReadOnlyList<Vec2> Trail { get; }
+        /// <summary>MonsterSystem 读：全场敌人移速倍率（时间沙漏，其他副武器为 1）。</summary>
+        float MonsterSpeedMultiplier { get; }
+        /// <summary>CombatSystem 读：这只怪受到伤害的倍率（时间沙漏「迟滞」，其他为 1）。</summary>
+        float DamageTakenMultiplier(MonsterEntity monster);
+        /// <summary>ProjectileSystem 回调：副武器子弹命中怪物。返回 true = 继续飞（穿透）。</summary>
+        bool OnProjectileHit(ProjectileEntity projectile, MonsterEntity monster);
+        /// <summary>ProjectileSystem 回调：副武器子弹结束。</summary>
+        void OnProjectileEnded(ProjectileEntity projectile);
     }
 
     /// <summary>
@@ -228,8 +282,8 @@ namespace Turn.Core
         void ApplySlow(MonsterEntity monster, float factor, float duration);
         /// <summary>眩晕：期间不移动、不攻击（取较长的剩余时间）。</summary>
         void ApplyStun(MonsterEntity monster, float duration);
-        /// <summary>把一只怪物沿 direction 推开 distance（经遮挡物修正 + 边界 Clamp）。</summary>
-        void Knockback(MonsterEntity monster, Vec2 direction, float distance);
+        /// <summary>把一只怪物沿 direction 推开 distance（经遮挡物修正 + 边界 Clamp）。返回实际移动的距离（小于 distance = 撞墙了）。</summary>
+        float Knockback(MonsterEntity monster, Vec2 direction, float distance);
         void Tick(float dt);
         /// <summary>与圆相交的存活怪物（结果先清空；考虑每只怪自己的半径）。</summary>
         void QueryCircle(Vec2 center, float radius, List<MonsterEntity> results);
@@ -299,6 +353,8 @@ namespace Turn.Core
     {
         /// <summary>当前装备的武器（= Loadout.Equipped）。</summary>
         WeaponKind Current { get; }
+        /// <summary>这把主武器的行为是否已经实现（选择页据此禁用还没做完的）。</summary>
+        bool Supports(WeaponKind weapon);
         int Ammo { get; }
         int Capacity { get; }
         /// <summary>某把武器的剩余弹药 / 弹药上限（含词条加成）。</summary>
@@ -307,9 +363,30 @@ namespace Turn.Core
         float FireTimer { get; }
         /// <summary>全图水渍（只读）。</summary>
         IReadOnlyList<WaterMark> Puddles { get; }
-        /// <summary>全场剑气印记总层数 / 矛印记总层数。</summary>
+        /// <summary>全场剑气印记 / 矛印记 / 掌印总层数。</summary>
         int TotalBladeMarks { get; }
         int TotalSpearMarks { get; }
+        int TotalPalmMarks { get; }
+        /// <summary>弩的杀气层数（切换主武器时清零）。</summary>
+        int KillingIntent { get; }
+        /// <summary>扑克牌：头顶的手牌（按抽到的顺序）。</summary>
+        IReadOnlyList<PlayingCard> Hand { get; }
+        /// <summary>扑克牌：方片护盾剩余层数。</summary>
+        int ShieldCharges { get; }
+        /// <summary>扑克牌：大小王累计的卡牌效果加成（0.23 = +23%，切换主武器时清零）。</summary>
+        float JokerBonus { get; }
+        /// <summary>扑克牌：牌库里还剩几张（精简牌库词条会减少）。</summary>
+        int DeckSize { get; }
+        /// <summary>全场钉痕总层数（订书机）。</summary>
+        int TotalStapleMarks { get; }
+        /// <summary>剑：影刺击杀累计的突进次数上限加成（切换主武器清零）。</summary>
+        int SwordBonusCharges { get; }
+        /// <summary>表现层用：场上的手里剑（停住旋转 / 环绕）、梅花裂隙。每次读取时重新收集。</summary>
+        IReadOnlyList<WeaponField> Fields { get; }
+        /// <summary>CombatSystem 调用：怪物碰撞 / 弹幕打到玩家时，有护盾（方片）就消耗一层挡下。返回 true = 已挡下。</summary>
+        bool AbsorbPlayerHit();
+        /// <summary>调试 / 测试：直接往扑克牌手牌里塞一张牌。</summary>
+        void DebugAddCard(PlayingCard card);
         /// <summary>补满当前武器的弹药。硬性规则：唯一调用方是 RollSystem（退出亚空间时）。</summary>
         void Reload();
         void Tick(float dt);
@@ -325,6 +402,8 @@ namespace Turn.Core
         IReadOnlyList<ProjectileEntity> Active { get; }
         /// <summary>玩家子弹。命中与结束交给 IWeaponSystem 的回调。</summary>
         ProjectileEntity SpawnPlayer(WeaponKind weapon, Vec2 position, Vec2 velocity, float radius, float damage, float maxDistance);
+        /// <summary>副武器的子弹（例：浮游炮）。命中与结束交给 ISubWeaponSystem 的回调。</summary>
+        ProjectileEntity SpawnSubWeapon(SubWeaponKind sub, Vec2 position, Vec2 velocity, float radius, float damage, float maxDistance);
         /// <summary>敌方弹幕：命中玩家（经 ICombatSystem）后消失。</summary>
         ProjectileEntity SpawnEnemy(Vec2 position, Vec2 velocity, float radius, float damage, float lifetime, float maxDistance, EnemyProjectileKind kind);
         void Tick(float dt);
@@ -375,5 +454,11 @@ namespace Turn.Core
         bool TryApply(int index);
         /// <summary>没有任何可选项时消耗一次待处理（升级优先，其次宝箱）。</summary>
         void SkipPending();
+        /// <summary>词条最大层数。</summary>
+        int MaxLevel(BuildId id);
+        /// <summary>这一局带着的装备用得上这个词条（= 会进升级 / 宝箱的候选池）。</summary>
+        bool IsCarried(BuildId id);
+        /// <summary>调试（强化词条面板 F7）：直接把词条设成 level 层（夹在 0 ~ 最大层数），发布 UpgradeAppliedEvent。</summary>
+        void DebugSetLevel(BuildId id, int level);
     }
 }

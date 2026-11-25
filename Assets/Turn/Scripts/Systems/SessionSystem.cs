@@ -84,6 +84,7 @@ namespace Turn.Systems
                 _ctx.Monsters.Tick(gameDt);
                 _ctx.Sharks.Tick(gameDt);
                 _ctx.Weapons.Tick(gameDt);
+                _ctx.SubWeapons.Tick(gameDt);
                 _ctx.Projectiles.Tick(gameDt);
             }
             _ctx.Experience.Tick(gameDt);

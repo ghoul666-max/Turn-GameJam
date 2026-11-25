@@ -59,7 +59,29 @@ namespace Turn.View
                 case WeaponKind.WaterGun: return new Color(0.3f, 0.75f, 1f, 1f);
                 case WeaponKind.Spear: return new Color(1f, 0.78f, 0.3f, 1f);
                 case WeaponKind.Blade: return new Color(0.95f, 0.35f, 0.4f, 1f);
+                case WeaponKind.Palm: return new Color(0.98f, 0.62f, 0.42f, 1f);
+                case WeaponKind.Crossbow: return new Color(0.7f, 0.85f, 0.45f, 1f);
+                case WeaponKind.Poker: return new Color(1f, 0.45f, 0.7f, 1f);
+                case WeaponKind.Shuriken: return new Color(0.6f, 0.65f, 0.85f, 1f);
+                case WeaponKind.Stapler: return new Color(0.85f, 0.85f, 0.9f, 1f);
+                case WeaponKind.Sword: return new Color(0.55f, 0.8f, 1f, 1f);
                 default: return Color.white;
+            }
+        }
+
+        /// <summary>三把副武器的主题色。</summary>
+        public static Color SubWeaponColor(SubWeaponKind sub)
+        {
+            switch (sub)
+            {
+                case SubWeaponKind.Drones: return new Color(0.55f, 0.95f, 0.6f, 1f);
+                case SubWeaponKind.GravityWell: return new Color(0.65f, 0.45f, 1f, 1f);
+                case SubWeaponKind.SpaceAnchor: return new Color(0.4f, 0.9f, 0.95f, 1f);
+                case SubWeaponKind.Hourglass: return new Color(0.95f, 0.8f, 0.45f, 1f);
+                case SubWeaponKind.Wasd: return new Color(0.9f, 0.9f, 0.95f, 1f);
+                case SubWeaponKind.Magnet: return new Color(1f, 0.35f, 0.35f, 1f);
+                case SubWeaponKind.Cursor: return new Color(0.35f, 0.6f, 1f, 1f);
+                default: return new Color(0.75f, 0.72f, 0.68f, 1f);
             }
         }
 

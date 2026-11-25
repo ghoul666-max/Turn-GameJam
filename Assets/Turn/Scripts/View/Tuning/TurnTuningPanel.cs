@@ -14,6 +14,8 @@ namespace Turn.View
     ///     “保存并重开本局”立刻用新数值重开。
     /// 每个参数一行：拖动滑条，或者直接在右边输入框里输数字（可以超出滑条范围，但不低于下限）。
     /// 数值存到 TurnTuningStore（编辑器里是 Assets/Turn/Resources/TurnTuning.json），开局时覆盖 Inspector 数值。
+    /// 历史记录：每次保存（有改动时）自动记一条完整快照 + 改动明细（TurnTuningHistory），
+    /// 「历史记录」页可以展开看改了什么、和当前面板对比、载入某一版（载入后要再保存才生效）、删除。
     /// </summary>
     public sealed class TurnTuningPanel : MonoBehaviour
     {
@@ -32,6 +34,23 @@ namespace Turn.View
         private readonly List<KeyValuePair<string, bool>> _foldRequests = new List<KeyValuePair<string, bool>>();
         private Action _restart;
         private Func<TurnTuningData> _capture;
+
+        // 历史记录
+        private TurnTuningHistoryFile _history;
+        private TurnTuningData _lastSaved;
+        private bool _lastSavedUse = true;
+        private string _saveNote = "";
+        private bool _showHistory;
+        private bool _showHistoryNext;
+        private Vector2 _historyScroll;
+        private int _pendingLoad = -1;
+        private int _pendingDelete = -1;
+        private int _pendingCompare = -1;
+        private int _compareIndex = -1;
+        private string _compareText = "";
+        private int _unsavedCount;
+        private float _unsavedCountTime = -10f;
+        private GUIStyle _wrap;
 
         private GUIStyle _title;
         private GUIStyle _header;
@@ -71,6 +90,7 @@ namespace Turn.View
         private void Reload()
         {
             _file = TurnTuningStore.Load();
+            bool fromDisk = _file != null;
             if (_file == null)
             {
                 _file = new TurnTuningFile();
@@ -81,6 +101,10 @@ namespace Turn.View
             }
             _text.Clear();
             _dirty = false;
+            // 历史记录：「上一次保存」= 磁盘上这份；从来没保存过时为 null（下一次保存记为「首次保存」）
+            _lastSaved = fromDisk ? _file.values.Clone() : null;
+            _lastSavedUse = _file.useTuning;
+            _history = TurnTuningHistory.Load();
         }
 
         private void SetStatus(string text)
@@ -94,8 +118,24 @@ namespace Turn.View
             Sanitize(_file.values);
             bool ok = TurnTuningStore.Save(_file);
             SetStatus(ok ? "已保存：" + TurnTuningStore.SavePath : "保存失败，详见 Console");
-            if (ok) _dirty = false;
-            return ok;
+            if (!ok) return false;
+            _dirty = false;
+
+            // 历史记录：和上一次保存相比有改动才记
+            if (_history == null) _history = TurnTuningHistory.Load();
+            bool changed = _lastSaved == null || _lastSavedUse != _file.useTuning || TurnTuningHistory.CountDiff(_lastSaved, _file.values) > 0;
+            if (changed)
+            {
+                TurnTuningHistoryEntry entry = TurnTuningHistory.Record(_history, _lastSaved, _file.values, _file.useTuning, _lastSavedUse,
+                    (_saveNote ?? "").Trim());
+                if (entry != null)
+                    SetStatus("已保存并记入历史（" + (entry.changeCount < 0 ? "首次保存" : "改了 " + entry.changeCount + " 项") + "）");
+            }
+            _lastSaved = _file.values.Clone();
+            _lastSavedUse = _file.useTuning;
+            _saveNote = "";
+            _compareIndex = -1;
+            return true;
         }
 
         private void LoadScene(string sceneName)
@@ -123,6 +163,7 @@ namespace Turn.View
                 for (int i = 0; i < _foldRequests.Count; i++) _folds[_foldRequests[i].Key] = _foldRequests[i].Value;
                 _foldRequests.Clear();
             }
+            if (e.type == EventType.Layout) ApplyHistoryRequests();
 
             EnsureStyles();
             float scale = Mathf.Clamp(Screen.height / 820f, 1f, 3f);
@@ -144,8 +185,16 @@ namespace Turn.View
             GUI.Box(r, GUIContent.none, _panel);
             GUILayout.BeginArea(new Rect(r.x + 12f, r.y + 8f, r.width - 24f, r.height - 16f));
             DrawToolbar();
-            _scroll = GUILayout.BeginScrollView(_scroll);
-            DrawFields(_file.values);
+            if (_showHistory)
+            {
+                _historyScroll = GUILayout.BeginScrollView(_historyScroll);
+                DrawHistory();
+            }
+            else
+            {
+                _scroll = GUILayout.BeginScrollView(_scroll);
+                DrawFields(_file.values);
+            }
             GUILayout.Space(10f);
             GUILayout.EndScrollView();
             GUILayout.EndArea();
@@ -196,8 +245,103 @@ namespace Turn.View
             }
             GUILayout.EndHorizontal();
 
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("本次保存备注", _label, GUILayout.Width(90f));
+            _saveNote = GUILayout.TextField(_saveNote ?? "", 60, GUILayout.ExpandWidth(true));
+            int count = _history != null ? _history.entries.Count : 0;
+            if (GUILayout.Button(_showHistoryNext ? "返回参数" : "历史记录（" + count + "）", GUILayout.Width(120f), GUILayout.Height(22f)))
+            {
+                _showHistoryNext = !_showHistoryNext;
+                GUIUtility.keyboardControl = 0;
+            }
+            GUILayout.EndHorizontal();
+
             string line = Time.unscaledTime - _statusTime < 4f ? _status : (_dirty ? "有未保存的修改" : "拖动滑条或直接输入数字；保存后下一局生效");
             GUILayout.Label(line, _hint);
+        }
+
+        // ================================================================
+        // 历史记录
+        // ================================================================
+
+        /// <summary>切换页面 / 载入 / 删除 / 对比都会改变控件数量：只在 Layout 阶段执行。</summary>
+        private void ApplyHistoryRequests()
+        {
+            _showHistory = _showHistoryNext;
+            if (_history == null) return;
+            List<TurnTuningHistoryEntry> list = _history.entries;
+            if (_pendingLoad >= 0 && _pendingLoad < list.Count && _file != null)
+            {
+                TurnTuningHistoryEntry entry = list[_pendingLoad];
+                _file.values = entry.values != null ? entry.values.Clone() : new TurnTuningData();
+                _file.useTuning = entry.useTuning;
+                ClearEdits();
+                _showHistory = _showHistoryNext = false;
+                SetStatus("已载入 " + entry.time + " 的数值（还没保存，保存后生效）");
+            }
+            if (_pendingDelete >= 0 && _pendingDelete < list.Count)
+            {
+                list.RemoveAt(_pendingDelete);
+                TurnTuningHistory.Save(_history);
+                _compareIndex = -1;
+                SetStatus("已删除一条历史记录");
+            }
+            if (_pendingCompare >= 0 && _pendingCompare < list.Count && _file != null)
+            {
+                if (_compareIndex == _pendingCompare) _compareIndex = -1; // 再点一次收起
+                else
+                {
+                    _compareIndex = _pendingCompare;
+                    var lines = new List<string>();
+                    TurnTuningHistory.Diff(list[_compareIndex].values, _file.values, lines);
+                    _compareText = lines.Count == 0 ? "和当前面板完全相同" : "从这一版到当前面板（" + lines.Count + " 项）：\n" + TurnTuningHistory.Join(lines, TurnTuningHistory.MaxDetailLines);
+                }
+            }
+            _pendingLoad = _pendingDelete = _pendingCompare = -1;
+        }
+
+        private void DrawHistory()
+        {
+            if (_history == null) _history = TurnTuningHistory.Load();
+            List<TurnTuningHistoryEntry> list = _history.entries;
+            GUILayout.Label("每次保存（有改动时）自动记一条，最多 " + TurnTuningHistory.MaxEntries + " 条。载入某一版后要再保存才生效。", _hint);
+            GUILayout.Label("文件：" + TurnTuningHistory.FilePath, _hint);
+            if (_lastSaved != null)
+            {
+                // 「当前面板 vs 上次保存」每秒最多算一次
+                if (Event.current.type == EventType.Layout && Time.unscaledTime - _unsavedCountTime > 1f)
+                {
+                    _unsavedCountTime = Time.unscaledTime;
+                    _unsavedCount = TurnTuningHistory.CountDiff(_lastSaved, _file.values);
+                }
+                GUILayout.Label(_unsavedCount > 0 ? "当前面板比上次保存多改了 " + _unsavedCount + " 项（还没保存）" : "当前面板和上次保存一致", _label);
+            }
+            if (list.Count == 0)
+            {
+                GUILayout.Space(8f);
+                GUILayout.Label("还没有历史记录：改完参数点保存就会记下第一条。", _label);
+                return;
+            }
+
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                TurnTuningHistoryEntry entry = list[i];
+                string title = (i == list.Count - 1 ? "【最新】" : "") + entry.time
+                               + (string.IsNullOrEmpty(entry.note) ? "" : "  「" + entry.note + "」")
+                               + "  " + (entry.changeCount < 0 ? "首次保存" : "改了 " + entry.changeCount + " 项")
+                               + (entry.useTuning ? "" : "（面板数值关闭）");
+                if (Section("hist." + entry.time + "#" + i, title, false))
+                {
+                    GUILayout.Label(entry.changeCount < 0 ? "首次保存，没有可比较的上一版。" :
+                        (string.IsNullOrEmpty(entry.changes) ? "（只改了开关）" : entry.changes), _wrap);
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("载入这一版", GUILayout.Height(24f))) _pendingLoad = i;
+                    if (GUILayout.Button(_compareIndex == i ? "收起对比" : "和当前面板对比", GUILayout.Height(24f))) _pendingCompare = i;
+                    if (GUILayout.Button("删除", GUILayout.Width(60f), GUILayout.Height(24f))) _pendingDelete = i;
+                    GUILayout.EndHorizontal();
+                    if (_compareIndex == i) GUILayout.Label(_compareText, _wrap);
+                }
+            }
         }
 
         private void ClearEdits()
@@ -209,15 +353,13 @@ namespace Turn.View
 
         private void DrawFields(TurnTuningData d)
         {
-            if (Section("level", "关卡 / 波次 / 武器解锁"))
+            if (Section("level", "关卡 / 波次"))
             {
                 // 旧存档没有这一组（version = 0）：换成默认值，保存后生效；version 1（亚空间之前）补上新字段
                 if (d.level == null || d.level.version <= 0) d.level = new LevelSettings();
                 d.level.Upgrade();
                 d.level.endless = Toggle("无尽生存（永不过关）", d.level.endless);
                 d.level.waveSeconds = F("lv.wave", "每波时长（秒，0 = 永远第 1 波）", d.level.waveSeconds, 0f, 180f);
-                d.level.spearUnlockWave = I("lv.spear", "投矛在第几波解锁", d.level.spearUnlockWave, 1, 50);
-                d.level.bladeUnlockWave = I("lv.blade", "陌刀在第几波解锁", d.level.bladeUnlockWave, 1, 50);
                 d.level.surviveSeconds = F("lv.survive", "旧流程：每关存活多少秒过关（关掉无尽才生效）", d.level.surviveSeconds, 0f, 900f);
             }
             if (Section("player", "主角"))
@@ -234,6 +376,12 @@ namespace Turn.View
                 r.waterGunCooldown = F("r.cdWater", "水枪：翻滚冷却（秒）", r.waterGunCooldown, 0f, 10f);
                 r.spearCooldown = F("r.cdSpear", "投矛：翻滚冷却（秒）", r.spearCooldown, 0f, 10f);
                 r.bladeCooldown = F("r.cdBlade", "陌刀：翻滚冷却（秒）", r.bladeCooldown, 0f, 10f);
+                r.palmCooldown = F("r.cdPalm", "掌：翻滚冷却（秒）", r.palmCooldown, 0f, 10f);
+                r.crossbowCooldown = F("r.cdBow", "弩：翻滚冷却（秒）", r.crossbowCooldown, 0f, 10f);
+                r.pokerCooldown = F("r.cdPoker", "扑克牌：翻滚冷却（秒）", r.pokerCooldown, 0f, 10f);
+                r.shurikenCooldown = F("r.cdShuriken", "手里剑：翻滚冷却（秒）", r.shurikenCooldown, 0f, 10f);
+                r.staplerCooldown = F("r.cdStapler", "订书机：翻滚冷却（秒）", r.staplerCooldown, 0f, 10f);
+                r.swordCooldown = F("r.cdSword", "剑：翻滚冷却（秒）", r.swordCooldown, 0f, 10f);
                 r.subspaceDuration = F("r.subDur", "亚空间时长（现实秒）", r.subspaceDuration, 0.05f, 5f);
                 r.subspaceTimeScale = F("r.subScale", "亚空间时间倍率", r.subspaceTimeScale, 0f, 1f);
                 r.duration = F("r.dur", "翻滚位移时长（游戏秒）", r.duration, 0.05f, 1.5f);
@@ -277,6 +425,7 @@ namespace Turn.View
         private void DrawCombat(TurnTuningData d)
         {
             if (d.arsenal == null) d.arsenal = new ArsenalConfig();
+            d.arsenal.Normalize();
             if (d.horde == null) d.horde = new HordeConfig();
             if (d.builds == null) d.builds = new BuildConfig();
             ArsenalConfig a = d.arsenal;
@@ -318,6 +467,181 @@ namespace Turn.View
                 b.SlashDamage = F("bl.slash", "一刀斩基础伤害", b.SlashDamage, 0f, 500f);
                 b.MarkBonus = F("bl.mark", "每层印记增伤", b.MarkBonus, 0f, 1f);
                 b.SlashHalfHeight = F("bl.height", "斩击半高", b.SlashHalfHeight, 0.1f, 10f);
+            }
+            if (Section("palm", "掌"))
+            {
+                PalmConfig p = a.Palm;
+                p.Ammo = I("pm2.ammo", "弹药上限", p.Ammo, 1, 200);
+                p.FireInterval = F("pm2.interval", "攻击间隔（秒 / 发）", p.FireInterval, 0.03f, 3f);
+                p.Damage = F("pm2.dmg", "掌击伤害", p.Damage, 0f, 200f);
+                p.Angle = F("pm2.angle", "扇形角度（度）", p.Angle, 5f, 360f);
+                p.Range = F("pm2.range", "掌击距离", p.Range, 0.5f, 15f);
+                p.RingThickness = F("pm2.ring", "掌击厚度（命中最近一圈）", p.RingThickness, 0.1f, 10f);
+                p.Knockback = F("pm2.knock", "击退距离", p.Knockback, 0f, 10f);
+                p.SkyRadius = F("pm2.skyR", "天降掌半径", p.SkyRadius, 0.5f, 20f);
+                p.SkyDamage = F("pm2.skyDmg", "天降掌伤害", p.SkyDamage, 0f, 500f);
+                p.MarkBonus = F("pm2.mark", "每层掌印增伤", p.MarkBonus, 0f, 2f);
+            }
+            if (Section("crossbow2", "弩"))
+            {
+                CrossbowConfig c = a.Crossbow;
+                c.Ammo = I("bw.ammo", "弹药上限", c.Ammo, 1, 20);
+                c.FireInterval = F("bw.interval", "攻击间隔（秒 / 发）", c.FireInterval, 0.03f, 3f);
+                c.Speed = F("bw.speed", "弩箭速度", c.Speed, 0.5f, 60f);
+                c.Damage = F("bw.dmg", "弩箭伤害", c.Damage, 0f, 500f);
+                c.Range = F("bw.range", "索敌 / 射程", c.Range, 1f, 40f);
+                c.Pierce = I("bw.pierce", "可命中敌人数（穿透）", c.Pierce, 1, 20);
+                c.PierceFalloff = F("bw.falloff", "每次穿透伤害衰减", c.PierceFalloff, 0f, 1f);
+                c.Knockback = F("bw.knock", "击退距离", c.Knockback, 0f, 15f);
+                c.WallStun = F("bw.stun", "撞墙眩晕（秒）", c.WallStun, 0f, 10f);
+                c.IntentBonus = F("bw.intent", "每层杀气增伤", c.IntentBonus, 0f, 1f);
+                c.SplashRadius = F("bw.splash", "杀气溢出溅射半径", c.SplashRadius, 0.1f, 10f);
+            }
+            if (Section("drones", "副武器 · 浮游炮"))
+            {
+                DronesConfig dr = a.Drones;
+                dr.StartCount = I("dr.start", "开局台数", dr.StartCount, 1, 64);
+                dr.SplitAdd = I("dr.add", "分裂一次 +几台", dr.SplitAdd, 0, 16);
+                dr.MergeRemove = I("dr.remove", "合体一次 −几台", dr.MergeRemove, 0, 16);
+                dr.MinCount = I("dr.min", "合体最少保留几台", dr.MinCount, 1, 16);
+                dr.MaxCount = I("dr.cap", "台数上限（0 = 不限）", dr.MaxCount, 0, 256);
+                dr.Damage = F("dr.dmg", "单台每发伤害", dr.Damage, 0f, 100f);
+                dr.FireInterval = F("dr.interval", "攻击间隔（秒）", dr.FireInterval, 0.05f, 5f);
+                dr.Range = F("dr.range", "索敌范围", dr.Range, 1f, 30f);
+                dr.BulletSpeed = F("dr.speed", "子弹速度", dr.BulletSpeed, 0.5f, 40f);
+                dr.OrbitRadius = F("dr.orbit", "环绕半径", dr.OrbitRadius, 0.2f, 6f);
+                dr.MaxActive = I("dr.max", "同时开火台数上限（性能）", dr.MaxActive, 1, 128);
+                dr.SplitChance = F("dr.split", "翻滚分裂基础概率", dr.SplitChance, 0f, 1f);
+            }
+            if (Section("gravity", "副武器 · 引力黑洞"))
+            {
+                GravityWellConfig g = a.Gravity;
+                g.Radius = F("gw.radius", "引力场半径", g.Radius, 0.5f, 20f);
+                g.PullDistance = F("gw.pull", "最多拉近距离", g.PullDistance, 0f, 20f);
+                g.MinGap = F("gw.gap", "拉到离中心多近停", g.MinGap, 0f, 5f);
+                g.SecondaryRadius = F("gw.secR", "次级引力点半径", g.SecondaryRadius, 0.5f, 10f);
+                g.SecondaryPull = F("gw.secPull", "次级引力点拉近距离", g.SecondaryPull, 0f, 10f);
+                g.SecondaryOffset = F("gw.secOff", "次级引力点离中心距离", g.SecondaryOffset, 0f, 10f);
+            }
+            if (Section("anchor", "副武器 · 空间锚"))
+            {
+                SpaceAnchorConfig an = a.Anchor;
+                an.SlashDamage = F("an.dmg", "连线斩击伤害", an.SlashDamage, 0f, 500f);
+                an.Width = F("an.width", "斩击路径半宽", an.Width, 0.05f, 5f);
+            }
+            if (Section("poker", "扑克牌"))
+            {
+                PokerConfig p = a.Poker;
+                p.HandSize = I("pk.hand", "手牌上限（= 弹药）", p.HandSize, 1, 20);
+                p.DrawInterval = F("pk.draw", "抽牌间隔（秒）", p.DrawInterval, 0.05f, 10f);
+                p.HeartsPerPoint = I("pk.hpp", "♥ 每点几发爱心弹", p.HeartsPerPoint, 0, 20);
+                p.HeartDamage = F("pk.hdmg", "♥ 爱心弹伤害", p.HeartDamage, 0f, 100f);
+                p.HeartSpeed = F("pk.hspd", "♥ 爱心弹速度", p.HeartSpeed, 0.5f, 40f);
+                p.HeartRange = F("pk.hrange", "♥ 爱心弹射程", p.HeartRange, 1f, 60f);
+                p.HeartBounces = I("pk.hbounce", "♥ 可反弹次数", p.HeartBounces, 0, 20);
+                p.HeartSpread = F("pk.hspread", "♥ 扇形张角（度）", p.HeartSpread, 0f, 360f);
+                p.MaxHearts = I("pk.hmax", "♥ 一次爆发最多几发（性能）", p.MaxHearts, 1, 2000);
+                p.SpadeDamagePerPoint = F("pk.sdmg", "♠ 每点伤害", p.SpadeDamagePerPoint, 0f, 100f);
+                p.SpadeRadius = F("pk.srad", "♠ 基础半径", p.SpadeRadius, 0.1f, 10f);
+                p.SpadeRadiusPerPoint = F("pk.sradp", "♠ 每点半径", p.SpadeRadiusPerPoint, 0f, 2f);
+                p.ShieldMax = I("pk.shield", "♦ 护盾最多几层", p.ShieldMax, 1, 200);
+                p.ClubRadius = F("pk.crad", "♣ 裂隙半径", p.ClubRadius, 0.2f, 10f);
+                p.ClubDps = F("pk.cdps", "♣ 裂隙每秒伤害", p.ClubDps, 0f, 200f);
+                p.ClubPullSpeed = F("pk.cpull", "♣ 吸附速度", p.ClubPullSpeed, 0f, 20f);
+                p.ClubDuration = F("pk.cdur", "♣ 基础持续（秒）", p.ClubDuration, 0f, 20f);
+                p.ClubDurationPerPoint = F("pk.cdurp", "♣ 每点持续（秒）", p.ClubDurationPerPoint, 0f, 5f);
+                p.SmallJokerBonus = F("pk.small", "小王：永久加成", p.SmallJokerBonus, 0f, 1f);
+                p.BigJokerBonus = F("pk.big", "大王：永久加成", p.BigJokerBonus, 0f, 1f);
+                p.TargetRange = F("pk.range", "♠ / ♣ 目标搜索范围", p.TargetRange, 1f, 40f);
+            }
+            if (Section("shuriken", "手里剑"))
+            {
+                ShurikenConfig s = a.Shuriken;
+                s.Ammo = I("sk.ammo", "弹药上限", s.Ammo, 1, 100);
+                s.FireInterval = F("sk.interval", "发射间隔（秒 / 发）", s.FireInterval, 0.03f, 5f);
+                s.Speed = F("sk.speed", "飞行速度", s.Speed, 0.5f, 40f);
+                s.FlyDistance = F("sk.fly", "飞行距离", s.FlyDistance, 0.2f, 20f);
+                s.SpinRadius = F("sk.spinR", "旋转判定半径", s.SpinRadius, 0.1f, 5f);
+                s.SpinDamage = F("sk.spinDmg", "旋转每次伤害", s.SpinDamage, 0f, 100f);
+                s.SpinInterval = F("sk.spinInt", "旋转伤害间隔（秒）", s.SpinInterval, 0.05f, 3f);
+                s.RecallDamage = F("sk.recall", "回收每枚伤害", s.RecallDamage, 0f, 300f);
+                s.RecallWidth = F("sk.recallW", "回收路径半宽", s.RecallWidth, 0.05f, 5f);
+                s.OrbitRadius = F("sk.orbitR", "环绕半径（方案 A）", s.OrbitRadius, 0.3f, 6f);
+                s.OrbitSpeed = F("sk.orbitS", "环绕角速度", s.OrbitSpeed, 0f, 20f);
+                s.MaxOnField = I("sk.max", "场上最多几枚（性能）", s.MaxOnField, 1, 300);
+                s.TargetRange = F("sk.range", "索敌范围", s.TargetRange, 1f, 30f);
+            }
+            if (Section("stapler", "订书机"))
+            {
+                StaplerConfig s = a.Stapler;
+                s.Ammo = I("st.ammo", "弹药上限", s.Ammo, 1, 200);
+                s.FireInterval = F("st.interval", "发射间隔（秒 / 发）", s.FireInterval, 0.03f, 5f);
+                s.Damage = F("st.dmg", "订书钉伤害", s.Damage, 0f, 200f);
+                s.Speed = F("st.speed", "订书钉速度", s.Speed, 0.5f, 40f);
+                s.Range = F("st.range", "射程 / 索敌", s.Range, 1f, 30f);
+                s.Pierce = I("st.pierce", "可命中敌人数", s.Pierce, 1, 20);
+                s.Knockback = F("st.knock", "击退距离", s.Knockback, 0f, 10f);
+                s.GroupMax = I("st.group", "一组最多钉合几只", s.GroupMax, 2, 30);
+                s.GroupSlow = F("st.slow", "钉合减速比例", s.GroupSlow, 0f, 0.95f);
+                s.GroupSlowTime = F("st.slowT", "钉合减速时长（秒）", s.GroupSlowTime, 0.1f, 30f);
+                s.SecondaryCount = I("st.count", "每只散射几枚次级钉", s.SecondaryCount, 1, 30);
+                s.SecondaryDamage = F("st.sdmg", "次级钉伤害", s.SecondaryDamage, 0f, 200f);
+                s.MarkBonus = F("st.mark", "每层钉痕散射加成", s.MarkBonus, 0f, 3f);
+                s.SecondaryRange = F("st.srange", "次级钉射程", s.SecondaryRange, 0.5f, 20f);
+                s.MaxSecondary = I("st.smax", "一次爆发最多几枚（性能）", s.MaxSecondary, 1, 3000);
+            }
+            if (Section("sword", "剑"))
+            {
+                SwordConfig s = a.Sword;
+                s.Ammo = I("sw.ammo", "突进次数上限（弹药）", s.Ammo, 1, 100);
+                s.FireInterval = F("sw.interval", "突进间隔（秒）", s.FireInterval, 0.05f, 5f);
+                s.DashDistance = F("sw.dist", "突进距离", s.DashDistance, 0.2f, 15f);
+                s.DashTime = F("sw.time", "突进用时（秒，期间无敌）", s.DashTime, 0.02f, 2f);
+                s.Width = F("sw.width", "刺击判定半宽", s.Width, 0.05f, 5f);
+                s.Damage = F("sw.dmg", "刺击伤害", s.Damage, 0f, 300f);
+                s.TargetRange = F("sw.range", "面向多远有敌人才突进", s.TargetRange, 0.5f, 20f);
+                s.TargetAngle = F("sw.angle", "面向扇形角度", s.TargetAngle, 5f, 360f);
+                s.ShadowDamage = F("sw.shadow", "影刺伤害", s.ShadowDamage, 0f, 500f);
+                s.TrailBonus = F("sw.trail", "每条剑痕影刺加成", s.TrailBonus, 0f, 1f);
+                s.KillsPerCharge = F("sw.kills", "影刺击杀几名 +1 突进次数", s.KillsPerCharge, 0.2f, 20f);
+                s.MaxTrails = I("sw.maxTrails", "剑痕最多几条（性能）", s.MaxTrails, 1, 300);
+            }
+            if (Section("hourglass", "副武器 · 时间沙漏"))
+            {
+                HourglassConfig hg = a.Hourglass;
+                hg.DecayRate = F("hg.rate", "衰减速率（每秒）", hg.DecayRate, 0f, 5f);
+                hg.FloorSpeed = F("hg.floor", "最低移速下限", hg.FloorSpeed, 0.05f, 1f);
+            }
+            if (Section("wasd", "副武器 · WASD"))
+            {
+                WasdConfig w = a.Wasd;
+                w.Damage = F("wd.dmg", "按键伤害", w.Damage, 0f, 200f);
+                w.Distance = F("wd.dist", "判定区离玩家距离", w.Distance, 0f, 10f);
+                w.Radius = F("wd.radius", "判定区半径", w.Radius, 0.1f, 10f);
+                w.HitCooldown = F("wd.cd", "每只敌人几秒最多吃 1 次", w.HitCooldown, 0f, 20f);
+                w.BurstDamage = F("wd.bdmg", "四向齐发伤害", w.BurstDamage, 0f, 500f);
+                w.BurstDistance = F("wd.bdist", "四向齐发距离", w.BurstDistance, 0f, 10f);
+                w.BurstRadius = F("wd.bradius", "四向齐发半径", w.BurstRadius, 0.1f, 10f);
+            }
+            if (Section("magnet", "副武器 · 强磁铁"))
+            {
+                MagnetConfig m = a.Magnet;
+                m.PathDamage = F("mg.path", "路径伤害", m.PathDamage, 0f, 500f);
+                m.PathWidth = F("mg.width", "路径半宽", m.PathWidth, 0.05f, 5f);
+                m.BlastDamage = F("mg.blast", "中点爆炸伤害", m.BlastDamage, 0f, 1000f);
+                m.BlastRadius = F("mg.radius", "爆炸半径", m.BlastRadius, 0.3f, 15f);
+                m.StunTime = F("mg.stun", "爆炸眩晕（秒）", m.StunTime, 0f, 10f);
+                m.SpawnPullRadius = F("mg.spawnR", "「磁场」吸附半径", m.SpawnPullRadius, 0.3f, 10f);
+                m.PathPullRadius = F("mg.pathR", "「磁流」路径两侧拉扯范围", m.PathPullRadius, 0.3f, 10f);
+            }
+            if (Section("cursor", "副武器 · 光标"))
+            {
+                CursorConfig c = a.Cursor;
+                c.Damage = F("cs.dmg", "降维打击伤害", c.Damage, 0f, 1000f);
+                c.PinTime = F("cs.pin", "定身时长（秒）", c.PinTime, 0f, 10f);
+                c.MaxLength = F("cs.len", "轨迹最长（选区最大覆盖）", c.MaxLength, 1f, 200f);
+                c.Thickness = F("cs.thick", "边界厚度", c.Thickness, 0.05f, 5f);
+                c.SampleSpacing = F("cs.spacing", "轨迹采样间距", c.SampleSpacing, 0.05f, 3f);
             }
             if (Section("arsenal", "武器共用"))
             {
@@ -383,6 +707,7 @@ namespace Turn.View
             }
 
             BuildConfig bc = d.builds;
+            if (bc.Builds == null || bc.Builds.Length != BuildIds.Count) bc.Builds = Turn.Weapons.BuildCatalog.Normalize(bc.Builds);
             if (Section("chest", "升级 / 宝箱"))
             {
                 bc.OptionCount = I("ch.options", "候选数", bc.OptionCount, 1, 3);
@@ -394,15 +719,20 @@ namespace Turn.View
             }
             if (bc.Builds != null)
             {
-                for (int w = 0; w < WeaponKinds.Count; w++)
+                // 分组：5 把主武器 + 3 把副武器
+                for (int w = 0; w < WeaponKinds.Count + SubWeaponKinds.Count - 1; w++)
                 {
-                    WeaponKind weapon = (WeaponKind)w;
-                    if (!Section("bd" + w, "词条表 · " + WeaponKinds.DisplayName(weapon) + "（每层数值 / 最大层数）")) continue;
+                    bool isSub = w >= WeaponKinds.Count;
+                    WeaponKind weapon = isSub ? WeaponKind.WaterGun : (WeaponKind)w;
+                    SubWeaponKind subKind = isSub ? (SubWeaponKind)(w - WeaponKinds.Count + 1) : SubWeaponKind.None;
+                    string owner = isSub ? SubWeaponKinds.DisplayName(subKind) : WeaponKinds.DisplayName(weapon);
+                    if (!Section("bd" + w, "词条表 · " + owner + "（每层数值 / 最大层数）")) continue;
                     for (int i = 0; i < bc.Builds.Length && i < BuildIds.Count; i++)
                     {
                         var id = (BuildId)i;
                         BuildDef def = bc.Builds[i];
-                        if (def == null || BuildIds.WeaponOf(id) != weapon) continue;
+                        if (def == null) continue;
+                        if (isSub ? BuildIds.SubOf(id) != subKind : (BuildIds.IsSub(id) || BuildIds.WeaponOf(id) != weapon)) continue;
                         string name = Turn.Weapons.BuildCatalog.Name(id);
                         def.Value = F("bd" + i + ".v", name + "：每层", def.Value, 0f, Mathf.Max(2f, def.Value * 4f));
                         def.MaxLevel = I("bd" + i + ".max", name + "：最大层数", def.MaxLevel, 0, 10);
@@ -447,8 +777,13 @@ namespace Turn.View
 
         private bool Section(string key, string title)
         {
+            return Section(key, title, true);
+        }
+
+        private bool Section(string key, string title, bool defaultOpen)
+        {
             bool open;
-            if (!_folds.TryGetValue(key, out open)) open = true;
+            if (!_folds.TryGetValue(key, out open)) open = defaultOpen;
             GUILayout.Space(6f);
             bool clicked = GUILayout.Toggle(open, (open ? "[-] " : "[+] ") + title, _header);
             if (clicked != open) _foldRequests.Add(new KeyValuePair<string, bool>(key, clicked));
@@ -550,6 +885,8 @@ namespace Turn.View
             _label.normal.textColor = new Color(0.9f, 0.9f, 0.92f);
             _hint = new GUIStyle(GUI.skin.label) { fontSize = 12 };
             _hint.normal.textColor = new Color(0.7f, 0.8f, 0.9f);
+            _wrap = new GUIStyle(GUI.skin.label) { fontSize = 12, wordWrap = true };
+            _wrap.normal.textColor = new Color(0.82f, 0.84f, 0.88f);
 
             _panelTex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
             _panelTex.SetPixel(0, 0, new Color(0.07f, 0.07f, 0.09f, 0.94f));

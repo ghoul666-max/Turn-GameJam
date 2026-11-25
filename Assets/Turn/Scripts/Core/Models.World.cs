@@ -23,8 +23,11 @@ namespace Turn.Core
 
     public sealed class RollConfig
     {
-        /// <summary>按 (int)WeaponKind：每把武器独立的翻滚冷却（秒，策划 水枪 2 / 投矛 2.5 / 陌刀 3）。从回到常态空间开始计。</summary>
-        public float[] WeaponCooldowns = { 2f, 2.5f, 3f };
+        /// <summary>
+        /// 按 (int)WeaponKind：每把主武器独立的翻滚冷却（秒）。从回到常态空间开始计，按「回到常态时正在用的那把」算
+        /// （双主武器方案里 = 切换后的那把）。策划：水枪 2 / 投矛 2.5 / 陌刀 3；掌 2.5、弩 1.2 为暂定（弩「显著短于其他」）。
+        /// </summary>
+        public float[] WeaponCooldowns = { 2f, 2.5f, 3f, 2.5f, 1.2f, 2.5f, 2.5f, 2.5f, 2.5f };
         /// <summary>数组缺项时的兜底冷却（秒）。</summary>
         public float Cooldown = 2f;
         /// <summary>亚空间持续时长（现实秒，策划 1）。全程无敌。</summary>
@@ -37,13 +40,18 @@ namespace Turn.Core
         public float Distance = 0.8f;
     }
 
-    /// <summary>武器装备与解锁（新策划案）。</summary>
+    /// <summary>
+    /// 出战配置（11/25 双武器策划案）：出战前在选择页选定，局内不再按波次解锁。
+    /// DualMain：Main = 开局生效的主武器，SecondMain = 待切换的主武器（必须不同）；
+    /// MainAndSub：Main = 唯一主武器，Sub = 副武器（None = 不带，相当于单武器）。
+    /// 默认值（纯模拟 / 测试用）= 方案 B + 水枪 + 不带副武器。
+    /// </summary>
     public sealed class LoadoutConfig
     {
-        /// <summary>开局装备的武器（策划：水枪）。</summary>
-        public WeaponKind StartWeapon = WeaponKind.WaterGun;
-        /// <summary>按 (int)WeaponKind：达到第几波解锁（≤ 1 = 开局就解锁）。策划书没给具体波次，暂定 1 / 4 / 8。</summary>
-        public int[] UnlockWaves = { 1, 4, 8 };
+        public LoadoutScheme Scheme = LoadoutScheme.MainAndSub;
+        public WeaponKind Main = WeaponKind.WaterGun;
+        public WeaponKind SecondMain = WeaponKind.Spear;
+        public SubWeaponKind Sub = SubWeaponKind.None;
     }
 
     public sealed class SharkConfig
@@ -259,9 +267,11 @@ namespace Turn.Core
         public float SubspaceLeft;
         /// <summary>PlayerSystem 写：受伤后的无敌帧剩余时间（PlayerConfig.HurtInvincibleTime）。</summary>
         public float HurtInvincibleLeft;
+        /// <summary>WeaponSystem 写：武器带来的无敌（剑的突进过程中）。</summary>
+        public bool WeaponInvincible;
 
-        /// <summary>任何一种无敌：调试无敌 / 亚空间 / 受伤无敌帧。CombatSystem 只看这一个。</summary>
-        public bool Invincible { get { return InvincibleLeft > 0f || InSubspace || HurtInvincibleLeft > 0f; } }
+        /// <summary>任何一种无敌：调试无敌 / 亚空间 / 受伤无敌帧 / 剑突进中。CombatSystem 只看这一个。</summary>
+        public bool Invincible { get { return InvincibleLeft > 0f || InSubspace || HurtInvincibleLeft > 0f || WeaponInvincible; } }
     }
 
     /// <summary>鲨鱼：海洋专属，没有生命值，不能被击杀。SharkSystem 写全部字段。</summary>

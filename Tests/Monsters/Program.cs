@@ -158,7 +158,7 @@ internal static class Program
 
     private static int _checks;
 
-    /// <summary>一局测试世界：不自动刷怪、不刷精英 / Boss、三把武器开局全部解锁。</summary>
+    /// <summary>一局测试世界：不自动刷怪、不刷精英 / Boss；默认方案 B + 水枪 + 不带副武器（Loadout.Equip 可换主武器）。</summary>
     private static ITurnContext World(Action<TurnConfig> configure = null)
     {
         var config = new TurnConfig();
@@ -166,7 +166,6 @@ internal static class Program
         config.Horde.CountPerWave = 0f;
         config.Horde.EliteFromWave = 0;
         config.Horde.BossEveryWaves = 0;
-        config.Loadout.UnlockWaves = new[] { 1, 1, 1 };
         configure?.Invoke(config);
         ITurnContext ctx = TurnFactory.Create(config, 777);
         ctx.Session.Start();

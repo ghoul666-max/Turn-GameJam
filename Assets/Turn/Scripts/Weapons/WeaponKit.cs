@@ -24,7 +24,21 @@ namespace Turn.Weapons
         public WeaponKit(ITurnContext ctx, ArsenalConfig arsenal)
         {
             Ctx = ctx;
-            Arsenal = arsenal ?? new ArsenalConfig();
+            Arsenal = (arsenal ?? new ArsenalConfig()).Normalize();
+        }
+
+        /// <summary>能不能被击退 / 拉扯：冲锋中的疾冲兽免疫（策划：冲锋型怪物免疫击退类效果）。</summary>
+        public static bool CanDisplace(MonsterEntity m)
+        {
+            return m != null && m.Alive && !(m.Kind == MonsterKind.Charger && m.AiPhase == 2);
+        }
+
+        /// <summary>击退 distance；返回是否撞上了障碍物 / 地图边缘（实际位移明显短于 distance）。免疫击退的返回 false。</summary>
+        public bool Knockback(MonsterEntity m, Vec2 direction, float distance)
+        {
+            if (!CanDisplace(m) || distance <= 0f) return false;
+            float moved = Ctx.Monsters.Knockback(m, direction, distance);
+            return moved < distance * 0.85f - 0.02f;
         }
 
         public Vec2 PlayerPosition { get { return Ctx.Player.State.Position; } }
@@ -33,6 +47,9 @@ namespace Turn.Weapons
         public bool Has(BuildId id) { return Ctx.Progression.GetLevel(id) > 0; }
         /// <summary>总效果 = 层数 × 每层数值。</summary>
         public float Value(BuildId id) { return Ctx.Progression.Value(id); }
+        /// <summary>可空版本：没有这个词条（null）时为 0。</summary>
+        public float Value(BuildId? id) { return id.HasValue ? Ctx.Progression.Value(id.Value) : 0f; }
+        public float Value2(BuildId? id) { return id.HasValue ? Ctx.Progression.Value2(id.Value) : 0f; }
         public float Value2(BuildId id) { return Ctx.Progression.Value2(id); }
 
         public bool Chance(float p)
@@ -108,8 +125,10 @@ namespace Turn.Weapons
         }
 
         /// <summary>爆发词条：以玩家为中心一圈，按最大生命百分比造成伤害。</summary>
-        public void BurstRing(BuildId id)
+        public void BurstRing(BuildId? build)
         {
+            if (build == null) return;
+            BuildId id = build.Value;
             float ratio = Value(id);
             if (ratio <= 0f) return;
             float radius = Value2(id) > 0f ? Value2(id) : Arsenal.BurstRingRadius;
@@ -138,14 +157,24 @@ namespace Turn.Weapons
         public abstract WeaponKind Kind { get; }
         /// <summary>基础弹药上限（不含词条）。</summary>
         public abstract int BaseAmmo { get; }
-        public abstract BuildId AmmoBuild { get; }
-        public abstract BuildId RateBuild { get; }
-        public abstract BuildId PostHasteBuild { get; }
-        public abstract BuildId BurstRingBuild { get; }
+        /// <summary>「弹药上限 +15%」词条；没有的武器返回 null。</summary>
+        public virtual BuildId? AmmoBuild { get { return null; } }
+        /// <summary>「攻速 +10%」词条；没有的武器返回 null。</summary>
+        public virtual BuildId? RateBuild { get { return null; } }
+        /// <summary>「翻滚结束后攻速提升」词条；没有的武器（弩）返回 null。</summary>
+        public virtual BuildId? PostHasteBuild { get { return null; } }
+        /// <summary>「翻滚爆发时对周身一圈百分比伤害」词条；没有的武器（弩）返回 null。</summary>
+        public virtual BuildId? BurstRingBuild { get { return null; } }
         /// <summary>基础攻击间隔（秒）。</summary>
         public abstract float BaseInterval { get; }
         /// <summary>自动索敌范围。</summary>
         public abstract float TargetRange { get; }
+
+        /// <summary>false = 不需要目标也会「攻击」（扑克牌：没有敌人也照样抽牌；Fire 的 target 可能为 null）。</summary>
+        public virtual bool NeedsTarget { get { return true; } }
+
+        /// <summary>有目标进入索敌范围时，这一次要不要攻击（掌：面向的扇形里没有敌人就不打，不浪费弹药）。</summary>
+        public virtual bool WantsToFire(Vec2 origin, MonsterEntity nearest) { return true; }
 
         /// <summary>朝 target 攻击一次（弹药由 WeaponSystem 扣）。</summary>
         public abstract void Fire(Vec2 origin, MonsterEntity target);
@@ -156,5 +185,15 @@ namespace Turn.Weapons
         public abstract void Burst();
         /// <summary>受到伤害时的词条。</summary>
         public virtual void OnHurt() { }
+        /// <summary>成为当前生效的主武器（开局不调用）。</summary>
+        public virtual void OnEquipped(bool byRoll) { }
+        /// <summary>不再是当前生效的主武器（例：弩的杀气在这里清零）。</summary>
+        public virtual void OnUnequipped(bool byRoll) { }
+        /// <summary>常态空间每步调用（不管是不是当前武器）：留在场上的东西（手里剑、裂隙）在这里结算。</summary>
+        public virtual void TickAlways(float dt) { }
+        /// <summary>表现层：把留在场上的东西写进 results（不清空）。</summary>
+        public virtual void CollectFields(List<WeaponField> results) { }
+        /// <summary>挡下一次玩家受到的碰撞 / 弹幕伤害（方片护盾）。</summary>
+        public virtual bool AbsorbPlayerHit() { return false; }
     }
 }

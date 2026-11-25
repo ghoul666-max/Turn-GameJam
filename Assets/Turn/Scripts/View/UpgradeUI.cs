@@ -89,7 +89,10 @@ namespace Turn.View
         private void Refresh()
         {
             IReadOnlyList<UpgradeOption> list = _ctx.Progression.Options;
-            string weapon = WeaponKinds.DisplayName(_ctx.Loadout.Equipped);
+            ILoadoutSystem l = _ctx.Loadout;
+            string weapon = l.Scheme == LoadoutScheme.DualMain
+                ? WeaponKinds.DisplayName(l.Equipped) + " / " + WeaponKinds.DisplayName(l.Standby)
+                : WeaponKinds.DisplayName(l.Equipped) + (l.Sub != SubWeaponKind.None ? " + " + SubWeaponKinds.DisplayName(l.Sub) : "");
             if (header != null)
                 header.text = _ctx.Progression.OptionsFromChest
                     ? "宝箱！ " + weapon + "   选择一项（1 / 2 / 3）—— 有的选项带代价"

@@ -3,7 +3,7 @@ using Turn.Core;
 using Turn.Systems;
 
 /// <summary>
-/// 程序A：翻滚 → 亚空间（新策划案 11/24）、受伤无敌帧、波次与武器解锁、维修机器人击退的纯模拟回归测试。
+/// 程序A：翻滚 → 亚空间（11/24）、出战方案 A / B 的翻滚时序（11/25）、受伤无敌帧、波次、维修机器人击退的纯模拟回归测试。
 /// 运行：在本目录 dotnet run。
 /// </summary>
 internal static class Program
@@ -19,7 +19,10 @@ internal static class Program
         RollAtAnyAmmoAndCooldownPerWeapon();
         RejectedWhileCoolingOrInSubspace();
         HurtInvincibilityFrames();
-        WavesUnlockWeapons();
+        WavesAreEndless();
+        DualMainSwitchesOnRoll();
+        MainAndSubKeepsWeapon();
+        UpgradePoolFollowsLoadout();
         LevelUpWaitsForNormalSpace();
         RobotKnockbackMovesPlayer();
         Console.WriteLine($"Roll checks passed ({_checks} assertions).");
@@ -106,7 +109,7 @@ internal static class Program
 
     private static void RollAtAnyAmmoAndCooldownPerWeapon()
     {
-        var ctx = World(c => c.Loadout.UnlockWaves = new[] { 1, 1, 1 });
+        var ctx = World();
         Check(ctx.Weapons.Ammo == ctx.Weapons.Capacity, "full magazine at start");
         Check(ctx.Roll.CanRoll, "can roll with a full magazine");
         Check(Near(ctx.Roll.CooldownFor(WeaponKind.WaterGun), 2f) && Near(ctx.Roll.CooldownFor(WeaponKind.Spear), 2.5f)
@@ -149,28 +152,92 @@ internal static class Program
         Check(Near(ctx.Player.State.Hp, ctx.Player.State.MaxHp - 10f), "two hits taken");
     }
 
-    private static void WavesUnlockWeapons()
+    private static void WavesAreEndless()
     {
-        var ctx = World(c => { c.Level.WaveSeconds = 1f; c.Loadout.UnlockWaves = new[] { 1, 2, 4 }; });
+        var ctx = World(c => c.Level.WaveSeconds = 1f);
         int lastWave = 0;
-        WeaponKind unlocked = WeaponKind.WaterGun;
-        int unlocks = 0;
         ctx.Events.Subscribe<WaveStartedEvent>(e => lastWave = e.Wave);
-        ctx.Events.Subscribe<WeaponUnlockedEvent>(e => { unlocked = e.Weapon; unlocks++; });
         Check(ctx.Session.Wave == 1, "wave 1 at start");
-        Check(ctx.Loadout.IsUnlocked(WeaponKind.WaterGun) && !ctx.Loadout.IsUnlocked(WeaponKind.Spear), "only water gun at start");
-        Check(!ctx.Loadout.Equip(WeaponKind.Spear), "cannot equip a locked weapon");
         Run(ctx, 1.05f);
         Check(ctx.Session.Wave == 2 && lastWave == 2, "wave 2 after 1 s");
-        Check(unlocks == 1 && unlocked == WeaponKind.Spear && ctx.Loadout.IsUnlocked(WeaponKind.Spear), "spear unlocked on wave 2");
         Run(ctx, 2f);
-        Check(ctx.Session.Wave == 4 && unlocks == 2 && ctx.Loadout.IsUnlocked(WeaponKind.Blade), "blade unlocked on wave 4");
+        Check(ctx.Session.Wave == 4, "wave 4 after 3 s");
         Check(ctx.Session.Phase == RunPhase.Playing && ctx.Session.LevelTimeLeft == 0f, "endless: never clears");
 
         var slow = World(c => c.Level.WaveSeconds = 1f);
         Check(slow.Roll.TryRoll(), "roll");
         Run(slow, 1f); // 亚空间里 1 现实秒 = 0.3 游戏秒
         Check(slow.Session.Wave == 1, "waves follow game time (slowed in subspace)");
+    }
+
+    /// <summary>方案 A 双主武器：翻滚 → 当前主武器爆发 → 切到另一把 → 回到常态时补满新武器、按新武器开冷却。</summary>
+    private static void DualMainSwitchesOnRoll()
+    {
+        var ctx = World(c =>
+        {
+            c.Loadout = new LoadoutConfig { Scheme = LoadoutScheme.DualMain, Main = WeaponKind.WaterGun, SecondMain = WeaponKind.Spear };
+            c.Weapon.InitialAmmo = 0;
+        });
+        ILoadoutSystem l = ctx.Loadout;
+        Check(l.Equipped == WeaponKind.WaterGun && l.Standby == WeaponKind.Spear, "starts with the first main weapon");
+        Check(l.Carries(WeaponKind.Spear) && !l.Carries(WeaponKind.Blade), "carries exactly two mains");
+        Check(l.Sub == SubWeaponKind.None, "scheme A has no sub weapon");
+
+        WeaponKind burst = WeaponKind.Blade;
+        bool swapped = false;
+        ctx.Events.Subscribe<SubspaceEnteredEvent>(e => burst = e.Weapon);
+        ctx.Events.Subscribe<WeaponEquippedEvent>(e => swapped |= e.ByRoll && e.From == WeaponKind.WaterGun && e.To == WeaponKind.Spear);
+        Check(ctx.Roll.TryRoll(), "roll");
+        Check(burst == WeaponKind.WaterGun, "burst uses the weapon you rolled with");
+        Check(swapped && l.Equipped == WeaponKind.Spear && l.Standby == WeaponKind.WaterGun, "switched to the other main after the burst");
+        Check(ctx.Weapons.AmmoOf(WeaponKind.Spear) == 0, "not refilled until subspace ends");
+        Run(ctx, 1.05f);
+        Check(ctx.Weapons.AmmoOf(WeaponKind.Spear) == ctx.Weapons.CapacityOf(WeaponKind.Spear), "switched-in weapon refilled");
+        Check(ctx.Weapons.AmmoOf(WeaponKind.WaterGun) == 0, "the other main keeps its own ammo");
+        Check(JustStarted(ctx.Player.State.RollCooldownLeft, 2.5f), "cooldown of the switched-in weapon (spear 2.5 s)");
+
+        Run(ctx, 2.6f);
+        Check(ctx.Roll.TryRoll() && burst == WeaponKind.Spear && l.Equipped == WeaponKind.WaterGun, "second roll: spear bursts, back to the water gun");
+        Run(ctx, 1.05f);
+        Check(JustStarted(ctx.Player.State.RollCooldownLeft, 2f), "water gun cooldown 2 s");
+
+        var same = World(c => c.Loadout = new LoadoutConfig { Scheme = LoadoutScheme.DualMain, Main = WeaponKind.Blade, SecondMain = WeaponKind.Blade });
+        Check(same.Loadout.Standby != same.Loadout.Equipped, "two mains are always different");
+    }
+
+    /// <summary>方案 B：翻滚不切换主武器；不带副武器时就是单武器。</summary>
+    private static void MainAndSubKeepsWeapon()
+    {
+        var ctx = World(c => c.Loadout = new LoadoutConfig { Scheme = LoadoutScheme.MainAndSub, Main = WeaponKind.Blade, Sub = SubWeaponKind.None });
+        Check(ctx.Loadout.Equipped == WeaponKind.Blade && ctx.Loadout.Standby == WeaponKind.Blade, "one main weapon");
+        Check(ctx.SubWeapons.Kind == SubWeaponKind.None, "no sub weapon");
+        Check(ctx.Roll.TryRoll(), "roll");
+        Check(ctx.Loadout.Equipped == WeaponKind.Blade, "scheme B never switches");
+        Run(ctx, 1.05f);
+        Check(JustStarted(ctx.Player.State.RollCooldownLeft, 3f), "blade cooldown 3 s");
+        Check(ctx.SubWeapons.Supports(SubWeaponKind.None), "None is always supported");
+    }
+
+    /// <summary>升级候选池 = 这一局带着的装备：方案 A 两把主武器的词条混在一起。</summary>
+    private static void UpgradePoolFollowsLoadout()
+    {
+        var ctx = World(c => c.Loadout = new LoadoutConfig { Scheme = LoadoutScheme.DualMain, Main = WeaponKind.WaterGun, SecondMain = WeaponKind.Blade });
+        bool water = false, blade = false;
+        for (int n = 0; n < 60; n++)
+        {
+            ctx.Progression.AddXp(ctx.Progression.XpToNext);
+            ctx.Progression.RollOptions();
+            var list = ctx.Progression.Options;
+            for (int i = 0; i < list.Count; i++)
+            {
+                WeaponKind w = BuildIds.WeaponOf(list[i].Build);
+                Check(!BuildIds.IsSub(list[i].Build) && (w == WeaponKind.WaterGun || w == WeaponKind.Blade), "options only from the two carried mains");
+                water |= w == WeaponKind.WaterGun;
+                blade |= w == WeaponKind.Blade;
+            }
+            ctx.Progression.SkipPending();
+        }
+        Check(water && blade, "both mains' upgrades show up");
     }
 
     private static void LevelUpWaitsForNormalSpace()

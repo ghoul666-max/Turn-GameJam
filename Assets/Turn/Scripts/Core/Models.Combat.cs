@@ -84,13 +84,338 @@ namespace Turn.Core
         public float SlashHalfHeight = 1.5f;
     }
 
-    /// <summary>三把武器 + 共用参数。</summary>
+    /// <summary>
+    /// 掌（11/25 双武器策划案）。常态：朝面向方向扇形掌击，伤害 + 击退（冲锋中的敌人免疫）+ 叠 1 层掌印；
+    /// 爆发：以自身为中心的圆形天降掌，每只敌人按自己的掌印层数增伤，结算后掌印清空。策划书没给数值，以下均为暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class PalmConfig
+    {
+        public int Ammo = 25;
+        public float FireInterval = 0.45f;
+        public float Damage = 7f;
+        /// <summary>扇形总角度（度）。</summary>
+        public float Angle = 90f;
+        /// <summary>掌击距离（单位）。</summary>
+        public float Range = 3.5f;
+        /// <summary>只命中最近一圈敌人（同陌刀），穿透词条每层多推进一圈。</summary>
+        public float RingThickness = 0.9f;
+        /// <summary>击退距离（单位）。</summary>
+        public float Knockback = 1.2f;
+        /// <summary>天降掌半径（单位）。</summary>
+        public float SkyRadius = 6f;
+        public float SkyDamage = 20f;
+        /// <summary>每层掌印的增伤（该敌人的伤害 × (1 + 层数 × MarkBonus)）。</summary>
+        public float MarkBonus = 0.15f;
+    }
+
+    /// <summary>
+    /// 弩（11/25 双武器策划案）。常态：基础 1 发重型弩箭，穿透（每穿透一个衰减）+ 强制击退；
+    /// 敌人被击退撞到障碍物 / 地图边缘：眩晕，玩家 +1 层杀气（只加弩的伤害，无限叠加，主武器切换时清零）。
+    /// 翻滚：没有爆发。策划书没给数值，以下均为暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class CrossbowConfig
+    {
+        public int Ammo = 1;
+        public float FireInterval = 0.3f;
+        public float Speed = 16f;
+        public float Damage = 30f;
+        public float Radius = 0.22f;
+        public float Range = 10f;
+        /// <summary>基础可穿透（可命中）的敌人数。</summary>
+        public int Pierce = 3;
+        /// <summary>每穿透一个敌人伤害衰减比例。</summary>
+        public float PierceFalloff = 0.25f;
+        /// <summary>击退距离（单位）。</summary>
+        public float Knockback = 2.5f;
+        /// <summary>撞墙眩晕（秒）。</summary>
+        public float WallStun = 1f;
+        /// <summary>每层杀气的弩伤害加成。</summary>
+        public float IntentBonus = 0.05f;
+        /// <summary>「杀气溢出」词条的溅射半径（单位）。</summary>
+        public float SplashRadius = 1.2f;
+    }
+
+    /// <summary>副武器 · 浮游炮：环绕玩家自动攻击；每次翻滚盲盒 50% 分裂（×2）/ 50% 合体（÷2，保底 1）。数值暂定。</summary>
+    [Serializable]
+    public sealed class DronesConfig
+    {
+        public int StartCount = 1;
+        /// <summary>分裂一次增加几台（翻滚分裂、「裂变」击杀分裂都按这个数加）。</summary>
+        public int SplitAdd = 1;
+        /// <summary>合体一次减少几台。</summary>
+        public int MergeRemove = 1;
+        /// <summary>合体最少保留几台（「双核」词条至少 2 台）。</summary>
+        public int MinCount = 1;
+        /// <summary>台数上限；0 = 不限。</summary>
+        public int MaxCount = 0;
+        /// <summary>单台每发伤害。</summary>
+        public float Damage = 4f;
+        public float FireInterval = 0.8f;
+        public float Range = 7f;
+        public float BulletSpeed = 12f;
+        public float BulletRadius = 0.12f;
+        /// <summary>环绕半径（单位）与角速度（弧度 / 秒）。</summary>
+        public float OrbitRadius = 1.3f;
+        public float OrbitSpeed = 2f;
+        /// <summary>同时真正开火的台数上限（性能）。超出的台数折算进这些炮的伤害里，逻辑数量本身没有上限。</summary>
+        public int MaxActive = 32;
+        /// <summary>翻滚时分裂的基础概率。</summary>
+        public float SplitChance = 0.5f;
+    }
+
+    /// <summary>副武器 · 引力黑洞：翻滚时以翻滚前的站位为中心，把周围怪物拉向中心（无基础伤害）。数值暂定。</summary>
+    [Serializable]
+    public sealed class GravityWellConfig
+    {
+        public float Radius = 5f;
+        /// <summary>每只怪最多被拉近的距离（单位）。</summary>
+        public float PullDistance = 3f;
+        /// <summary>拉到离中心这么近就停（单位）。</summary>
+        public float MinGap = 0.6f;
+        /// <summary>次级引力点：半径、拉扯距离、离主中心的距离。</summary>
+        public float SecondaryRadius = 2.5f;
+        public float SecondaryPull = 1.2f;
+        public float SecondaryOffset = 3f;
+    }
+
+    /// <summary>副武器 · 空间锚：每次翻滚记录锚点；下一次翻滚回溯到锚点，连线斩击。数值暂定。</summary>
+    [Serializable]
+    public sealed class SpaceAnchorConfig
+    {
+        public float SlashDamage = 30f;
+        /// <summary>斩击路径半宽（单位）。</summary>
+        public float Width = 0.6f;
+    }
+
+    /// <summary>
+    /// 主武器 · 扑克牌（11/25 第二批策划案）。常态不攻击，每隔 DrawInterval 秒抽 1 张牌到头顶（弹药 = 手牌上限，抽满停）；
+    /// 翻滚爆发时打出全部手牌，每张按花色 + 点数独立结算。数值策划书没给，以下均为暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class PokerConfig
+    {
+        /// <summary>手牌上限（= 弹药）。</summary>
+        public int HandSize = 5;
+        public float DrawInterval = 1f;
+        /// <summary>红桃：每点几发爱心弹（策划 5）；单发伤害、速度、半径、射程、可反弹次数、扇形张角、一次爆发最多几发（性能）。</summary>
+        public int HeartsPerPoint = 5;
+        public float HeartDamage = 3f;
+        public float HeartSpeed = 10f;
+        public float HeartRadius = 0.15f;
+        public float HeartRange = 14f;
+        public int HeartBounces = 3;
+        public float HeartSpread = 50f;
+        public int MaxHearts = 300;
+        /// <summary>黑桃：伤害 = 每点伤害 × 点数；半径 = 基础 + 每点 × 点数。</summary>
+        public float SpadeDamagePerPoint = 6f;
+        public float SpadeRadius = 1.2f;
+        public float SpadeRadiusPerPoint = 0.12f;
+        /// <summary>方片：护盾层数 = 点数（× 加成）；最多叠几层。</summary>
+        public int ShieldMax = 40;
+        /// <summary>梅花：裂隙半径、每秒伤害、吸附速度（单位/秒）、持续 = 基础 + 每点 × 点数（秒）。</summary>
+        public float ClubRadius = 2.5f;
+        public float ClubDps = 6f;
+        public float ClubPullSpeed = 2.5f;
+        public float ClubDuration = 1f;
+        public float ClubDurationPerPoint = 0.4f;
+        /// <summary>大小王：每张永久提升所有卡牌效果的比例（切换主武器时清零）。</summary>
+        public float SmallJokerBonus = 0.08f;
+        public float BigJokerBonus = 0.15f;
+        /// <summary>找黑桃落点 / 梅花目标的搜索范围。</summary>
+        public float TargetRange = 12f;
+    }
+
+    /// <summary>
+    /// 主武器 · 手里剑（11/25 第二批策划案）。常态朝最近敌人飞出 FlyDistance 后停住旋转，持续伤害范围内敌人（永久留存）；
+    /// 爆发：全部回收，路径穿刺；方案 A 回收后环绕玩家，直到下一次切换主武器。数值暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class ShurikenConfig
+    {
+        public int Ammo = 12;
+        public float FireInterval = 0.6f;
+        public float Speed = 9f;
+        public float FlyDistance = 5f;
+        /// <summary>旋转：判定半径、每次伤害、伤害间隔（秒）。</summary>
+        public float SpinRadius = 0.9f;
+        public float SpinDamage = 4f;
+        public float SpinInterval = 0.3f;
+        /// <summary>回收：每枚路径伤害、路径半宽。</summary>
+        public float RecallDamage = 14f;
+        public float RecallWidth = 0.5f;
+        /// <summary>双飞词条：两枚之间的夹角（度）。</summary>
+        public float DoubleAngle = 20f;
+        /// <summary>环绕（方案 A）：半径、角速度（弧度 / 秒）。</summary>
+        public float OrbitRadius = 1.6f;
+        public float OrbitSpeed = 4f;
+        /// <summary>场上最多留几枚（性能兜底，超出时最早的消失）。</summary>
+        public int MaxOnField = 60;
+        public float TargetRange = 8f;
+    }
+
+    /// <summary>
+    /// 主武器 · 订书机（11/25 第三批）：订书钉命中造成伤害并击退；被击退的敌人撞上其他怪物时把沿途撞到的钉合成一组（叠钉痕 + 减速）。
+    /// 爆发：全图带钉痕的怪各向四周散射 SecondaryCount 枚次级钉（和常态钉逻辑一致）。数值暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class StaplerConfig
+    {
+        public int Ammo = 25;
+        public float FireInterval = 0.4f;
+        public float Speed = 14f;
+        public float Damage = 6f;
+        public float Radius = 0.15f;
+        public float Range = 9f;
+        /// <summary>可命中敌人数（1 = 不穿透）。</summary>
+        public int Pierce = 1;
+        public float Knockback = 1f;
+        /// <summary>一组最多钉合几只（含被击退的那只）。</summary>
+        public int GroupMax = 3;
+        /// <summary>钉合减速：移速 × (1 − GroupSlow)，持续 GroupSlowTime 秒。</summary>
+        public float GroupSlow = 0.3f;
+        public float GroupSlowTime = 4f;
+        public int SecondaryCount = 5;
+        public float SecondaryDamage = 8f;
+        /// <summary>每层钉痕的散射伤害加成。</summary>
+        public float MarkBonus = 0.2f;
+        public float SecondaryRange = 5f;
+        /// <summary>一次爆发最多散射几枚（性能）。</summary>
+        public int MaxSecondary = 400;
+    }
+
+    /// <summary>
+    /// 主武器 · 剑（11/25 第三批）：朝面向方向突进刺击（突进中无敌），路径留下剑痕；
+    /// 爆发：影子沿全部剑痕复刻刺击，影刺每击杀 1 名敌人永久 +1 突进次数上限（切换主武器清零）。数值暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class SwordConfig
+    {
+        public int Ammo = 8;
+        public float FireInterval = 0.9f;
+        public float DashDistance = 3f;
+        public float DashTime = 0.15f;
+        public float Width = 0.6f;
+        public float Damage = 14f;
+        /// <summary>面向方向这么远、这么大夹角内有敌人才突进。</summary>
+        public float TargetRange = 5f;
+        public float TargetAngle = 120f;
+        public float ShadowDamage = 22f;
+        /// <summary>每条剑痕给影刺的伤害加成。</summary>
+        public float TrailBonus = 0.05f;
+        /// <summary>影刺击杀几名敌人 +1 突进次数上限（策划 1）。</summary>
+        public float KillsPerCharge = 1f;
+        /// <summary>剑痕最多保留几条（性能）。</summary>
+        public int MaxTrails = 40;
+        /// <summary>影子复刻的倍速（表现用）。</summary>
+        public float ShadowSpeed = 5f;
+    }
+
+    /// <summary>
+    /// 副武器 · 强磁铁（11/25 第三批）：奇数次翻滚在原地留正极，偶数次留负极，两极沿直线对撞（路径穿刺 + 中点爆炸眩晕）后消失。
+    /// 在主武器爆发之前结算。数值暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class MagnetConfig
+    {
+        public float PathDamage = 20f;
+        public float PathWidth = 0.6f;
+        public float BlastDamage = 60f;
+        public float BlastRadius = 2.5f;
+        public float StunTime = 0.8f;
+        /// <summary>「磁场」词条：磁极生成时吸附这么远内的敌人；「磁流」词条：把路径两侧这么远内的敌人拉向中点（拉近距离 = 词条数值）。</summary>
+        public float SpawnPullRadius = 2.5f;
+        public float PathPullRadius = 1.5f;
+    }
+
+    /// <summary>
+    /// 副武器 · 光标（11/25 第三批）：翻滚 = 按下 / 松开。第一次翻滚开始绘制（身后拖出选区边界），
+    /// 之后每次翻滚：选区（轨迹围成的多边形 + 边界厚度）内敌人受到降维打击并定身，然后以当前站位重新开始绘制。数值暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class CursorConfig
+    {
+        public float Damage = 35f;
+        public float PinTime = 1.5f;
+        /// <summary>轨迹最长多少单位（选区的最大覆盖范围），超过后丢掉最早的点。</summary>
+        public float MaxLength = 30f;
+        /// <summary>边界厚度：离轨迹这么近的也算在选区里（避免漏怪）。</summary>
+        public float Thickness = 0.6f;
+        /// <summary>轨迹采样间距。</summary>
+        public float SampleSpacing = 0.3f;
+    }
+
+    /// <summary>副武器 · 时间沙漏：常态敌人移速按 e^(−DecayRate × t) 趋近 FloorSpeed；翻滚时重置为 1。数值暂定。</summary>
+    [Serializable]
+    public sealed class HourglassConfig
+    {
+        public float DecayRate = 0.15f;
+        /// <summary>移速下限（策划 1/2）。</summary>
+        public float FloorSpeed = 0.5f;
+    }
+
+    /// <summary>
+    /// 副武器 · WASD：按住移动键时在对应方向生成判定区（每只敌人 HitCooldown 秒最多吃 1 次），最多 2 个方向；
+    /// 翻滚时四向齐发。数值暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class WasdConfig
+    {
+        public float Damage = 8f;
+        /// <summary>判定区中心离玩家的距离、判定区半径。</summary>
+        public float Distance = 1.4f;
+        public float Radius = 1.1f;
+        public float HitCooldown = 3f;
+        /// <summary>判定间隔（秒，性能）。</summary>
+        public float CheckInterval = 0.1f;
+        public float BurstDamage = 20f;
+        public float BurstDistance = 1.6f;
+        public float BurstRadius = 1.6f;
+    }
+
+    /// <summary>五把主武器 + 三把副武器 + 共用参数。</summary>
     [Serializable]
     public sealed class ArsenalConfig
     {
         public WaterGunConfig WaterGun = new WaterGunConfig();
         public SpearConfig Spear = new SpearConfig();
         public BladeConfig Blade = new BladeConfig();
+        public PalmConfig Palm = new PalmConfig();
+        public CrossbowConfig Crossbow = new CrossbowConfig();
+        public DronesConfig Drones = new DronesConfig();
+        public GravityWellConfig Gravity = new GravityWellConfig();
+        public SpaceAnchorConfig Anchor = new SpaceAnchorConfig();
+        public PokerConfig Poker = new PokerConfig();
+        public ShurikenConfig Shuriken = new ShurikenConfig();
+        public HourglassConfig Hourglass = new HourglassConfig();
+        public WasdConfig Wasd = new WasdConfig();
+        public StaplerConfig Stapler = new StaplerConfig();
+        public SwordConfig Sword = new SwordConfig();
+        public MagnetConfig Magnet = new MagnetConfig();
+        public CursorConfig Cursor = new CursorConfig();
+
+        /// <summary>旧存档 / 旧场景里缺的分组补成默认值（JsonUtility 读不到的嵌套对象可能是 null）。</summary>
+        public ArsenalConfig Normalize()
+        {
+            if (WaterGun == null) WaterGun = new WaterGunConfig();
+            if (Spear == null) Spear = new SpearConfig();
+            if (Blade == null) Blade = new BladeConfig();
+            if (Palm == null || Palm.Ammo <= 0) Palm = new PalmConfig();
+            if (Crossbow == null || Crossbow.Ammo <= 0) Crossbow = new CrossbowConfig();
+            if (Drones == null || Drones.FireInterval <= 0f) Drones = new DronesConfig();
+            if (Gravity == null || Gravity.Radius <= 0f) Gravity = new GravityWellConfig();
+            if (Anchor == null || Anchor.Width <= 0f) Anchor = new SpaceAnchorConfig();
+            if (Poker == null || Poker.HandSize <= 0) Poker = new PokerConfig();
+            if (Shuriken == null || Shuriken.Ammo <= 0) Shuriken = new ShurikenConfig();
+            if (Hourglass == null || Hourglass.FloorSpeed <= 0f) Hourglass = new HourglassConfig();
+            if (Wasd == null || Wasd.Radius <= 0f) Wasd = new WasdConfig();
+            if (Stapler == null || Stapler.Ammo <= 0) Stapler = new StaplerConfig();
+            if (Sword == null || Sword.Ammo <= 0) Sword = new SwordConfig();
+            if (Magnet == null || Magnet.PathWidth <= 0f) Magnet = new MagnetConfig();
+            if (Cursor == null || Cursor.MaxLength <= 0f) Cursor = new CursorConfig();
+            return this;
+        }
         /// <summary>暴击伤害倍率（暴击词条共用）。</summary>
         public float CritMultiplier = 2f;
         /// <summary>「翻滚爆发时对周身一圈敌人造成百分比伤害」的半径（单位）。</summary>
@@ -364,8 +689,8 @@ namespace Turn.Core
     public sealed class UpgradeConfig
     {
         public int OptionCount = 3;
-        /// <summary>按 B01..B19 顺序配置的最大叠层。</summary>
-        public int[] BuildMaxLevels = { 5, 4, 2, 3, 3, 2, 3, 2, 3, 2, 2, 3, 3, 2, 2, 1, 2, 1, 2 };
+        /// <summary>按 B01..B19 顺序配置的最大叠层。B10 地形增伤暂设 0（不进池）：岩浆喷发即消失，等策划定危险地形规则后再开（原值 2）。</summary>
+        public int[] BuildMaxLevels = { 5, 4, 2, 3, 3, 2, 3, 2, 3, 0, 2, 3, 3, 2, 2, 1, 2, 1, 2 };
         /// <summary>词条稀有度权重：普通、稀有、史诗。</summary>
         public int CommonWeight = 70, RareWeight = 25, EpicWeight = 5;
         public float DamagePerLevel = 0.20f;
@@ -503,6 +828,16 @@ namespace Turn.Core
         public int SpearMarks;
         /// <summary>WeaponSystem 写：剑气印记层数。回到常态空间时清零。</summary>
         public int BladeMarks;
+        /// <summary>WeaponSystem 写：掌印层数。天降掌结算后 / 回到常态空间时清零。</summary>
+        public int PalmMarks;
+        /// <summary>SubWeaponSystem 写（引力黑洞「失衡」/ 强磁铁「磁暴」）：本次翻滚爆发伤害的额外倍率（0 = 没有）。CombatSystem 对 Burst 来源读取。回到常态空间时清零。</summary>
+        public float BurstVulnerability;
+        /// <summary>WeaponSystem 写（订书机）：钉痕层数。翻滚爆发散射时清零（爆发后次级钉打出的新钉痕留到下一次爆发）。</summary>
+        public int StapleMarks;
+        /// <summary>WeaponSystem 写（订书机）：钉合组编号（0 = 没被钉合）。同一组不会再被钉合；和钉痕一起在爆发时清零。</summary>
+        public int StapleGroup;
+        /// <summary>SubWeaponSystem 写（光标）：「降维打击」定身剩余秒数（表现层压扁贴地；「定身易伤」读它）。</summary>
+        public float PinnedLeft;
         /// <summary>MonsterSystem 写（生成时）：0 普通 / 1 精英 / 2 Boss。精英与 Boss 死亡掉落宝箱。</summary>
         public int Rank;
         /// <summary>MonsterSystem 写（生成时）：碰撞半径（精英 / Boss 更大）。</summary>
@@ -553,10 +888,53 @@ namespace Turn.Core
         public readonly List<int> HitIds = new List<int>();
         /// <summary>ProjectileSystem 写（生成时）：玩家子弹属于哪把武器（敌方弹幕忽略）。</summary>
         public WeaponKind Weapon;
+        /// <summary>ProjectileSystem 写（生成时）：副武器的子弹（例：浮游炮）。≠ None 时命中 / 结束交给 ISubWeaponSystem。</summary>
+        public SubWeaponKind SubOwner;
         /// <summary>WeaponSystem 写：长矛携带的矛印记层数（击杀穿透时累加被击杀者身上的矛）。</summary>
         public int CarriedMarks;
         /// <summary>WeaponSystem 写：水弹是否已经留下过水渍（穿透词条：只在首个命中处留一滩）。</summary>
         public bool MarkLeft;
+        /// <summary>WeaponSystem 写（生成时）、ProjectileSystem 递减：碰到遮挡物 / 地图边缘还能反弹几次（扑克牌爱心弹）。</summary>
+        public int BouncesLeft;
+    }
+
+    /// <summary>扑克牌的花色。大小王没有花色（None）。</summary>
+    public enum CardSuit { None = 0, Heart = 1, Spade = 2, Diamond = 3, Club = 4 }
+
+    /// <summary>一张扑克牌：Rank 1–13（J/Q/K = 11/12/13），14 = 小王，15 = 大王。</summary>
+    public struct PlayingCard
+    {
+        public const int SmallJoker = 14;
+        public const int BigJoker = 15;
+        public int Rank;
+        public CardSuit Suit;
+        public bool IsJoker { get { return Rank >= SmallJoker; } }
+
+        public string Label
+        {
+            get
+            {
+                if (Rank == SmallJoker) return "小王";
+                if (Rank == BigJoker) return "大王";
+                string suit = Suit == CardSuit.Heart ? "♥" : Suit == CardSuit.Spade ? "♠" : Suit == CardSuit.Diamond ? "♦" : "♣";
+                string rank = Rank == 1 ? "A" : Rank == 11 ? "J" : Rank == 12 ? "Q" : Rank == 13 ? "K" : Rank.ToString();
+                return suit + rank;
+            }
+        }
+    }
+
+    /// <summary>武器留在场上的东西（表现层只读）：手里剑（停住旋转 / 环绕）、梅花裂隙、剑痕（线段 Position → End）。</summary>
+    public enum WeaponFieldKind { Shuriken = 0, OrbitShuriken = 1, Rift = 2, SwordTrail = 3 }
+
+    public struct WeaponField
+    {
+        public WeaponFieldKind Kind;
+        public Vec2 Position;
+        /// <summary>线段类（剑痕）的终点。</summary>
+        public Vec2 End;
+        public float Radius;
+        /// <summary>剩余时间比例 0–1（裂隙）；没有时限的为 1。</summary>
+        public float Life;
     }
 
     /// <summary>水枪的水渍（铺垫痕迹）。永久存在，直到翻滚爆发后回到常态空间时清空。WeaponSystem 写。</summary>

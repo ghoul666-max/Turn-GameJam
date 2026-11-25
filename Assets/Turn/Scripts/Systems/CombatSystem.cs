@@ -28,6 +28,12 @@ namespace Turn.Systems
                 _ctx.Events.Publish(new DamageBlockedEvent { Source = source });
                 return false;
             }
+            // 扑克牌方片护盾：挡怪物碰撞与弹幕（DamageSource.Monster）
+            if (source == DamageSource.Monster && _ctx.Weapons != null && _ctx.Weapons.AbsorbPlayerHit())
+            {
+                _ctx.Events.Publish(new DamageBlockedEvent { Source = source });
+                return false;
+            }
 
             player.Hp -= amount;
             if (player.Hp <= 0f)
@@ -54,6 +60,10 @@ namespace Turn.Systems
         public void DamageMonster(MonsterEntity monster, float amount, DamageSource source, bool critical = false)
         {
             if (monster == null || !monster.Alive || amount <= 0f) return;
+            // 引力黑洞「失衡」：被拉扯过的敌人受到本次翻滚爆发的伤害提高
+            if (source == DamageSource.Burst && monster.BurstVulnerability > 0f) amount *= 1f + monster.BurstVulnerability;
+            // 时间沙漏「迟滞」：敌人越慢受到的伤害越高
+            if (_ctx.SubWeapons != null) amount *= _ctx.SubWeapons.DamageTakenMultiplier(monster);
             monster.Hp -= amount;
             _ctx.Events.Publish(new MonsterDamagedEvent
             {
@@ -73,7 +83,7 @@ namespace Turn.Systems
             _ctx.Experience.SpawnOrb(monster.Position, monster.XpValue);
             if (monster.Rank > 0) _ctx.Experience.SpawnChest(monster.Position, monster.Rank);
             _ctx.Progression.AddKill();
-            if (source == DamageSource.Weapon || source == DamageSource.Burst)
+            if (source == DamageSource.Weapon || source == DamageSource.Burst || source == DamageSource.SubWeapon)
                 _ctx.Events.Publish(new WeaponKillConfirmedEvent
                 {
                     MonsterId = monster.Id, Weapon = _ctx.Loadout.Equipped, Source = source, Position = monster.Position,

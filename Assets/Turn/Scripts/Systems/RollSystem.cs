@@ -9,11 +9,16 @@ namespace Turn.Systems
     /// TryRoll（一次调用里按顺序原子完成）：
     ///   1) 进入亚空间：PlayerState.InSubspace = true，全程无敌（CombatSystem 只看 PlayerState.Invincible）；
     ///   2) 翻滚位移：沿移动方向（没有输入时沿朝向）冲出 RollConfig.Distance，位移本身按游戏时间推进（亚空间里是慢放的）；
-    ///   3) 爆发：发布 SubspaceEnteredEvent —— 全图印记 / 痕迹同步爆发的唯一时机（程序B 的武器订阅结算）；
-    ///   4) 发布 RollPerformedEvent（表现层：音效 / 传送门特效）。
-    /// 亚空间期间（SessionSystem 负责）：游戏时间 × SubspaceTimeScale，敌人 / 刷怪 / 武器 / 子弹 / 环境全部暂停。
+    ///   3) 副武器 BeforeBurst(翻滚前站位)：例如引力黑洞先把怪拉拢；
+    ///   4) 爆发：发布 SubspaceEnteredEvent —— 当前主武器的全图印记 / 痕迹同步爆发（武器订阅结算）；
+    ///   5) 副武器 AfterBurst：例如空间锚回溯 + 连线斩击；
+    ///   6) 方案 A 双主武器：Loadout.SwapMains() 切到另一把主武器；
+    ///   7) 发布 RollPerformedEvent（表现层：音效 / 传送门特效）。
+    /// 亚空间期间（SessionSystem 负责）：游戏时间 × SubspaceTimeScale，敌人 / 刷怪 / 武器 / 子弹 / 环境 / 副武器全部暂停。
     /// TickRealtime 按现实时间计满 SubspaceDuration 后自动退出：
-    ///   5) 回到常态空间 → 6) Weapons.Reload()（整个游戏唯一的装填入口）→ 7) 开启翻滚时那把武器的冷却 → 8) 发布 SubspaceExitedEvent（程序B 清空印记）。
+    ///   8) 回到常态空间 → 9) Weapons.Reload()（补满当前生效主武器，整个游戏唯一的装填入口）
+    ///   → 10) 开启当前生效主武器的翻滚冷却（方案 A = 切换后的那把）→ 11) 发布 SubspaceExitedEvent（清空印记）
+    ///   → 12) 副武器 OnSubspaceExited（例如浮游炮分裂 / 合体）。
     /// 任意弹药状态都能翻滚；冷却中 / 亚空间中 / 非 Playing 阶段 / 已死亡时 TryRoll 返回 false（冷却中会发布 RollRejectedEvent）。
     ///
     /// 写 PlayerState 的 IsRolling / RollTimer / RollDirection / RollSpeed / RollCooldownLeft / InvincibleLeft / InSubspace / SubspaceLeft。
@@ -23,8 +28,6 @@ namespace Turn.Systems
     {
         private readonly ITurnContext _ctx;
         private readonly RollConfig _config;
-        /// <summary>翻滚时装备的武器：退出亚空间时按它开冷却（亚空间里不能换武器，这里只是保险）。</summary>
-        private WeaponKind _subspaceWeapon;
 
         public int RollCount { get; private set; }
 
@@ -75,8 +78,8 @@ namespace Turn.Systems
             }
 
             WeaponKind weapon = _ctx.Loadout.Equipped;
-            _subspaceWeapon = weapon;
             float duration = SubspaceDuration;
+            Vec2 origin = s.Position;
 
             // 1) 进入亚空间：全程无敌
             s.InSubspace = true;
@@ -92,17 +95,27 @@ namespace Turn.Systems
             s.RollSpeed = MathF.Max(0f, _config.Distance) / dashTime;
             RollCount++;
 
-            // 3) 爆发：全图铺垫痕迹 / 印记同步触发（程序B 的武器订阅这个事件，在回调里结算伤害）
+            // 3) 副武器：爆发前（引力黑洞拉拢）
             int ammo = _ctx.Weapons.Ammo;
+            _ctx.SubWeapons.BeforeBurst(origin);
+
+            // 4) 爆发：当前主武器的全图铺垫痕迹 / 印记同步触发（武器订阅这个事件，在回调里结算伤害）
             _ctx.Events.Publish(new SubspaceEnteredEvent
             {
                 Position = s.Position,
+                RollOrigin = origin,
                 Weapon = weapon,
                 Duration = duration,
                 TimeScale = Clamp01(_config.SubspaceTimeScale),
             });
 
-            // 4) 翻滚表现（音效 / 传送门）。不切位面、不刷怪、不在这里装填。
+            // 5) 副武器：爆发后（空间锚回溯 + 斩击）
+            _ctx.SubWeapons.AfterBurst(origin);
+
+            // 6) 方案 A：切到另一把主武器（弹药在退出亚空间时补满）
+            if (_ctx.Loadout.Scheme == LoadoutScheme.DualMain) _ctx.Loadout.SwapMains();
+
+            // 7) 翻滚表现（音效 / 传送门）。不切位面、不刷怪、不在这里装填。
             PlaneId plane = _ctx.Plane.Active;
             _ctx.Events.Publish(new RollPerformedEvent
             {
@@ -136,6 +149,12 @@ namespace Turn.Systems
             _ctx.Events.Publish(new RollLandedEvent { Position = s.Position });
         }
 
+        public void ReduceCooldown(float seconds)
+        {
+            PlayerState s = _ctx.Player.State;
+            if (seconds > 0f) s.RollCooldownLeft = MathF.Max(0f, s.RollCooldownLeft - seconds);
+        }
+
         public void TickRealtime(float realDt)
         {
             PlayerState s = _ctx.Player.State;
@@ -147,19 +166,23 @@ namespace Turn.Systems
 
         private void ExitSubspace(PlayerState s)
         {
-            // 5) 回到常态空间
+            // 8) 回到常态空间
             s.InSubspace = false;
             s.SubspaceLeft = 0f;
 
-            // 6) 弹药补满。整个游戏里唯一的装填入口。（程序B 实现）
+            // 9) 弹药补满当前生效的主武器（方案 A = 切换后的那把）。整个游戏里唯一的装填入口。
             _ctx.Weapons.Reload();
 
-            // 7) 翻滚冷却：按翻滚时那把武器
-            float cooldown = CooldownFor(_subspaceWeapon);
+            // 10) 翻滚冷却：按当前生效的主武器
+            WeaponKind current = _ctx.Loadout.Equipped;
+            float cooldown = CooldownFor(current);
             s.RollCooldownLeft = cooldown;
 
-            // 8) 清空全部铺垫痕迹 / 印记（程序B 订阅）
-            _ctx.Events.Publish(new SubspaceExitedEvent { Position = s.Position, Weapon = _subspaceWeapon, Cooldown = cooldown });
+            // 11) 清空全部铺垫痕迹 / 印记
+            _ctx.Events.Publish(new SubspaceExitedEvent { Position = s.Position, Weapon = current, Cooldown = cooldown });
+
+            // 12) 副武器：回到常态后（浮游炮分裂 / 合体）
+            _ctx.SubWeapons.OnSubspaceExited();
         }
 
         private static float Clamp01(float v) { return v < 0f ? 0f : (v > 1f ? 1f : v); }

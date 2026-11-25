@@ -77,7 +77,7 @@ namespace Turn.Systems
             return i > 0 && i < _curses.Length ? _curses[i] : 0;
         }
 
-        private int MaxLevel(BuildId id)
+        public int MaxLevel(BuildId id)
         {
             int i = (int)id;
             return i >= 0 && i < _defs.Length ? Math.Max(0, _defs[i].MaxLevel) : 0;
@@ -103,14 +103,48 @@ namespace Turn.Systems
 
         // ---------------- 选项 ----------------
 
-        private void CollectCandidates(WeaponKind weapon)
+        /// <summary>
+        /// 候选池 = 这一局带着的全部装备的词条（11/25 双武器策划案）：
+        /// 方案 A 两把主武器的词条混在一起；方案 B 主武器 + 副武器的词条混在一起。只收未满级的。
+        /// </summary>
+        private void CollectCandidates()
         {
             _candidates.Clear();
             for (int i = 0; i < BuildIds.Count; i++)
             {
                 var id = (BuildId)i;
-                if (BuildIds.WeaponOf(id) == weapon && _levels[i] < MaxLevel(id)) _candidates.Add(id);
+                if (_levels[i] >= MaxLevel(id)) continue;
+                if (IsCarried(id)) _candidates.Add(id);
             }
+        }
+
+        public bool IsCarried(BuildId id)
+        {
+            ILoadoutSystem loadout = _ctx.Loadout;
+            return BuildIds.IsSub(id)
+                ? loadout.Sub != SubWeaponKind.None && BuildIds.SubOf(id) == loadout.Sub
+                : loadout.Carries(BuildIds.WeaponOf(id));
+        }
+
+        public void DebugSetLevel(BuildId id, int level)
+        {
+            int i = (int)id;
+            if (i < 0 || i >= _levels.Length) return;
+            int next = Math.Max(0, Math.Min(MaxLevel(id), level));
+            if (next == _levels[i]) return;
+            _levels[i] = next;
+            _ctx.Events.Publish(new UpgradeAppliedEvent { Build = id, Level = next, Curse = ChestCurse.None });
+        }
+
+        /// <summary>出战装备的显示名（「水枪 + 投矛」「掌 + 引力黑洞」）。</summary>
+        private string LoadoutName()
+        {
+            ILoadoutSystem loadout = _ctx.Loadout;
+            if (loadout.Scheme == LoadoutScheme.DualMain)
+                return WeaponKinds.DisplayName(loadout.Equipped) + " / " + WeaponKinds.DisplayName(loadout.Standby);
+            return loadout.Sub != SubWeaponKind.None
+                ? WeaponKinds.DisplayName(loadout.Equipped) + " / " + SubWeaponKinds.DisplayName(loadout.Sub)
+                : WeaponKinds.DisplayName(loadout.Equipped);
         }
 
         private BuildId TakeRandomCandidate()
@@ -125,8 +159,7 @@ namespace Turn.Systems
         {
             _options.Clear();
             OptionsFromChest = false;
-            WeaponKind weapon = _ctx.Loadout.Equipped;
-            CollectCandidates(weapon);
+            CollectCandidates();
             int take = Math.Min(Math.Max(1, _builds.OptionCount), _candidates.Count);
             for (int i = 0; i < take; i++) _options.Add(Describe(TakeRandomCandidate(), 1, "强化"));
         }
@@ -136,11 +169,11 @@ namespace Turn.Systems
             _options.Clear();
             OptionsFromChest = true;
             WeaponKind weapon = _ctx.Loadout.Equipped;
-            CollectCandidates(weapon);
+            CollectCandidates();
             int total = Math.Max(1, _builds.OptionCount);
             int normal = Math.Min(Math.Max(0, total - 1), _candidates.Count);
             for (int i = 0; i < normal; i++) _options.Add(Describe(TakeRandomCandidate(), Math.Max(1, _builds.ChestLevels), "宝箱"));
-            CollectCandidates(weapon);
+            CollectCandidates();
             if (_candidates.Count > 0) _options.Add(DescribeCurse((ChestCurse)(1 + _ctx.Random.Next(ChestCurses.Count - 1)), weapon));
         }
 
@@ -192,7 +225,7 @@ namespace Turn.Systems
         {
             for (int n = 0; n < levels; n++)
             {
-                CollectCandidates(weapon);
+                CollectCandidates();
                 if (_candidates.Count == 0) return;
                 BuildId id = _candidates[_ctx.Random.Next(_candidates.Count)];
                 _levels[(int)id]++;
@@ -206,12 +239,12 @@ namespace Turn.Systems
             return new UpgradeOption
             {
                 Build = id,
-                Weapon = BuildIds.WeaponOf(id),
+                Weapon = BuildIds.IsSub(id) ? _ctx.Loadout.Equipped : BuildIds.WeaponOf(id),
                 FromLevel = from,
                 ToLevel = to,
                 Name = BuildCatalog.Name(id),
                 Description = BuildCatalog.Describe(id, _defs[(int)id], to) + (to - from > 1 ? "（一次 +" + (to - from) + " 层）" : ""),
-                Tag = tag,
+                Tag = tag + "·" + BuildIds.OwnerName(id),
             };
         }
 
@@ -241,7 +274,7 @@ namespace Turn.Systems
                 Curse = curse,
                 BonusLevels = bonus,
                 Name = name,
-                Description = "随机获得 " + bonus + " 层" + WeaponKinds.DisplayName(weapon) + "强化；代价：" + cost + "（本局永久，可叠加）",
+                Description = "随机获得 " + bonus + " 层强化（" + LoadoutName() + "）；代价：" + cost + "（本局永久，可叠加）",
                 Tag = "代价",
                 FromLevel = CurseStacks(curse),
                 ToLevel = CurseStacks(curse) + 1,

@@ -42,11 +42,8 @@ namespace Turn.View
             if (map != null)
             {
                 c.Environment = map.Environment.ToConfig();
-                if (map.Level != null)
-                {
-                    c.Level = map.Level.ToConfig();
-                    map.Level.ApplyLoadout(c.Loadout);
-                }
+                // 出战配置（方案 / 武器）由 GameManager 按选择页的结果写入，不从 Inspector 读
+                if (map.Level != null) c.Level = map.Level.ToConfig();
                 Rect rect = bounds != null ? bounds.Rect : new Rect(-20f, -12f, 40f, 24f);
                 map.SyncTerrainShape(rect); // 水池与岩浆池一一对应（大小、形状完全一样）
                 for (int i = 0; i < PlaneIds.Count; i++)
@@ -81,13 +78,6 @@ namespace Turn.View
                 c.Builds = Clone(upgrade.Builds);
                 c.Upgrades = upgrade.Upgrades.ToConfig();
                 c.Experience = upgrade.Experience.ToConfig();
-
-                // 程序A 的临时开关：B10（地形增伤）暂不进池 —— 岩浆喷发即消失，普通帧 IsHazard 基本为 false。
-                // 等策划定下危险地形规则后删掉这三行即可（B 的默认层数是 2，B 的测试与 Inspector 都按 2 走）。
-                if (c.Upgrades.BuildMaxLevels != null && c.Upgrades.BuildMaxLevels.Length > 9)
-                {
-                    c.Upgrades.BuildMaxLevels[9] = 0;
-                }
             }
             else Debug.LogError("[Turn] GameManager 没有引用 UpgradeManager。");
 
