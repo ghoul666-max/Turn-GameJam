@@ -57,7 +57,8 @@ namespace Turn.View
                 portal.SetLifetime(Mathf.Max(0.3f, _ctx.Config.Roll.Duration + 0.15f));
                 portal.Play(ViewMath.ToWorld(evt.Position), 1f, player);
             }
-            if (hud != null) hud.FlashScreen(ViewMath.MapColor(evt.ToPlane));
+            // 新策划案：翻滚 = 进入灰白亚空间，闪一下白（HUD 画布不受亚空间灰白后处理影响）
+            if (hud != null) hud.FlashScreen(new Color(1f, 1f, 1f, 1f));
         }
 
         private void OnShockwave(ShockwaveTriggeredEvent evt)

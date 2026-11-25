@@ -6,8 +6,199 @@ namespace Turn.Core
     // ==================================================================
     // 战斗数据（程序B）：武器、怪物、刷怪、升级、经验。世界数据在 Models.World.cs（程序A）。
     // 配置数据：由 Unity 层的 TurnConfigReader 从 Inspector 参数转换而来，运行时只读。
-    // 默认值 = 题目给出的推荐手感参数。
+    // 新策划案（11/24）用的是下面的 ArsenalConfig / HordeConfig / BuildConfig；
+    // 旧方案的 WeaponConfig / WeaponFormConfig / MonsterConfig / SpawnConfig / PenaltyConfig / UpgradeConfig
+    // 只为兼容场景与 Prefab 上已序列化的 Inspector 字段而保留，新系统不再读取（MonsterConfig 的岩浆伤害除外）。
+    // 像素 → 世界单位：1 单位 = 40 像素。
     // ==================================================================
+
+    // ---------------- 新策划案：三把武器 ----------------
+
+    /// <summary>水枪。常态：水弹落地 / 命中敌人处留下水渍；爆发：全图水渍同时喷发喷泉。</summary>
+    [Serializable]
+    public sealed class WaterGunConfig
+    {
+        public int Ammo = 30;
+        /// <summary>攻击间隔（秒 / 发）。</summary>
+        public float FireInterval = 0.2f;
+        /// <summary>水弹飞行速度（单位/秒）。策划书没给，暂定 10（400 像素/秒）。</summary>
+        public float BulletSpeed = 10f;
+        public float Damage = 5f;
+        public float BulletRadius = 0.15f;
+        /// <summary>自动索敌 / 射程（单位）。策划书没给，暂定 8。</summary>
+        public float Range = 8f;
+        /// <summary>水渍半径（单位，策划 40 像素 = 1）。</summary>
+        public float PuddleRadius = 1f;
+        /// <summary>单滩水渍的喷泉伤害。</summary>
+        public float FountainDamage = 12f;
+        /// <summary>重叠加成：同一敌人被 n 滩喷泉覆盖时，每滩伤害 ×(1 + OverlapBonus × (n − 1))。默认 0 = 每滩独立判定、直接相加。</summary>
+        public float OverlapBonus = 0f;
+        /// <summary>全图水渍上限（防止极端情况下卡顿）。</summary>
+        public int MaxPuddles = 400;
+        /// <summary>散射词条：两枚子弹之间的夹角（度）。</summary>
+        public float SpreadDegrees = 12f;
+    }
+
+    /// <summary>投矛。常态：命中叠矛印记，击杀则穿透下一个并传递印记；爆发：全部长矛向玩家回收，路径穿刺。</summary>
+    [Serializable]
+    public sealed class SpearConfig
+    {
+        public int Ammo = 20;
+        public float FireInterval = 0.4f;
+        /// <summary>长矛飞行速度（单位/秒）。策划书没给，暂定 12。</summary>
+        public float Speed = 12f;
+        public float Damage = 8f;
+        public float Radius = 0.18f;
+        /// <summary>索敌 / 射程（单位）。暂定 9。</summary>
+        public float Range = 9f;
+        /// <summary>每穿透一次伤害衰减比例（策划 20%）。</summary>
+        public float PierceFalloff = 0.2f;
+        /// <summary>每根长矛的回收伤害。</summary>
+        public float RecallDamage = 15f;
+        /// <summary>回收路径判定半宽（单位）。暂定 0.5。</summary>
+        public float RecallWidth = 0.5f;
+        /// <summary>每多一层矛，这只敌人身上每根矛的回收伤害加成（默认 0，词条提升）。</summary>
+        public float StackBonus = 0f;
+        /// <summary>双矛词条：两根长矛之间的夹角（度）。</summary>
+        public float SpreadDegrees = 14f;
+    }
+
+    /// <summary>陌刀。常态：前方扇形剑气，命中的敌人各叠 1 层剑气印记；爆发：横贯屏幕的巨型斩击，按全场印记总层数增伤。</summary>
+    [Serializable]
+    public sealed class BladeConfig
+    {
+        public int Ammo = 25;
+        public float FireInterval = 0.5f;
+        public float Damage = 6f;
+        /// <summary>扇形总角度（度）。</summary>
+        public float Angle = 60f;
+        /// <summary>剑气射程（单位，策划 300 像素 = 7.5）。</summary>
+        public float Range = 7.5f;
+        /// <summary>剑气厚度：默认只命中最近一圈敌人（离最近目标不超过这个距离），穿透词条每层多推进一圈。</summary>
+        public float RingThickness = 0.9f;
+        /// <summary>一刀斩基础伤害。</summary>
+        public float SlashDamage = 25f;
+        /// <summary>每层印记增伤（策划 8%）。</summary>
+        public float MarkBonus = 0.08f;
+        /// <summary>横向斩击的半高（单位，以玩家为中心上下各这么多）。暂定 1.5。</summary>
+        public float SlashHalfHeight = 1.5f;
+    }
+
+    /// <summary>三把武器 + 共用参数。</summary>
+    [Serializable]
+    public sealed class ArsenalConfig
+    {
+        public WaterGunConfig WaterGun = new WaterGunConfig();
+        public SpearConfig Spear = new SpearConfig();
+        public BladeConfig Blade = new BladeConfig();
+        /// <summary>暴击伤害倍率（暴击词条共用）。</summary>
+        public float CritMultiplier = 2f;
+        /// <summary>「翻滚爆发时对周身一圈敌人造成百分比伤害」的半径（单位）。</summary>
+        public float BurstRingRadius = 3f;
+        /// <summary>「受到伤害时给附近敌人叠印记」的搜索半径（单位）。</summary>
+        public float HurtMarkRange = 8f;
+    }
+
+    // ---------------- 新策划案：五种怪物 + 波次 ----------------
+
+    /// <summary>一种怪物的基础数值（= 它首次出现那一波的数值）。</summary>
+    [Serializable]
+    public sealed class HordeKindConfig
+    {
+        public float MaxHp;
+        /// <summary>移动速度（单位/秒）。</summary>
+        public float Speed;
+        /// <summary>碰撞 / 弹幕 / 冲锋 / 激光伤害（按种类）。</summary>
+        public float Damage;
+        /// <summary>攻击间隔或接触伤害间隔（秒）。</summary>
+        public float AttackInterval;
+        /// <summary>蓄力时间（秒）。</summary>
+        public float Windup;
+        /// <summary>进入攻击的距离（冲锋范围 / 狙击射程，单位）。</summary>
+        public float Range;
+        public int Xp;
+        /// <summary>第几波开始出现。</summary>
+        public int DebutWave;
+        /// <summary>刷新权重。</summary>
+        public float Weight;
+    }
+
+    /// <summary>怪物与波次（新策划案）。Kinds 按 MonsterKind.Walker..Sniper 的顺序。</summary>
+    [Serializable]
+    public sealed class HordeConfig
+    {
+        public HordeKindConfig[] Kinds = Turn.Monsters.MonsterCatalog.CreateHordeDefaults();
+        /// <summary>每推进 1 波：血量 +10%、伤害 +5%（从该怪物首次出现的波次算起）。</summary>
+        public float HpPerWave = 0.10f;
+        public float DamagePerWave = 0.05f;
+
+        /// <summary>常规刷怪间隔（秒）。</summary>
+        public float SpawnInterval = 1.5f;
+        /// <summary>第 1 波每批刷几只。</summary>
+        public float BaseCount = 2f;
+        /// <summary>每推进 1 波，每批多刷几只（线性）。</summary>
+        public float CountPerWave = 0.5f;
+        public int MaxAlive = 160;
+        /// <summary>从地图边缘往里缩多少刷新（单位）。</summary>
+        public float EdgeInset = 0.6f;
+        /// <summary>刷新点离玩家的最小距离（太近就重新随机）。</summary>
+        public float MinPlayerDistance = 6f;
+        public float Radius = 0.4f;
+
+        // 弹幕孢
+        public int SporeBullets = 8;
+        public float SporeBulletSpeed = 3.75f;
+        public float SporeBulletRadius = 0.2f;
+        public float SporeBulletLifetime = 6f;
+        // 疾冲兽
+        public float ChargeSpeed = 7.5f;
+        public float ChargeMaxDistance = 9f;
+        // 毒腐体
+        public float PoolRadius = 1.5f;
+        public float PoolDuration = 5f;
+        public float PoolDamage = 2f;
+        public float PoolInterval = 0.5f;
+        // 狙击械
+        public float SniperMinRange = 6f;
+        public float SniperMaxRange = 10f;
+        public float LaserWidth = 0.3f;
+
+        // 精英 / Boss（策划书没给规则，暂定：第 2 波起每波开始时刷 1 只精英；每 10 波刷 1 只 Boss）
+        public int EliteFromWave = 2;
+        public float EliteHp = 5f, EliteDamage = 1.5f, EliteScale = 1.5f;
+        public int EliteXp = 5;
+        public int BossEveryWaves = 10;
+        public float BossHp = 25f, BossDamage = 2f, BossScale = 2.2f;
+        public int BossXp = 20;
+    }
+
+    // ---------------- 新策划案：词条与宝箱 ----------------
+
+    /// <summary>一条词条的数值：每层效果 Value（含义见 BuildCatalog 的说明），Value2 为附加参数（持续时间 / 半径等），MaxLevel 最大层数。</summary>
+    [Serializable]
+    public sealed class BuildDef
+    {
+        public int MaxLevel;
+        public float Value;
+        public float Value2;
+    }
+
+    [Serializable]
+    public sealed class BuildConfig
+    {
+        /// <summary>升级 / 宝箱的候选数。</summary>
+        public int OptionCount = 3;
+        /// <summary>按 (int)BuildId 下标。</summary>
+        public BuildDef[] Builds = Turn.Weapons.BuildCatalog.CreateDefaults();
+        /// <summary>宝箱的强化选项一次给几层。</summary>
+        public int ChestLevels = 1;
+        /// <summary>宝箱代价选项：选择后随机获得几层强化。</summary>
+        public int CurseBonusLevels = 3;
+        /// <summary>每层代价：最大生命 −15 / 怪物伤害 +15% / 怪物移速 +10%。</summary>
+        public float FrailMaxHp = 15f;
+        public float FuryDamage = 0.15f;
+        public float HasteSpeed = 0.10f;
+    }
 
     /// <summary>两种武器形态共用的弹匣与射击节奏（全局一份，升级直接作用于它）。</summary>
     public sealed class WeaponConfig
@@ -55,7 +246,39 @@ namespace Turn.Core
     public enum MonsterKind
     {
         StoneGolem, Anglerfish, NullPointer, Bug, Buglet, Alarm, BlackPot,
-        RockThrower, VineDemon, Boar, FutureSoldier, RepairRobot, DataWorm
+        RockThrower, VineDemon, Boar, FutureSoldier, RepairRobot, DataWorm,
+        /// <summary>新策划案：近战炮灰 · 游荡尸。</summary>
+        Walker,
+        /// <summary>新策划案：远程弹幕 · 弹幕孢。</summary>
+        Spore,
+        /// <summary>新策划案：冲锋 · 疾冲兽。</summary>
+        Charger,
+        /// <summary>新策划案：亡语 · 毒腐体。</summary>
+        Rotter,
+        /// <summary>新策划案：激光枪 · 狙击械。</summary>
+        Sniper,
+    }
+
+    public static class MonsterKinds
+    {
+        /// <summary>新策划案的五种怪物（HordeConfig.Kinds 的下标 = Kind − Walker）。</summary>
+        public const MonsterKind First = MonsterKind.Walker;
+        public const int HordeCount = 5;
+
+        public static int HordeIndex(MonsterKind kind) { return (int)kind - (int)First; }
+
+        public static string DisplayName(MonsterKind kind)
+        {
+            switch (kind)
+            {
+                case MonsterKind.Walker: return "游荡尸";
+                case MonsterKind.Spore: return "弹幕孢";
+                case MonsterKind.Charger: return "疾冲兽";
+                case MonsterKind.Rotter: return "毒腐体";
+                case MonsterKind.Sniper: return "狙击械";
+                default: return kind.ToString();
+            }
+        }
     }
 
     /// <summary>纯数据怪物原型；MonsterSystem 只读，Inspector/数值面板在开局写入配置。</summary>
@@ -181,6 +404,14 @@ namespace Turn.Core
 
     public sealed class ExperienceConfig
     {
+        /// <summary>新策划案：1 级升 2 级所需经验（策划 50）。</summary>
+        public int FirstLevelXp = 50;
+        /// <summary>新策划案：每级所需经验递增比例（策划 20%）。</summary>
+        public float XpGrowthRate = 0.2f;
+        /// <summary>新策划案：经验拾取范围（单位，策划 100 像素 = 2.5）。进入后经验球飞向玩家。</summary>
+        public float PickupRange = 2.5f;
+        /// <summary>宝箱：玩家靠近到这个距离自动打开（单位）。</summary>
+        public float ChestOpenRadius = 1f;
         /// <summary>1 级升 2 级所需经验。</summary>
         public int BaseXpToLevel = 4;
         /// <summary>每升一级所需经验每级增长 4。</summary>
@@ -205,6 +436,12 @@ namespace Turn.Core
         public PenaltyConfig Penalty = new PenaltyConfig();
         public UpgradeConfig Upgrades = new UpgradeConfig();
         public ExperienceConfig Experience = new ExperienceConfig();
+        /// <summary>新策划案：三把武器。</summary>
+        public ArsenalConfig Arsenal = new ArsenalConfig();
+        /// <summary>新策划案：五种怪物 + 波次 + 精英 / Boss。</summary>
+        public HordeConfig Horde = new HordeConfig();
+        /// <summary>新策划案：词条表 + 宝箱。</summary>
+        public BuildConfig Builds = new BuildConfig();
     }
 
     // ==================================================================
@@ -262,6 +499,19 @@ namespace Turn.Core
         /// <summary>MonsterSystem 写：脚下地形。</summary>
         public TerrainType Terrain;
 
+        /// <summary>WeaponSystem 写：身上的矛印记层数（= 插着几根矛）。爆发后 / 回到常态空间时清零。</summary>
+        public int SpearMarks;
+        /// <summary>WeaponSystem 写：剑气印记层数。回到常态空间时清零。</summary>
+        public int BladeMarks;
+        /// <summary>MonsterSystem 写（生成时）：0 普通 / 1 精英 / 2 Boss。精英与 Boss 死亡掉落宝箱。</summary>
+        public int Rank;
+        /// <summary>MonsterSystem 写（生成时）：碰撞半径（精英 / Boss 更大）。</summary>
+        public float Radius = 0.4f;
+        /// <summary>MonsterSystem 写（生成时）：伤害倍率（波次成长 × 精英 / Boss）。</summary>
+        public float DamageScale = 1f;
+        /// <summary>MonsterSystem 写：疾冲兽本次冲锋已经走过的距离。</summary>
+        public float ChargeTravelled;
+
         /// <summary>MonsterSystem 写：灼烧（持续 Buff）剩余时间。</summary>
         public float BurnLeft;
         /// <summary>MonsterSystem 写：灼烧每秒伤害。</summary>
@@ -301,6 +551,41 @@ namespace Turn.Core
         public float DistanceLeft;
         public bool Alive;
         public readonly List<int> HitIds = new List<int>();
+        /// <summary>ProjectileSystem 写（生成时）：玩家子弹属于哪把武器（敌方弹幕忽略）。</summary>
+        public WeaponKind Weapon;
+        /// <summary>WeaponSystem 写：长矛携带的矛印记层数（击杀穿透时累加被击杀者身上的矛）。</summary>
+        public int CarriedMarks;
+        /// <summary>WeaponSystem 写：水弹是否已经留下过水渍（穿透词条：只在首个命中处留一滩）。</summary>
+        public bool MarkLeft;
+    }
+
+    /// <summary>水枪的水渍（铺垫痕迹）。永久存在，直到翻滚爆发后回到常态空间时清空。WeaponSystem 写。</summary>
+    public struct WaterMark
+    {
+        public Vec2 Position;
+        public float Radius;
+    }
+
+    /// <summary>毒腐体死亡留下的毒潭。MonsterSystem 写全部字段。</summary>
+    public sealed class PoisonPool
+    {
+        public int Id;
+        public Vec2 Position;
+        public float Radius;
+        public float TimeLeft;
+        public float Duration;
+        /// <summary>每次结算对玩家的伤害（已含波次成长）。</summary>
+        public float Damage;
+    }
+
+    /// <summary>精英 / Boss 掉落的宝箱。ExperienceSystem 写全部字段。玩家靠近自动打开。</summary>
+    public sealed class ChestEntity
+    {
+        public int Id;
+        public Vec2 Position;
+        /// <summary>掉落者的等级（1 精英 / 2 Boss），表现层据此区分外观。</summary>
+        public int Rank;
+        public bool Alive;
     }
 
     /// <summary>经验球。ExperienceSystem 写全部字段。</summary>
@@ -313,15 +598,19 @@ namespace Turn.Core
         public bool Alive;
     }
 
-    /// <summary>升级面板上的一个候选项。ProgressionSystem 生成。</summary>
+    /// <summary>升级 / 宝箱面板上的一个候选项。ProgressionSystem 生成。</summary>
     public sealed class UpgradeOption
     {
-        public UpgradeId Id;
         public BuildId Build;
-        public string Rarity = "普通";
+        public WeaponKind Weapon;
         public int FromLevel;
         public int ToLevel;
         public string Name = "";
         public string Description = "";
+        /// <summary>标签：「强化」「宝箱」「代价」。</summary>
+        public string Tag = "强化";
+        /// <summary>宝箱代价选项：Curse ≠ None 时，选择后该代价 +1 层，并随机获得 BonusLevels 层当前武器的强化（此时 Build 无意义）。</summary>
+        public ChestCurse Curse;
+        public int BonusLevels;
     }
 }

@@ -7,7 +7,7 @@ using Turn.Core;
 namespace Turn.View
 {
     /// <summary>
-    /// 升级三选一面板（节点 Canvas/UpgradePanel）。LevelUp 阶段显示，点击按钮或按 1/2/3 选择。
+    /// 升级 / 宝箱三选一面板（节点 Canvas/UpgradePanel）。LevelUp / Chest 阶段显示（游戏全局暂停），点击按钮或按 1/2/3 选择。
     /// 单向：只把选择转成回调（GameManager 调 ISessionSystem.TryChooseUpgrade），不直接改升级数据。
     /// </summary>
     public sealed class UpgradeUI : MonoBehaviour
@@ -76,9 +76,9 @@ namespace Turn.View
 
         private void OnPhaseChanged(PhaseChangedEvent evt)
         {
-            bool levelUp = evt.Phase == RunPhase.LevelUp;
-            Show(levelUp);
-            if (levelUp) Refresh();
+            bool open = evt.Phase == RunPhase.LevelUp || evt.Phase == RunPhase.Chest;
+            Show(open);
+            if (open) Refresh();
         }
 
         private void Show(bool visible)
@@ -89,7 +89,11 @@ namespace Turn.View
         private void Refresh()
         {
             IReadOnlyList<UpgradeOption> list = _ctx.Progression.Options;
-            if (header != null) header.text = "升级！ Lv " + _ctx.Progression.Level + "   选择一项（1 / 2 / 3）";
+            string weapon = WeaponKinds.DisplayName(_ctx.Loadout.Equipped);
+            if (header != null)
+                header.text = _ctx.Progression.OptionsFromChest
+                    ? "宝箱！ " + weapon + "   选择一项（1 / 2 / 3）—— 有的选项带代价"
+                    : "升级！ Lv " + _ctx.Progression.Level + " · " + weapon + "   选择一项（1 / 2 / 3）";
             for (int i = 0; i < options.Length; i++)
             {
                 OptionView view = options[i];
@@ -98,7 +102,8 @@ namespace Turn.View
                 view.button.gameObject.SetActive(has);
                 if (!has) continue;
                 UpgradeOption o = list[i];
-                if (view.title != null) view.title.text = (i + 1) + ". [" + o.Build + " · " + o.Rarity + "] " + o.Name + "   Lv " + o.FromLevel + " → " + o.ToLevel;
+                string levels = o.Curse != ChestCurse.None ? "   代价 " + o.FromLevel + " → " + o.ToLevel + " 层" : "   Lv " + o.FromLevel + " → " + o.ToLevel;
+                if (view.title != null) view.title.text = (i + 1) + ". [" + o.Tag + "] " + o.Name + levels;
                 if (view.description != null) view.description.text = o.Description;
             }
         }

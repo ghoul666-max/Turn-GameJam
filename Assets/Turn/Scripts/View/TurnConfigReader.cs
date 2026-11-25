@@ -26,6 +26,7 @@ namespace Turn.View
 
             if (weapon != null)
             {
+                c.Arsenal = Clone(weapon.Arsenal);
                 c.Weapon = weapon.Settings.ToConfig();
                 for (int i = 0; i < PlaneIds.Count; i++)
                 {
@@ -41,7 +42,11 @@ namespace Turn.View
             if (map != null)
             {
                 c.Environment = map.Environment.ToConfig();
-                if (map.Level != null) c.Level = map.Level.ToConfig();
+                if (map.Level != null)
+                {
+                    c.Level = map.Level.ToConfig();
+                    map.Level.ApplyLoadout(c.Loadout);
+                }
                 Rect rect = bounds != null ? bounds.Rect : new Rect(-20f, -12f, 40f, 24f);
                 map.SyncTerrainShape(rect); // 水池与岩浆池一一对应（大小、形状完全一样）
                 for (int i = 0; i < PlaneIds.Count; i++)
@@ -61,6 +66,7 @@ namespace Turn.View
 
             if (spawn != null)
             {
+                c.Horde = Clone(spawn.Horde);
                 c.Spawn = spawn.Spawn.ToConfig();
                 c.Penalty = spawn.Penalty.ToConfig();
                 if (spawn.MonsterPrefab != null) c.Monster = spawn.MonsterPrefab.Settings.ToConfig();
@@ -72,11 +78,12 @@ namespace Turn.View
 
             if (upgrade != null)
             {
+                c.Builds = Clone(upgrade.Builds);
                 c.Upgrades = upgrade.Upgrades.ToConfig();
                 c.Experience = upgrade.Experience.ToConfig();
 
-                // 程序A 的临时开关：B10（地形增伤）暂不进池 —— 岩浆喷发即消失，普通帧 IsHazard 基本为 false，
-                // 等策划定下危险地形规则后删掉这三行即可（B 的默认层数是 2，测试与 Inspector 都按 2 走）。
+                // 程序A 的临时开关：B10（地形增伤）暂不进池 —— 岩浆喷发即消失，普通帧 IsHazard 基本为 false。
+                // 等策划定下危险地形规则后删掉这三行即可（B 的默认层数是 2，B 的测试与 Inspector 都按 2 走）。
                 if (c.Upgrades.BuildMaxLevels != null && c.Upgrades.BuildMaxLevels.Length > 9)
                 {
                     c.Upgrades.BuildMaxLevels[9] = 0;
@@ -85,6 +92,12 @@ namespace Turn.View
             else Debug.LogError("[Turn] GameManager 没有引用 UpgradeManager。");
 
             return c;
+        }
+
+        /// <summary>深拷贝 Inspector 上的配置：模拟层拿到的是独立的一份，运行时不会改到组件上的数值。</summary>
+        public static T Clone<T>(T source) where T : class, new()
+        {
+            return source == null ? new T() : JsonUtility.FromJson<T>(JsonUtility.ToJson(source));
         }
     }
 }

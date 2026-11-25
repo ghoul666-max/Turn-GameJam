@@ -3,42 +3,44 @@ using Turn.Core;
 
 namespace Turn.Monsters
 {
-    /// <summary>从当前位面的类型池抽样，P2 只在约定时间后加入；默认普通类型等权。</summary>
+    /// <summary>新策划案：从已解锁（DebutWave ≤ 当前波次）的五种怪物里按权重随机。</summary>
     public static class MonsterSpawnPool
     {
-        public static MonsterKind Pick(PlaneId plane, SpawnConfig config, Random random, float elapsed)
+        public static MonsterKind Pick(HordeConfig horde, int wave, Random random)
         {
-            MonsterKind[] kinds;
-            switch (plane)
-            {
-                case PlaneId.Volcano: return MonsterKind.StoneGolem;
-                case PlaneId.Ocean: return MonsterKind.Anglerfish;
-                case PlaneId.Office: kinds = new[] { MonsterKind.NullPointer, MonsterKind.Bug }; break;
-                case PlaneId.Dream: kinds = new[] { MonsterKind.Alarm, MonsterKind.BlackPot }; break;
-                case PlaneId.Primal: kinds = elapsed >= config.P2StartSeconds
-                    ? new[] { MonsterKind.RockThrower, MonsterKind.VineDemon, MonsterKind.Boar }
-                    : new[] { MonsterKind.RockThrower, MonsterKind.VineDemon }; break;
-                default: kinds = elapsed >= config.P2StartSeconds
-                    ? new[] { MonsterKind.FutureSoldier, MonsterKind.RepairRobot, MonsterKind.DataWorm }
-                    : new[] { MonsterKind.FutureSoldier, MonsterKind.RepairRobot }; break;
-            }
+            HordeKindConfig[] kinds = horde.Kinds;
             float sum = 0f;
-            for (int i = 0; i < kinds.Length; i++) sum += Weight(config, kinds[i]);
-            if (sum <= 0f) return kinds[0]; // 当前 Spawn 接口必须返回类型；全部禁用时使用保底原型。
-            float roll = (float)random.NextDouble() * sum;
-            for (int i = 0; i < kinds.Length; i++)
+            for (int i = 0; i < MonsterKinds.HordeCount; i++)
             {
-                roll -= Weight(config, kinds[i]);
-                if (roll < 0f) return kinds[i];
+                HordeKindConfig k = i < kinds.Length ? kinds[i] : null;
+                if (k != null && k.DebutWave <= wave) sum += MathF.Max(0f, k.Weight);
             }
-            return kinds[kinds.Length - 1];
+            if (sum <= 0f) return MonsterKinds.First; // 全部禁用时保底刷游荡尸
+            float roll = (float)random.NextDouble() * sum;
+            for (int i = 0; i < MonsterKinds.HordeCount; i++)
+            {
+                HordeKindConfig k = i < kinds.Length ? kinds[i] : null;
+                if (k == null || k.DebutWave > wave) continue;
+                roll -= MathF.Max(0f, k.Weight);
+                if (roll < 0f) return (MonsterKind)((int)MonsterKinds.First + i);
+            }
+            return MonsterKinds.First;
         }
 
-        private static float Weight(SpawnConfig config, MonsterKind kind)
+        /// <summary>精英 / Boss 的种类：已解锁的里面等概率随机。</summary>
+        public static MonsterKind PickUnlocked(HordeConfig horde, int wave, Random random)
         {
-            int i = (int)kind;
-            float[] weights = config.KindWeights;
-            return weights != null && i < weights.Length ? (weights[i] < 0f ? 0f : weights[i] == 0f ? 1f : weights[i]) : 1f;
+            int count = 0;
+            for (int i = 0; i < MonsterKinds.HordeCount; i++)
+                if (i < horde.Kinds.Length && horde.Kinds[i] != null && horde.Kinds[i].DebutWave <= wave) count++;
+            if (count <= 0) return MonsterKinds.First;
+            int pick = random.Next(count);
+            for (int i = 0; i < MonsterKinds.HordeCount; i++)
+            {
+                if (i >= horde.Kinds.Length || horde.Kinds[i] == null || horde.Kinds[i].DebutWave > wave) continue;
+                if (pick-- == 0) return (MonsterKind)((int)MonsterKinds.First + i);
+            }
+            return MonsterKinds.First;
         }
     }
 }

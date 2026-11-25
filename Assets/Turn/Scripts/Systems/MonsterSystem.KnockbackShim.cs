@@ -8,14 +8,11 @@ namespace Turn.Systems
     /// <see cref="IMonsterSystem.Knockback"/> 的实现，避免把 A 的代码写进 B 的 MonsterSystem.cs。
     ///
     /// 程序B 在自己文件里实现同名方法后，**直接删掉本文件（含 .meta）** 即可，不需要改别处。
-    /// 因为 Knockback 属于 IMonsterSystem，两边都实现会编译冲突（重复定义），只能留一份。
+    /// Knockback 属于 IMonsterSystem，两边都实现会编译冲突（重复定义），只能留一份。
     /// </summary>
     public sealed partial class MonsterSystem
     {
-        /// <summary>
-        /// 沿 direction 推开 distance。分小步经过遮挡物修正（避免穿过薄墙），最后 Clamp 进边界。
-        /// 怪物位置仍然只由 MonsterSystem 写；A 侧只负责调用。
-        /// </summary>
+        /// <summary>沿 direction 推开 distance；分小步经过遮挡物修正，最后 Clamp 进边界。</summary>
         public void Knockback(MonsterEntity monster, Vec2 direction, float distance)
         {
             if (monster == null || !monster.Alive || distance <= 0f || direction.SqrMagnitude < 0.0001f) return;
@@ -27,11 +24,10 @@ namespace Turn.Systems
             Vec2 p = monster.Position;
             for (int i = 0; i < steps; i++)
             {
-                p = _ctx.Obstacles.ResolveMove(p, p + dir * step, _config.Radius, ObstacleMask.Units);
+                p = _ctx.Obstacles.ResolveMove(p, p + dir * step, monster.Radius, ObstacleMask.Units);
             }
 
-            monster.Position = _ctx.Bounds.Clamp(p, _config.Radius);
-            monster.Terrain = _ctx.Terrain.Sample(monster.Position);
+            monster.Position = _ctx.Bounds.Clamp(p, monster.Radius);
         }
     }
 }

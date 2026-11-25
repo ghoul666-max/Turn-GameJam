@@ -87,8 +87,9 @@ namespace Turn.Core
     /// <summary>
     /// 一局（= 一关 = 一组位面）的阶段。只有 SessionSystem 能改。只能在末尾追加。
     /// LevelCleared：本关存活够时间，等表现层翻页后进入下一关；Victory：最后一关也过了。
+    /// Chest：打开了宝箱，三选一弹窗（和 LevelUp 一样全局暂停）。
     /// </summary>
-    public enum RunPhase { Playing, LevelUp, Defeat, LevelCleared, Victory }
+    public enum RunPhase { Playing, LevelUp, Defeat, LevelCleared, Victory, Chest }
 
     /// <summary>五种升级词条。</summary>
     public enum UpgradeId { Magazine = 0, Burn = 1, RollCooldown = 2, RollInvincible = 3, Shockwave = 4 }
@@ -99,7 +100,8 @@ namespace Turn.Core
     }
 
     /// <summary>伤害来源：用来区分表现，以及在测试时确认无敌帧挡住了哪一种伤害。</summary>
-    public enum DamageSource { Weapon, Burn, Lava, Monster, Shark, Shockwave, Drowsy, Phone }
+    /// Weapon = 常态空间的武器攻击（铺垫）；Burst = 翻滚爆发；Poison = 毒腐体的毒潭；Laser = 狙击械激光。
+    public enum DamageSource { Weapon, Burn, Lava, Monster, Shark, Shockwave, Drowsy, Phone, Burst, Poison, Laser }
 
     /// <summary>玩家动画状态（表现层据此驱动 Animator 的 State 参数）。</summary>
     public enum PlayerAnimState { Idle = 0, Move = 1, Roll = 2, Hurt = 3, Death = 4 }
@@ -111,5 +113,29 @@ namespace Turn.Core
         AroundPlayer,
         /// <summary>整个边界内随机，但离玩家不小于最小距离。</summary>
         AnywhereInBounds,
+    }
+
+    /// <summary>
+    /// 武器种类（新策划案 · 三把武器）。同一时刻只装备一把；每把武器独立的弹药上限、攻速、翻滚冷却。
+    /// 数值会被 Unity 序列化，只能在末尾追加。
+    /// </summary>
+    public enum WeaponKind { WaterGun = 0, Spear = 1, Blade = 2 }
+
+    public static class WeaponKinds
+    {
+        public const int Count = 3;
+
+        public static bool IsValid(WeaponKind kind) { return (int)kind >= 0 && (int)kind < Count; }
+
+        public static string DisplayName(WeaponKind kind)
+        {
+            switch (kind)
+            {
+                case WeaponKind.WaterGun: return "水枪";
+                case WeaponKind.Spear: return "投矛";
+                case WeaponKind.Blade: return "陌刀";
+                default: return kind.ToString();
+            }
+        }
     }
 }

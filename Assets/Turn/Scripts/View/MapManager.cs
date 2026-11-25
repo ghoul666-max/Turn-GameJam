@@ -9,8 +9,10 @@ namespace Turn.View
     [Serializable]
     public sealed class EnvironmentSettings
     {
-        [Tooltip("开局激活的位面（目前只有火山 / 海洋搭好了场景）")]
+        [Tooltip("开局激活的位面（目前只有火山 / 海洋搭好了场景）。新策划案是单地图：翻滚不再切位面，只用这一张")]
         public PlaneId startMap = PlaneId.Volcano;
+        [Tooltip("旧位面机制总开关：岩浆喷发、浅水回血、工位困意、梦境减速 / 来电、海洋鲨鱼。新策划案默认关闭")]
+        public bool planeMechanicsEnabled;
         [Tooltip("地形网格尺寸：每格边长（世界单位）。两张地图共用。")]
         [Min(0.25f)] public float terrainCellSize = 1f;
         [Tooltip("岩浆 / 浅水 / 灼烧的结算间隔（秒）。按间隔结算，与帧率无关。")]
@@ -28,6 +30,7 @@ namespace Turn.View
             var c = new EnvironmentConfig
             {
                 StartPlane = startMap,
+                MechanicsEnabled = planeMechanicsEnabled,
                 DotTickInterval = dotTickInterval,
                 PlayerLavaDps = playerLavaDps,
                 ShallowRegenPerSecond = shallowRegenPerSecond,
@@ -37,18 +40,49 @@ namespace Turn.View
         }
     }
 
-    /// <summary>关卡参数（Inspector + F1 数值面板）。一关 = 一组位面，存活够时间翻页进下一关，最后一组通过 = 胜利。</summary>
+    /// <summary>
+    /// 关卡 / 波次 / 武器解锁参数（Inspector + F1 数值面板）。
+    /// 新策划案：无尽生存，波次无限推进，波次解锁新武器。旧流程（一关 = 一组位面，存活够时间翻页）在关掉「无尽」后生效。
+    /// </summary>
     [Serializable]
     public sealed class LevelSettings
     {
-        [Tooltip("数据版本。旧存档里没有这一组时读出来是 0，此时忽略、使用 Inspector 数值。")]
-        [HideInInspector] public int version = 1;
-        [Tooltip("每关（每组位面）需要存活的秒数。0 = 不会过关（无尽测试）。")]
+        [Tooltip("数据版本。旧存档里没有这一组时读出来是 0，此时忽略、使用 Inspector 数值；是 1（亚空间之前）时新字段换成默认值。")]
+        [HideInInspector] public int version = 2;
+        [Tooltip("无尽生存：永不过关（新策划案）")]
+        public bool endless = true;
+        [Tooltip("每一波的时长（秒）。策划书没给，暂定 30")]
+        [Min(0f)] public float waveSeconds = 30f;
+        [Tooltip("投矛在第几波解锁（策划书没给，暂定 4）")]
+        [Min(1)] public int spearUnlockWave = 4;
+        [Tooltip("陌刀在第几波解锁（策划书没给，暂定 8）")]
+        [Min(1)] public int bladeUnlockWave = 8;
+        [Tooltip("旧流程：每关（每组位面）需要存活的秒数。只在关掉「无尽」时生效。0 = 不会过关。")]
         [Min(0f)] public float surviveSeconds = 300f;
 
         public LevelConfig ToConfig()
         {
-            return new LevelConfig { SurviveSeconds = surviveSeconds };
+            return new LevelConfig { Endless = endless, WaveSeconds = waveSeconds, SurviveSeconds = surviveSeconds };
+        }
+
+        /// <summary>开局武器固定为水枪（策划）；投矛 / 陌刀按波次解锁。</summary>
+        public void ApplyLoadout(LoadoutConfig c)
+        {
+            if (c == null) return;
+            c.StartWeapon = WeaponKind.WaterGun;
+            c.UnlockWaves = new[] { 1, Mathf.Max(1, spearUnlockWave), Mathf.Max(1, bladeUnlockWave) };
+        }
+
+        /// <summary>version 1 的旧存档（亚空间之前）：只保留 surviveSeconds，新字段换成默认值。</summary>
+        public void Upgrade()
+        {
+            if (version >= 2) return;
+            var fresh = new LevelSettings { surviveSeconds = surviveSeconds };
+            endless = fresh.endless;
+            waveSeconds = fresh.waveSeconds;
+            spearUnlockWave = fresh.spearUnlockWave;
+            bladeUnlockWave = fresh.bladeUnlockWave;
+            version = 2;
         }
     }
 

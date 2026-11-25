@@ -38,22 +38,32 @@ namespace Turn.Core
         IProjectileSystem Projectiles { get; }
         IExperienceSystem Experience { get; }
         IProgressionSystem Progression { get; }
+        /// <summary>当前装备的武器 + 按波次解锁（新策划案：同一时刻只用一把）。</summary>
+        ILoadoutSystem Loadout { get; }
     }
 
-    /// <summary>一局的流程：阶段、计时、每个模拟步里各系统的更新顺序、失败判定。</summary>
+    /// <summary>
+    /// 一局的流程：阶段、计时、波次、每个模拟步里各系统的更新顺序、失败判定。
+    /// 亚空间（翻滚后）期间：游戏时间 × RollConfig.SubspaceTimeScale；刷怪、怪物、鲨鱼、武器、子弹、环境全部暂停（敌人停止移动 / 攻击），
+    /// 只推进玩家、经验球与翻滚计时；升级弹窗推迟到回到常态空间后再弹。
+    /// </summary>
     public interface ISessionSystem
     {
         RunPhase Phase { get; }
-        /// <summary>已存活秒数（只在 Playing 阶段增长）。</summary>
+        /// <summary>已存活的游戏秒数（只在 Playing 阶段增长；亚空间里按慢放后的时间增长）。</summary>
         float Time { get; }
-        /// <summary>本关还要存活多少秒才过关（关卡时长 ≤ 0 时恒为 0）。</summary>
+        /// <summary>当前波次（从 1 开始；每 LevelConfig.WaveSeconds 秒 +1，无上限）。程序B 的刷怪按它做强度成长与怪物解锁。</summary>
+        int Wave { get; }
+        /// <summary>距离下一波还有多少游戏秒（WaveSeconds ≤ 0 时为 0）。</summary>
+        float WaveTimeLeft { get; }
+        /// <summary>本关还要存活多少秒才过关（无尽模式或关卡时长 ≤ 0 时恒为 0）。</summary>
         float LevelTimeLeft { get; }
         /// <summary>失败或胜利：本局结束，等待重开。（LevelCleared 不算结束：表现层翻页后开下一关）</summary>
         bool IsOver { get; }
         void Start();
         /// <summary>推进一个固定步长。非 Playing 阶段什么都不做。</summary>
         void Tick(float dt);
-        /// <summary>LevelUp 阶段选择第 index 个升级项。</summary>
+        /// <summary>LevelUp / Chest 阶段选择第 index 个选项。</summary>
         bool TryChooseUpgrade(int index);
         /// <summary>调试：立刻判定本关通过（走和存活满时间完全相同的流程）。只在 Playing / LevelUp 阶段有效。</summary>
         void DebugClearLevel();
@@ -140,64 +150,93 @@ namespace Turn.Core
     }
 
     /// <summary>
-    /// 翻滚：唯一的核心操作。一次成功的 TryRoll 在同一个调用里按策划书时序原子地完成
-    /// 无敌 → 位移 → 切位面 → 怪物偏移换皮 → 弹幕保留 → 惩罚刷怪 → 装填 → 位面进入结算 → CD；
-    /// 冷却中调用什么都不做。详细顺序见 RollSystem.TryRoll。
+    /// 翻滚 = Turn：唯一的核心操作（新策划案 11/24）。
+    /// 进入：一次成功的 TryRoll 在同一个调用里 → 进入亚空间（全程无敌）→ 翻滚位移 → 发布 SubspaceEnteredEvent
+    ///      （全图印记 / 痕迹同步爆发的唯一时机，由程序B 的武器订阅结算）→ 发布 RollPerformedEvent。
+    /// 持续：亚空间按现实时间持续 RollConfig.SubspaceDuration 秒（TickRealtime 计时，不受慢放影响）。
+    /// 退出：自动回到常态空间 → Weapons.Reload()（唯一装填入口）→ 发布 SubspaceExitedEvent（程序B 清空全部印记）→ 开启当前武器的翻滚冷却。
+    /// 任意弹药状态都能翻滚；冷却中 / 亚空间中调用什么都不做。
     /// </summary>
     public interface IRollSystem
     {
         bool CanRoll { get; }
-        /// <summary>B18 双程翻滚：当前可以免费再翻一次（不刷怪、不装填）。HUD 可用它提示。</summary>
-        bool FreeRollAvailable { get; }
+        /// <summary>是否处在亚空间（= PlayerState.InSubspace）。</summary>
+        bool InSubspace { get; }
+        /// <summary>亚空间剩余现实秒数（不在亚空间时为 0）。</summary>
+        float SubspaceLeft { get; }
+        /// <summary>当前装备武器的翻滚冷却（秒）。</summary>
         float EffectiveCooldown { get; }
+        /// <summary>某把武器的翻滚冷却（秒）。</summary>
+        float CooldownFor(WeaponKind weapon);
+        /// <summary>一次翻滚的无敌时长 = 亚空间时长（现实秒）。</summary>
         float EffectiveInvincibleTime { get; }
         int RollCount { get; }
         bool TryRoll();
+        /// <summary>游戏时间（亚空间里已经乘过慢放倍率）：冷却、翻滚位移、调试无敌。由 SessionSystem 每步调用。</summary>
         void Tick(float dt);
+        /// <summary>现实时间：亚空间计时，到点自动退出。由 SessionSystem 每步调用。</summary>
+        void TickRealtime(float realDt);
     }
 
-    /// <summary>数值结算：玩家与怪物的生命只有这里能改。玩家无敌时拒绝一切伤害来源。</summary>
+    /// <summary>
+    /// 武器装备与解锁（程序A，新策划案）。开局装备 LoadoutConfig.StartWeapon；
+    /// 达到 LoadoutConfig.UnlockWaves[武器] 波时解锁并发布 WeaponUnlockedEvent。同一时刻只装备一把。
+    /// 程序B 的 WeaponSystem 每步读 Equipped 决定当前武器；换武器的入口（升级 / 宝箱选项）由程序B 调 Equip。
+    /// </summary>
+    public interface ILoadoutSystem
+    {
+        WeaponKind Equipped { get; }
+        bool IsUnlocked(WeaponKind weapon);
+        int UnlockedCount { get; }
+        /// <summary>换成一把已解锁的武器并发布 WeaponEquippedEvent。未解锁、已经装备、或正处在亚空间时返回 false。</summary>
+        bool Equip(WeaponKind weapon);
+    }
+
+    /// <summary>
+    /// 数值结算：玩家与怪物的生命只有这里能改。玩家无敌时拒绝一切伤害来源。
+    /// 怪物伤害：Weapon / Burst 来源会经过武器侧的吸血；击杀发布 WeaponKillConfirmedEvent（带武器与来源）。
+    /// </summary>
     public interface ICombatSystem
     {
         /// <summary>返回是否真的扣了血（无敌 / 已死亡时返回 false）。</summary>
         bool DamagePlayer(float amount, DamageSource source);
         void HealPlayer(float amount);
-        void DamageMonster(MonsterEntity monster, float amount, DamageSource source);
+        /// <summary>对怪物造成伤害。critical 只影响表现（伤害数字 / 闪光）。</summary>
+        void DamageMonster(MonsterEntity monster, float amount, DamageSource source, bool critical = false);
     }
 
-    /// <summary>普通怪物：生成、追踪、互相挤开、边界、接触伤害、灼烧、空间查询。（岩浆伤害在 IEnvironmentSystem 里一次性结算）</summary>
+    /// <summary>
+    /// 怪物（新策划案：游荡尸 / 弹幕孢 / 疾冲兽 / 毒腐体 / 狙击械）：生成、移动、互相挤开、遮挡与边界、
+    /// 接触伤害（单只怪每 AttackInterval 秒最多一次）、弹幕 / 冲锋 / 激光、毒潭、减速 / 眩晕、空间查询。
+    /// 亚空间里 SessionSystem 不调用 Tick：敌人停止移动与攻击。
+    /// </summary>
     public interface IMonsterSystem
     {
         IReadOnlyList<MonsterEntity> Active { get; }
         int AliveCount { get; }
+        /// <summary>毒腐体留下的毒潭。</summary>
+        IReadOnlyList<PoisonPool> Pools { get; }
+        /// <summary>按当前波次的刷新池随机一种已解锁的怪物生成（普通等级）。</summary>
         MonsterEntity Spawn(Vec2 position, bool penalty);
-        /// <summary>标记死亡。只应由 CombatSystem 调用；实体在下一次 Tick 开头移出列表。</summary>
+        /// <summary>生成指定种类与等级（0 普通 / 1 精英 / 2 Boss）的怪物，数值按当前波次成长。</summary>
+        MonsterEntity SpawnKind(Vec2 position, MonsterKind kind, int rank);
+        /// <summary>标记死亡。只应由 CombatSystem 调用；实体在下一次 Tick 开头移出列表。毒腐体在这里留下毒潭。</summary>
         void Despawn(MonsterEntity monster);
         /// <summary>施加 / 刷新灼烧。每秒伤害取较大值，持续时间重置。</summary>
         void ApplyBurn(MonsterEntity monster, float dps, float duration);
-        /// <summary>程序B：对怪物施加速度倍率（0.7 表示减速 30%）并刷新持续时间。</summary>
+        /// <summary>对怪物施加速度倍率（0.7 表示减速 30%）并刷新持续时间。</summary>
         void ApplySlow(MonsterEntity monster, float factor, float duration);
-        /// <summary>
-        /// 把一只怪物沿 direction 推开 distance（经遮挡物修正 + 边界 Clamp）。
-        /// 程序A 的 B15 翻滚冲击调用；怪物位置仍只由 MonsterSystem 写。（程序B 实现）
-        /// </summary>
+        /// <summary>眩晕：期间不移动、不攻击（取较长的剩余时间）。</summary>
+        void ApplyStun(MonsterEntity monster, float duration);
+        /// <summary>把一只怪物沿 direction 推开 distance（经遮挡物修正 + 边界 Clamp）。</summary>
         void Knockback(MonsterEntity monster, Vec2 direction, float distance);
         void Tick(float dt);
-        /// <summary>与圆相交的存活怪物（结果先清空）。</summary>
+        /// <summary>与圆相交的存活怪物（结果先清空；考虑每只怪自己的半径）。</summary>
         void QueryCircle(Vec2 center, float radius, List<MonsterEntity> results);
+        /// <summary>与线段 a → b（半宽 halfWidth）相交的存活怪物（结果先清空）。</summary>
+        void QuerySegment(Vec2 a, Vec2 b, float halfWidth, List<MonsterEntity> results);
         /// <summary>范围内最近的存活怪物；没有返回 null。</summary>
         MonsterEntity GetNearest(Vec2 from, float range);
-        /// <summary>
-        /// 翻滚第 6 步：所有存活怪物整体平移 offset（与玩家的相对位置不变，包围阵型不散），之后各自 Clamp 进边界。
-        /// 只应由 RollSystem 调用。（程序B 实现）
-        /// </summary>
-        void ShiftAll(Vec2 offset);
-        /// <summary>
-        /// 翻滚第 6 步：位面从 from 切到 to 后，所有存活怪物按「切图对应」表换成对应怪物的配置与 AI
-        /// （实例不销毁，血量 / Buff / 异常状态全部保留），并立刻打断冲锋回到 Idle；
-        /// 只属于旧位面的单位（如虫崽）在这里清除。只应由 RollSystem 调用。（程序B 实现）
-        /// </summary>
-        void SwapPlane(PlaneId from, PlaneId to);
     }
 
     /// <summary>鲨鱼：存在与否完全由当前激活位面决定（海洋存在，其他位面销毁）。</summary>
@@ -237,53 +276,75 @@ namespace Turn.Core
         void Tick(float dt);
     }
 
-    /// <summary>刷怪：开局一批 + 定时刷 + 翻滚惩罚。只通过 IMonsterSystem.Spawn 生成。</summary>
+    /// <summary>
+    /// 刷怪（新策划案）：从地图边缘随机位置刷新，数量随波次线性提升，新怪物类型按波次解锁；
+    /// 每波开始时刷精英（EliteFromWave 起）与 Boss（每 BossEveryWaves 波）。只通过 IMonsterSystem 生成。
+    /// </summary>
     public interface ISpawnSystem
     {
         void SpawnInitial();
         void Tick(float dt, float time);
-        /// <summary>
-        /// 翻滚惩罚：在玩家周围为当前位面生成 count 只怪物，返回实际生成数量。
-        /// 只应由 RollSystem 调用；count 由 RollSystem 算好（已计入 B17 惩罚减免）。
-        /// </summary>
+        /// <summary>旧方案的翻滚惩罚刷怪（新策划案不再调用，保留给调试）。</summary>
         int SpawnPenalty(int count);
+        /// <summary>地图边缘的一个随机刷新点（离玩家不小于 MinPlayerDistance，尽量避开遮挡物）。</summary>
+        Vec2 EdgePoint();
     }
 
-    /// <summary>武器：全局唯一的弹匣 + 按当前地图选择的武器形态 + 自动索敌射击。</summary>
+    /// <summary>
+    /// 武器（新策划案）：当前装备的那一把（ILoadoutSystem.Equipped）自动索敌攻击，每把武器独立弹药；
+    /// 常态攻击留下铺垫痕迹（水渍 / 矛印记 / 剑气印记），订阅 SubspaceEnteredEvent 同步爆发、SubspaceExitedEvent 清空。
+    /// 硬性规则：弹药打空自动停火；Reload() 是唯一的装填入口，唯一调用方是 RollSystem（退出亚空间时）。
+    /// </summary>
     public interface IWeaponSystem
     {
-        PlaneId Form { get; }
-        WeaponFormConfig CurrentForm { get; }
+        /// <summary>当前装备的武器（= Loadout.Equipped）。</summary>
+        WeaponKind Current { get; }
         int Ammo { get; }
         int Capacity { get; }
+        /// <summary>某把武器的剩余弹药 / 弹药上限（含词条加成）。</summary>
+        int AmmoOf(WeaponKind weapon);
+        int CapacityOf(WeaponKind weapon);
         float FireTimer { get; }
-        /// <summary>装满弹匣。硬性规则：唯一调用方是 RollSystem.TryRoll。</summary>
+        /// <summary>全图水渍（只读）。</summary>
+        IReadOnlyList<WaterMark> Puddles { get; }
+        /// <summary>全场剑气印记总层数 / 矛印记总层数。</summary>
+        int TotalBladeMarks { get; }
+        int TotalSpearMarks { get; }
+        /// <summary>补满当前武器的弹药。硬性规则：唯一调用方是 RollSystem（退出亚空间时）。</summary>
         void Reload();
         void Tick(float dt);
+        /// <summary>ProjectileSystem 回调：玩家子弹命中怪物（伤害已由武器结算）。返回 true = 子弹继续飞（穿透），false = 子弹消失。</summary>
+        bool OnProjectileHit(ProjectileEntity projectile, MonsterEntity monster);
+        /// <summary>ProjectileSystem 回调：玩家子弹因射程 / 遮挡 / 出界而结束（水弹在这里落地留下水渍）。</summary>
+        void OnProjectileEnded(ProjectileEntity projectile);
     }
 
+    /// <summary>投射物：玩家的水弹 / 长矛、怪物的弹幕。直线飞行、射程、遮挡（ObstacleMask.Projectiles）、出界即消失。</summary>
     public interface IProjectileSystem
     {
         IReadOnlyList<ProjectileEntity> Active { get; }
-        ProjectileEntity Spawn(PlaneId form, Vec2 position, Vec2 velocity, float radius, float damage, int pierce, float maxDistance);
-        /// <summary>程序B：生成属于指定发射位面的敌方投射物；切位面不销毁，但仅在所属位面伤害玩家。</summary>
-        ProjectileEntity SpawnEnemy(PlaneId plane, Vec2 position, Vec2 velocity, float radius, float damage, float lifetime, float maxDistance, EnemyProjectileKind kind);
+        /// <summary>玩家子弹。命中与结束交给 IWeaponSystem 的回调。</summary>
+        ProjectileEntity SpawnPlayer(WeaponKind weapon, Vec2 position, Vec2 velocity, float radius, float damage, float maxDistance);
+        /// <summary>敌方弹幕：命中玩家（经 ICombatSystem）后消失。</summary>
+        ProjectileEntity SpawnEnemy(Vec2 position, Vec2 velocity, float radius, float damage, float lifetime, float maxDistance, EnemyProjectileKind kind);
         void Tick(float dt);
-        /// <summary>
-        /// 翻滚第 6b 步：已飞出的投射物（玩家的与敌方的）不销毁，存活时间 ×1.6（B19 再加），
-        /// 之后只对发射时所在位面的单位生效。只应由 RollSystem 调用。（程序B 实现）
-        /// </summary>
-        void OnPlaneSwitched(PlaneId from, PlaneId to);
     }
 
+    /// <summary>经验球与宝箱：怪物死亡掉经验球，精英 / Boss 掉宝箱；进入拾取范围后经验球飞向玩家，靠近宝箱自动打开。</summary>
     public interface IExperienceSystem
     {
         IReadOnlyList<OrbEntity> Active { get; }
+        IReadOnlyList<ChestEntity> Chests { get; }
         void SpawnOrb(Vec2 position, int value);
+        void SpawnChest(Vec2 position, int rank);
         void Tick(float dt);
     }
 
-    /// <summary>经验、等级、击杀数、三选一升级，以及全局共享的升级等级表。</summary>
+    /// <summary>
+    /// 经验、等级、击杀数、词条等级表、升级三选一与宝箱三选一。
+    /// 升级：经验满 → PendingLevelUps +1 → Session 弹窗（全局暂停）→ 当前武器词条池随机 3 个。
+    /// 宝箱：打开 → PendingChests +1 → Session 弹窗 → 2 个强化 + 1 个代价选项（不全为正向）。
+    /// </summary>
     public interface IProgressionSystem
     {
         int Level { get; }
@@ -291,34 +352,28 @@ namespace Turn.Core
         int XpToNext { get; }
         int Kills { get; }
         int PendingLevelUps { get; }
+        int PendingChests { get; }
         IReadOnlyList<UpgradeOption> Options { get; }
-        /// <summary>某个词条的当前等级（全局一份，火球与鱼叉共用）。</summary>
-        int GetLevel(UpgradeId id);
+        /// <summary>当前选项是不是宝箱的（UpgradeUI 显示用）。</summary>
+        bool OptionsFromChest { get; }
+        /// <summary>某个词条的当前层数。</summary>
+        int GetLevel(BuildId id);
+        /// <summary>某个词条在第 level 层时的总效果 = level × Value（level 默认取当前层数）。</summary>
+        float Value(BuildId id);
+        /// <summary>词条的附加参数（持续时间 / 半径等）。</summary>
+        float Value2(BuildId id);
+        /// <summary>宝箱代价的层数。</summary>
+        int CurseStacks(ChestCurse curse);
         void AddXp(int amount);
         void AddKill();
+        void AddChest();
+        /// <summary>升级三选一（当前武器的词条池里未满级的）。</summary>
         void RollOptions();
+        /// <summary>宝箱三选一。</summary>
+        void RollChestOptions();
+        /// <summary>选择第 index 项；消耗一次待处理的升级或宝箱。</summary>
         bool TryApply(int index);
-        /// <summary>没有任何可选词条时（全部满级）消耗一次待处理升级。</summary>
+        /// <summary>没有任何可选项时消耗一次待处理（升级优先，其次宝箱）。</summary>
         void SkipPending();
-    }
-
-    // ------------------------------------------------------------------
-    // 武器形态：无状态，只通过 World 上的系统接口生成子弹。
-    // 新增地图 + 武器 = 新增一个 PlaneId 值 + 一个 IWeaponForm 实现 + WeaponForms.Create 里的一行。
-    // ------------------------------------------------------------------
-
-    public struct WeaponFireContext
-    {
-        public ITurnContext World;
-        public WeaponFormConfig Form;
-        public Vec2 Origin;
-        public MonsterEntity Target;
-        public float AttackRange;
-    }
-
-    public interface IWeaponForm
-    {
-        PlaneId Map { get; }
-        void Fire(WeaponFireContext fire);
     }
 }

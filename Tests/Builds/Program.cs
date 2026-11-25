@@ -1,198 +1,251 @@
 using System;
-using System.Linq;
 using Turn.Core;
 using Turn.Systems;
 
+/// <summary>程序B：三把武器（铺垫 → 爆发）、弹药、词条与宝箱选项的纯模拟回归测试（新策划案 11/24）。运行：dotnet run。</summary>
 internal static class Program
 {
-    private static int _checks;
     private static void Main()
     {
-        BuildPoolAndLegacyMapping();
-        DamageLifestealAndLevelGrowth();
-        TwoPlaneWeaponBuffs();
-        KillRefundExcludesSingleShotAndShark();
-        HazardDamageAndCriticalSlow();
-        SwitchAftershockAndLinger();
-        MagnetAndRange();
+        WaterBulletLeavesPuddle();
+        FountainsStackOnOverlap();
+        PuddlesClearedAfterSubspace();
+        SpearMarksAndRecall();
+        SpearKillPiercesAndPassesMarks();
+        BladeHitsFirstRingAndSlashScales();
+        AmmoRunsOutAndStops();
+        AmmoBuildRaisesCapacity();
+        OptionsComeFromEquippedWeapon();
+        ChestHasCurseOption();
         Console.WriteLine($"Build checks passed ({_checks} assertions).");
     }
 
+    private static void Tough(TurnConfig c)
+    {
+        for (int i = 0; i < c.Horde.Kinds.Length; i++) c.Horde.Kinds[i].MaxHp = 1000f;
+    }
+
+    private static void WaterBulletLeavesPuddle()
+    {
+        var ctx = World(Tough);
+        MonsterEntity m = Spawn(ctx, new Vec2(4f, 0f));
+        ctx.Weapons.Tick(0f);
+        Check(ctx.Weapons.Ammo == 29, "one shot costs one water");
+        RunProjectiles(ctx, 1f);
+        Check(ctx.Projectiles.Active.Count == 0, "bullet done");
+        Check(Near(m.Hp, 995f), "water bullet hits for 5");
+        Check(ctx.Weapons.Puddles.Count == 1, "hit leaves one puddle");
+        Check(Vec2.Distance(ctx.Weapons.Puddles[0].Position, m.Position) < .01f, "puddle at the hit enemy");
+        Check(Near(ctx.Weapons.Puddles[0].Radius, 1f), "puddle radius 1 (40 px)");
+    }
+
+    private static void FountainsStackOnOverlap()
+    {
+        var ctx = World(Tough);
+        MonsterEntity m = Spawn(ctx, new Vec2(4f, 0f));
+        for (int i = 0; i < 3; i++)
+        {
+            ctx.Weapons.Tick(1f);
+            RunProjectiles(ctx, 1f);
+        }
+        Check(ctx.Weapons.Puddles.Count == 3, "three overlapping puddles");
+        float before = m.Hp;
+        int fountains = 0;
+        ctx.Events.Subscribe<FountainBurstEvent>(e => fountains++);
+        Check(ctx.Roll.TryRoll(), "roll");
+        Check(fountains == 3, "every puddle erupts");
+        Check(Near(before - m.Hp, 36f), "overlapping fountains add up: 3 x 12");
+    }
+
+    private static void PuddlesClearedAfterSubspace()
+    {
+        var ctx = World(Tough);
+        Spawn(ctx, new Vec2(4f, 0f));
+        ctx.Weapons.Tick(0f);
+        RunProjectiles(ctx, 1f);
+        Check(ctx.Weapons.Puddles.Count == 1, "puddle laid");
+        ctx.Roll.TryRoll();
+        Check(ctx.Weapons.Puddles.Count == 1, "puddles stay during subspace");
+        for (int i = 0; i < 70; i++) ctx.Session.Tick(1f / 60f);
+        Check(!ctx.Roll.InSubspace, "back to normal");
+        Check(ctx.Weapons.Puddles.Count <= 1, "old puddles cleared on exit (at most one new shot landed)");
+    }
+
+    private static void SpearMarksAndRecall()
+    {
+        var ctx = World(Tough);
+        Check(ctx.Loadout.Equip(WeaponKind.Spear), "equip spear");
+        Check(ctx.Weapons.Capacity == 20, "spear ammo 20");
+        MonsterEntity m = Spawn(ctx, new Vec2(3f, 0f));
+        for (int i = 0; i < 2; i++)
+        {
+            ctx.Weapons.Tick(1f);
+            RunProjectiles(ctx, 1f);
+        }
+        Check(m.SpearMarks == 2, "two spears stuck = two marks");
+        Check(Near(m.Hp, 1000f - 16f), "spear hits for 8");
+        int recalls = 0;
+        ctx.Events.Subscribe<SpearRecalledEvent>(e => recalls++);
+        ctx.Roll.TryRoll();
+        Check(recalls == 2, "each spear is recalled");
+        Check(Near(m.Hp, 1000f - 16f - 30f), "recall: 15 per spear along the path");
+        Check(m.SpearMarks == 0, "marks cleared after recall");
+    }
+
+    private static void SpearKillPiercesAndPassesMarks()
+    {
+        var ctx = World(Tough);
+        ctx.Loadout.Equip(WeaponKind.Spear);
+        MonsterEntity weak = Spawn(ctx, new Vec2(2f, 0f));
+        MonsterEntity tank = Spawn(ctx, new Vec2(4f, 0f));
+        weak.Hp = 1f;
+        weak.SpearMarks = 2; // 被击杀者身上原有的矛一起传下去
+        ctx.Weapons.Tick(1f);
+        RunProjectiles(ctx, 1f);
+        Check(!weak.Alive, "first target killed");
+        Check(Near(tank.Hp, 1000f - 8f * .8f), "pierced spear deals 80%");
+        Check(tank.SpearMarks == 3, "marks passed on: own spear + 2 from the killed enemy");
+    }
+
+    private static void BladeHitsFirstRingAndSlashScales()
+    {
+        var ctx = World(Tough);
+        ctx.Loadout.Equip(WeaponKind.Blade);
+        MonsterEntity a = Spawn(ctx, new Vec2(2f, 0f));
+        MonsterEntity b = Spawn(ctx, new Vec2(2.5f, .4f));
+        MonsterEntity far = Spawn(ctx, new Vec2(5.5f, 0f));
+        ctx.Weapons.Tick(1f);
+        Check(Near(a.Hp, 994f) && Near(b.Hp, 994f), "sword wave hits the first ring for 6");
+        Check(a.BladeMarks == 1 && b.BladeMarks == 1, "each hit enemy gets one mark");
+        Check(Near(far.Hp, 1000f) && far.BladeMarks == 0, "enemies behind the ring are not hit");
+        Check(ctx.Weapons.TotalBladeMarks == 2, "two marks on the field");
+        float slash = 25f * (1f + .08f * 2f);
+        ctx.Roll.TryRoll();
+        Check(Near(a.Hp, 994f - slash, .05f) && Near(far.Hp, 1000f - slash, .05f), "slash = 25 x (1 + 8% x marks), whole row");
+    }
+
+    private static void AmmoRunsOutAndStops()
+    {
+        var ctx = World(c => { Tough(c); c.Weapon.InitialAmmo = 1; });
+        Spawn(ctx, new Vec2(4f, 0f));
+        int empty = 0;
+        ctx.Events.Subscribe<AmmoEmptiedEvent>(e => empty++);
+        ctx.Weapons.Tick(1f);
+        Check(ctx.Weapons.Ammo == 0, "last bullet fired");
+        RunProjectiles(ctx, 1f);
+        ctx.Weapons.Tick(1f);
+        Check(ctx.Projectiles.Active.Count == 0 && empty == 1, "empty magazine stops firing");
+        Check(ctx.Roll.TryRoll(), "can roll on empty");
+        for (int i = 0; i < 65; i++) ctx.Session.Tick(1f / 60f);
+        Check(ctx.Weapons.Ammo >= ctx.Weapons.Capacity - 1, "refilled after subspace");
+    }
+
+    private static void AmmoBuildRaisesCapacity()
+    {
+        var ctx = World();
+        ApplyBuild(ctx, BuildId.WaterAmmo);
+        Check(ctx.Weapons.Capacity >= 34 && ctx.Weapons.Capacity <= 35, "ammo +15%: 30 -> 34/35");
+        Check(ctx.Weapons.CapacityOf(WeaponKind.Spear) == 20, "builds are per weapon");
+    }
+
+    private static void OptionsComeFromEquippedWeapon()
+    {
+        var ctx = World();
+        foreach (WeaponKind w in new[] { WeaponKind.WaterGun, WeaponKind.Spear, WeaponKind.Blade })
+        {
+            ctx.Loadout.Equip(w);
+            for (int n = 0; n < 20; n++)
+            {
+                ctx.Progression.AddXp(ctx.Progression.XpToNext);
+                ctx.Progression.RollOptions();
+                Check(ctx.Progression.Options.Count == 3, "three options");
+                for (int i = 0; i < ctx.Progression.Options.Count; i++)
+                    Check(ctx.Progression.Options[i].Weapon == w, "options from the equipped weapon's pool");
+                ctx.Progression.SkipPending();
+            }
+        }
+    }
+
+    private static void ChestHasCurseOption()
+    {
+        var ctx = World();
+        ctx.Progression.AddChest();
+        ctx.Progression.RollChestOptions();
+        var list = ctx.Progression.Options;
+        Check(list.Count == 3 && ctx.Progression.OptionsFromChest, "chest: three options");
+        int curseIndex = -1;
+        for (int i = 0; i < list.Count; i++) if (list[i].Curse != ChestCurse.None) curseIndex = i;
+        Check(curseIndex >= 0, "one option carries a cost");
+        ChestCurse curse = list[curseIndex].Curse;
+        int before = TotalLevels(ctx, WeaponKind.WaterGun);
+        float maxHp = ctx.Player.State.MaxHp;
+        Check(ctx.Progression.TryApply(curseIndex), "take the cursed option");
+        Check(ctx.Progression.CurseStacks(curse) == 1, "curse stacks");
+        Check(TotalLevels(ctx, WeaponKind.WaterGun) == before + 3, "cursed option grants 3 random levels");
+        if (curse == ChestCurse.Frail) Check(Near(ctx.Player.State.MaxHp, maxHp - 15f), "frail: max hp -15");
+        Check(ctx.Progression.PendingChests == 0, "chest consumed");
+    }
+
+    private static int TotalLevels(ITurnContext ctx, WeaponKind w)
+    {
+        int total = 0;
+        for (int i = 0; i < BuildIds.Count; i++)
+            if (BuildIds.WeaponOf((BuildId)i) == w) total += ctx.Progression.GetLevel((BuildId)i);
+        return total;
+    }
+
+    private static int _checks;
+
+    /// <summary>一局测试世界：不自动刷怪、不刷精英 / Boss、三把武器开局全部解锁。</summary>
     private static ITurnContext World(Action<TurnConfig> configure = null)
     {
         var config = new TurnConfig();
-        config.Weapon.PlaneCapacities = new[] { 8, 8, 8, 8, 1, 1 };
-        config.Spawn.InitialCount = 0;
-        for (int i = 0; i < PlaneIds.Count; i++)
-            config.Forms[i] = new WeaponFormConfig { Map = (PlaneId)i, ProjectileSpeed = 10f, Damage = 10f, Pierce = 1 };
+        config.Horde.BaseCount = 0f;
+        config.Horde.CountPerWave = 0f;
+        config.Horde.EliteFromWave = 0;
+        config.Horde.BossEveryWaves = 0;
+        config.Loadout.UnlockWaves = new[] { 1, 1, 1 };
         configure?.Invoke(config);
-        return TurnFactory.Create(config, 222);
+        ITurnContext ctx = TurnFactory.Create(config, 777);
+        ctx.Session.Start();
+        return ctx;
     }
 
-    private static void Apply(ITurnContext ctx, BuildId id)
+    private static MonsterEntity Spawn(ITurnContext ctx, Vec2 offset, MonsterKind kind = MonsterKind.Walker, int rank = 0)
     {
-        for (int attempt = 0; attempt < 1000; attempt++)
+        return ctx.Monsters.SpawnKind(ctx.Player.State.Position + offset, kind, rank);
+    }
+
+    /// <summary>反复升级直到抽到指定词条并选中它。</summary>
+    private static void ApplyBuild(ITurnContext ctx, BuildId id)
+    {
+        for (int attempt = 0; attempt < 2000; attempt++)
         {
+            ctx.Progression.AddXp(ctx.Progression.XpToNext);
             ctx.Progression.RollOptions();
             var list = ctx.Progression.Options;
             for (int i = 0; i < list.Count; i++)
             {
-                if (list[i].Build != id) continue;
-                Check(ctx.Progression.TryApply(i), $"apply {id}");
+                if (list[i].Build != id || list[i].Curse != ChestCurse.None) continue;
+                Check(ctx.Progression.TryApply(i), "apply " + id);
+                while (ctx.Progression.PendingLevelUps > 0) ctx.Progression.SkipPending();
                 return;
             }
+            ctx.Progression.SkipPending();
         }
-        throw new Exception($"Could not sample {id} from Build pool");
+        throw new Exception("Could not sample " + id);
     }
 
-    private static void BuildPoolAndLegacyMapping()
+    private static void RunProjectiles(ITurnContext ctx, float seconds)
     {
-        var ctx = World();
-        ctx.Progression.AddXp(500);
-        ctx.Progression.RollOptions();
-        Check(ctx.Progression.Options.Count == 3, "three options");
-        Check(ctx.Progression.Options.Select(x => x.Build).Distinct().Count() == 3, "unique options");
-        Check(ctx.Progression.Options.All(x => BuildIds.IsValid(x.Build)), "nineteen only");
-        Check(ctx.Progression.GetLevel(UpgradeId.Magazine) == 0 && ctx.Progression.GetLevel(UpgradeId.Burn) == 0, "no legacy upgrades");
-        Apply(ctx, BuildId.B13);
-        Check(ctx.Progression.GetLevel(UpgradeId.RollCooldown) == 1, "legacy roll cooldown maps B13");
-        Apply(ctx, BuildId.B14);
-        Check(ctx.Progression.GetLevel(UpgradeId.RollInvincible) == 1, "legacy invincibility maps B14");
-        Apply(ctx, BuildId.B15);
-        Check(ctx.Progression.GetLevel(UpgradeId.Shockwave) == 1, "legacy shockwave maps B15");
-        Check(ctx.Progression.GetLevel(BuildIds.Query(BuildId.B15)) == 1, "B id query through interface");
+        for (float t = 0f; t < seconds; t += 1f / 60f) ctx.Projectiles.Tick(1f / 60f);
     }
 
-    private static void DamageLifestealAndLevelGrowth()
-    {
-        var ctx = World();
-        Check(ctx.Progression.XpToNext == 4, "level 1 xp threshold");
-        ctx.Progression.AddXp(4);
-        Check(ctx.Progression.Level == 2 && ctx.Progression.XpToNext == 8, "level 2 xp threshold");
-        Check(Near(ctx.Player.State.MaxHp, 110f) && Near(ctx.Player.MoveSpeed, 4.28f), "level 2 stats");
-        ctx.Combat.DamagePlayer(30, DamageSource.Monster);
-        ctx.Progression.AddXp(8);
-        Check(Near(ctx.Player.State.Hp, 90f), "level up heals only max HP gain");
-        Apply(ctx, BuildId.B01);
-        Apply(ctx, BuildId.B07);
-        var m = ctx.Monsters.Spawn(new Vec2(2, 0), false);
-        float hp = m.Hp;
-        float before = ctx.Player.State.Hp;
-        ctx.Combat.DamageMonster(m, 10f, DamageSource.Weapon);
-        Check(Near(hp - m.Hp, 12f), "B01 weapon damage");
-        Check(Near(ctx.Player.State.Hp - before, .6f), "B07 lifesteal based on applied damage");
-    }
+    private static bool Near(float a, float b, float eps = .01f) => Math.Abs(a - b) < eps;
 
-    private static void TwoPlaneWeaponBuffs()
-    {
-        var ctx = World(c => { c.Weapon.FireInterval = .7f; c.Forms[0].Damage = 18; c.Forms[1].Damage = 24; });
-        ctx.Progression.AddXp(200);
-        Apply(ctx, BuildId.B02);
-        Apply(ctx, BuildId.B03);
-        Apply(ctx, BuildId.B04);
-        ctx.Monsters.Spawn(new Vec2(2, 0), false);
-        ctx.Weapons.Tick(1f);
-        Check(ctx.Projectiles.Active.Count == 2, "B03 fires two volcano projectiles");
-        Check(Near(ctx.Projectiles.Active[0].Velocity.Magnitude, 14f), "B04 fireball speed");
-        Check(Near(ctx.Weapons.FireTimer, .616f), "B02 attack interval");
-        Check(ctx.Roll.TryRoll(), "successful roll reloads the shared magazine");
-        ctx.Weapons.Tick(1f);
-        Check(ctx.Projectiles.Active.Count == 4, "B03 fires two ocean projectiles");
-        Check(Near(ctx.Projectiles.Active[2].Velocity.Magnitude, 14f), "B04 harpoon speed");
-    }
-
-    private static void KillRefundExcludesSingleShotAndShark()
-    {
-        var ctx = World(c => { c.Weapon.InitialAmmo = 3; c.Weapon.PlaneCapacities = new[] { 8, 8, 8, 8, 1, 1 }; });
-        ctx.Progression.AddXp(100);
-        Apply(ctx, BuildId.B11);
-        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(2f, 0f), false);
-        ctx.Combat.DamageMonster(m, 100f, DamageSource.Shark);
-        int ammo = ctx.Weapons.Ammo;
-        ctx.Weapons.Tick(.01f);
-        Check(ctx.Weapons.Ammo == ammo, "shark kill never refunds ammo");
-
-        ctx.Plane.EnterPair(PlanePairId.PrimalFuture);
-        MonsterEntity bowTarget = ctx.Monsters.Spawn(new Vec2(2f, 0f), false);
-        int before = ctx.Weapons.Ammo;
-        ctx.Combat.DamageMonster(bowTarget, 1000f, DamageSource.Weapon);
-        ctx.Weapons.Tick(.01f);
-        Check(ctx.Weapons.Ammo <= before, "crossbow kill cannot refund ammo");
-
-        ctx.Plane.EnterPair(PlanePairId.VolcanoOcean);
-        MonsterEntity fireTarget = ctx.Monsters.Spawn(new Vec2(2f, 0f), false);
-        ctx.Combat.DamageMonster(fireTarget, 1000f, DamageSource.Weapon);
-        ctx.Weapons.Tick(.01f);
-        Check(ctx.Weapons.Ammo > 0, "fireball kill eligible for refund");
-    }
-
-    private static void HazardDamageAndCriticalSlow()
-    {
-        var ctx = World(c =>
-        {
-            c.Upgrades.CriticalChancePerLevel = 1f;
-            c.Upgrades.CriticalMultiplier = 2f;
-            c.Terrain[(int)PlaneId.Volcano] = new TerrainGridData(40, 24, 1f,
-                new Vec2(-20f, -12f), Enumerable.Repeat(TerrainType.Lava, 40 * 24).ToArray());
-        });
-        ctx.Progression.AddXp(100);
-        Apply(ctx, BuildId.B06);
-        Apply(ctx, BuildId.B08);
-        Apply(ctx, BuildId.B10);
-        ctx.Environment.OnPlaneEntered(PlaneId.Volcano);
-        MonsterEntity monster = ctx.Monsters.Spawn(new Vec2(3f, 0f), false);
-        float hp = monster.Hp;
-        ctx.Projectiles.Spawn(PlaneId.Volcano, monster.Position, Vec2.Zero, .2f, 10f, 1, 3f);
-        ctx.Projectiles.Tick(.01f);
-        Check(Near(hp - monster.Hp, 20f), "B08 critical doubles projectile damage");
-        Check(monster.SlowLeft > 0f && Near(monster.SlowFactor, .7f), "B06 slows hit monster");
-    }
-
-    private static void SwitchAftershockAndLinger()
-    {
-        var ctx = World(c => { c.Weapon.ProjectileLifetime = 2f; c.Weapon.PlaneSwitchLifetimeMultiplier = 1.6f; });
-        ctx.Progression.AddXp(100);
-        Apply(ctx, BuildId.B16);
-        Apply(ctx, BuildId.B19);
-        var p = ctx.Projectiles.Spawn(PlaneId.Volcano, Vec2.Zero, Vec2.Zero, .2f, 10f, 1, 10f);
-        ctx.Plane.Switch();
-        ctx.Projectiles.OnPlaneSwitched(PlaneId.Volcano, PlaneId.Ocean);
-        Check(Near(p.LifetimeLeft, 2f * 1.6f * 1.6f), "B19 increases initial plane-switch lifetime once");
-        Check(p.AftershockLeft > 0f, "B16 starts aftershock for existing bullet");
-        ctx.Plane.Switch();
-        ctx.Projectiles.OnPlaneSwitched(PlaneId.Ocean, PlaneId.Volcano);
-        Check(Near(p.LifetimeLeft, 2f * 1.6f * 1.6f), "B19 never repeatedly extends one bullet");
-        MonsterEntity monster = ctx.Monsters.Spawn(new Vec2(1f, 0f), false);
-        float hp = monster.Hp;
-        p.Position = monster.Position;
-        ctx.Projectiles.Tick(.01f);
-        Check(Near(hp - monster.Hp, 13f), "B16 increases existing bullet damage by 30 percent");
-    }
-
-    private static void MagnetAndRange()
-    {
-        var ctx = World(c =>
-        {
-            c.Weapon.PlaneTargetRanges[0] = 2f;
-            c.Experience.MagnetRadius = 2f;
-            c.Experience.MagnetSpeed = 0f;
-        });
-        ctx.Progression.AddXp(100);
-        Apply(ctx, BuildId.B05);
-        Apply(ctx, BuildId.B12);
-        ctx.Monsters.Spawn(new Vec2(2.4f, 0f), false);
-        ctx.Weapons.Tick(1f);
-        Check(ctx.Projectiles.Active.Count > 0, "B05 extends target acquisition range");
-        ctx.Experience.SpawnOrb(new Vec2(2.4f, 0f), 1);
-        ctx.Experience.Tick(.01f);
-        Check(ctx.Experience.Active.Count == 1 && ctx.Experience.Active[0].Magnetized,
-            "B12 extends experience magnet range");
-    }
-
-    private static bool Near(float a, float b) => Math.Abs(a - b) < .001f;
     private static void Check(bool condition, string description)
     {
         _checks++;
-        if (!condition) throw new Exception("Build test failed: " + description);
+        if (!condition) throw new Exception("Test failed: " + description);
     }
 }

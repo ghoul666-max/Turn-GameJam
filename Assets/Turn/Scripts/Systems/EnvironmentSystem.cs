@@ -15,6 +15,8 @@ namespace Turn.Systems
     ///           老板来电：每隔 [PhoneIntervalMin, PhoneIntervalMax] 秒在玩家当前位置预警 PhoneWarning 秒，
     ///           随后砸下（半径 PhoneRadius，伤害 PhoneDamage，只伤玩家）。还没砸下就离开梦境的来电直接取消。
     /// 每次进入位面（开局 / 翻滚）都会把计时、困意、减速层、待砸的电话全部清零。
+    /// 新策划案（11/24）：EnvironmentConfig.MechanicsEnabled 默认关闭 —— 进入位面只清零状态并发布 PlaneEnteredEvent，
+    /// 不喷岩浆、不叠减速、不来电，Tick 什么都不做，IsHazard 恒为 false。
     /// </summary>
     public sealed class EnvironmentSystem : IEnvironmentSystem
     {
@@ -64,6 +66,14 @@ namespace Turn.Systems
             DreamSlowStacks = 0;
             _dreamTimer = 0f;
             CancelPhones();
+            LavaPresent = false;
+
+            if (!_env.MechanicsEnabled)
+            {
+                _ctx.Player.ClearSpeedModifiers();
+                _ctx.Events.Publish(new PlaneEnteredEvent { Plane = plane });
+                return;
+            }
 
             // 移速：进入工位清除所有减速；其他位面只清掉梦境减速（离开梦境清零 / 进入梦境从 0 开始叠）
             if (plane == PlaneId.Office) _ctx.Player.ClearSpeedModifiers();
@@ -79,6 +89,7 @@ namespace Turn.Systems
 
         public bool IsHazard(Vec2 position)
         {
+            if (!_env.MechanicsEnabled) return false;
             if (_ctx.Terrain.Sample(position) == TerrainType.Lava) return true;
             float r = _env.PhoneRadius;
             for (int i = 0; i < _phones.Count; i++)
@@ -94,6 +105,7 @@ namespace Turn.Systems
         {
             if (dt <= 0f) return;
             PlaneTime += dt;
+            if (!_env.MechanicsEnabled) return;
             if (_plane == PlaneId.Office) TickDrowsy(dt);
             else if (_plane == PlaneId.Dream)
             {

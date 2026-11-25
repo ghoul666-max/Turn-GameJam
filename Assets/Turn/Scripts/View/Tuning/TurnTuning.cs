@@ -84,6 +84,13 @@ namespace Turn.View
         public float shallowRegenPerSecond = 3f;
         public PlaneMechanicsSettings mechanics = new PlaneMechanicsSettings();
         public LevelSettings level = new LevelSettings();
+        /// <summary>新策划案（11/24）战斗分组：三把武器 / 怪物与波次 / 词条表与宝箱。battleVersion ≥ 2 时才覆盖 Inspector。</summary>
+        public ArsenalConfig arsenal = new ArsenalConfig();
+        public HordeConfig horde = new HordeConfig();
+        public BuildConfig builds = new BuildConfig();
+
+        /// <summary>当前战斗分组的数据版本（2 = 新策划案）。</summary>
+        public const int CombatVersion = 2;
 
         public TurnTuningData Clone()
         {
@@ -117,11 +124,14 @@ namespace Turn.View
                 if (spawn.MonsterPrefab != null) d.monster = Copy(spawn.MonsterPrefab.Settings);
                 if (spawn.SharkPrefab != null) d.shark = Copy(spawn.SharkPrefab.Settings);
             }
+            if (weapon != null) d.arsenal = Copy(weapon.Arsenal);
+            if (spawn != null) d.horde = Copy(spawn.Horde);
             if (upgrade != null)
             {
                 d.upgrades = Copy(upgrade.Upgrades);
                 d.experience = Copy(upgrade.Experience);
-                d.battleVersion = 1;
+                d.builds = Copy(upgrade.Builds);
+                d.battleVersion = CombatVersion;
             }
             if (map != null)
             {
@@ -148,13 +158,51 @@ namespace Turn.View
             if (battleVersion > 0 && upgrades != null && upgrades.buildMaxLevels != null && upgrades.buildMaxLevels.Length == BuildIds.Count)
                 c.Upgrades = upgrades.ToConfig();
             if (battleVersion > 0 && experience != null && experience.baseXpToLevel > 0) c.Experience = experience.ToConfig();
+            if (battleVersion >= CombatVersion)
+            {
+                if (arsenal != null) c.Arsenal = Copy(arsenal);
+                if (horde != null) c.Horde = Copy(horde);
+                if (builds != null) c.Builds = Copy(builds);
+            }
             if (monster != null) c.Monster = monster.ToConfig();
             if (shark != null) c.Shark = shark.ToConfig();
             if (spawn != null) c.Spawn = spawn.ToConfig();
             if (penalty != null) c.Penalty = penalty.ToConfig();
             if (c.Environment != null) c.Environment.ShallowRegenPerSecond = shallowRegenPerSecond;
             if (mechanics != null) mechanics.ApplyTo(c.Environment); // 旧存档没有这一组（version = 0）时不覆盖
-            if (level != null && level.version > 0) c.Level.SurviveSeconds = level.surviveSeconds;
+            if (level != null && level.version > 0)
+            {
+                level.Upgrade();
+                c.Level = level.ToConfig();
+                level.ApplyLoadout(c.Loadout);
+            }
+        }
+
+        /// <summary>
+        /// 旧存档迁移（亚空间之前保存的文件：翻滚分组没有 version 2）：翻滚分组换成新的默认值（保留翻滚位移时长 / 距离），
+        /// 主角补上受伤无敌帧，关卡分组补上无尽 / 波次 / 解锁字段。返回是否改动了数据。
+        /// </summary>
+        public bool MigrateWorld()
+        {
+            bool changed = false;
+            if (roll == null || roll.version < 2)
+            {
+                var fresh = new RollSettings();
+                if (roll != null)
+                {
+                    fresh.duration = roll.duration;
+                    fresh.distance = roll.distance;
+                }
+                roll = fresh;
+                if (player != null) player.hurtInvincibleTime = new PlayerSettings().hurtInvincibleTime;
+                changed = true;
+            }
+            if (level != null && level.version == 1)
+            {
+                level.Upgrade();
+                changed = true;
+            }
+            return changed;
         }
 
         /// <summary>
@@ -174,6 +222,11 @@ namespace Turn.View
             monster = src.monster;
             upgrades = src.upgrades;
             experience = src.experience;
+            arsenal = src.arsenal;
+            horde = src.horde;
+            builds = src.builds;
+            spawn = src.spawn;
+            penalty = src.penalty;
             battleVersion = src.battleVersion;
         }
 
@@ -292,14 +345,20 @@ namespace Turn.View
                 Save(file);
                 return;
             }
-            if (upgrade != null && file.values != null && file.values.battleVersion <= 0)
+            if (upgrade != null && file.values != null && file.values.battleVersion < TurnTuningData.CombatVersion)
             {
                 TurnTuningData fresh = TurnTuningData.Capture(player, weapon, spawn, map, upgrade);
                 file.values.AdoptCombat(fresh);
                 if (file.defaults == null) file.defaults = new TurnTuningData();
                 file.defaults.AdoptCombat(fresh.Clone());
                 Save(file);
-                Debug.Log("[TurnTuning] 旧存档没有 Build 池分组：战斗侧数值已换成当前 Inspector 数值并保存。");
+                Debug.Log("[TurnTuning] 旧存档没有新策划案的战斗分组：武器 / 怪物 / 词条数值已换成当前 Inspector 数值并保存。");
+            }
+            if (file.values != null && file.values.MigrateWorld())
+            {
+                if (file.defaults != null) file.defaults.MigrateWorld();
+                Save(file);
+                Debug.Log("[TurnTuning] 旧存档没有亚空间分组：翻滚 / 关卡分组已换成新策划案默认值并保存。");
             }
             if (file.useTuning) file.values.ApplyTo(config);
         }

@@ -2,202 +2,151 @@ using System;
 using Turn.Core;
 using Turn.Systems;
 
-// Standalone pure-C# regression checks: dotnet run --project Tests/Combat/TurnCombatChecks.csproj
+/// <summary>程序B：击杀掉落、经验曲线、宝箱流程、受伤词条、拾取范围的纯模拟回归测试（新策划案 11/24）。运行：dotnet run。</summary>
 internal static class Program
 {
     private static void Main()
     {
-        MonsterShiftAndRatio();
-        MonsterBoundaryClamp();
-        ProjectileLifetimeAndPlane();
-        ProjectileRangeAndExpiry();
-        EnemyProjectilePlaneCollision();
-        SweptEnemyProjectileCollision();
-        SweptPlayerProjectileCollision();
-        FireballSplashAndHarpoonFalloff();
-        PaintbrushPoisonZone();
-        PoisonZoneStopsAtConfiguredDuration();
-        Console.WriteLine("Combat cross-plane checks passed.");
+        KillDropsXp();
+        XpCurve();
+        EliteDropsChestAndOpensSelection();
+        PickupRange();
+        HurtBuildsMarkEnemies();
+        BurstRingHitsAround();
+        Console.WriteLine($"Combat checks passed ({_checks} assertions).");
     }
 
-    private static ITurnContext NewWorld()
+    private static void KillDropsXp()
+    {
+        var ctx = World();
+        MonsterEntity m = Spawn(ctx, new Vec2(6f, 0f));
+        int kills = 0;
+        ctx.Events.Subscribe<WeaponKillConfirmedEvent>(e => kills++);
+        ctx.Combat.DamageMonster(m, 100f, DamageSource.Weapon);
+        Check(!m.Alive && kills == 1, "kill confirmed");
+        Check(ctx.Experience.Active.Count == 1 && ctx.Experience.Active[0].Value == 5, "walker drops 5 xp");
+        Check(ctx.Experience.Chests.Count == 0, "normal monsters drop no chest");
+        Check(ctx.Progression.Kills == 1, "kill counted");
+    }
+
+    private static void XpCurve()
+    {
+        var ctx = World();
+        Check(ctx.Progression.XpToNext == 50, "level 1 needs 50");
+        ctx.Progression.AddXp(50);
+        Check(ctx.Progression.Level == 2 && ctx.Progression.XpToNext == 60, "each level +20%");
+        ctx.Progression.AddXp(60);
+        Check(ctx.Progression.XpToNext == 72, "72 at level 3");
+        Check(ctx.Progression.PendingLevelUps == 2, "two level-ups pending");
+    }
+
+    private static void EliteDropsChestAndOpensSelection()
+    {
+        var ctx = World();
+        MonsterEntity elite = Spawn(ctx, new Vec2(6f, 0f), MonsterKind.Walker, 1);
+        Check(elite.Rank == 1 && Near(elite.MaxHp, 150f), "elite hp x5");
+        Check(elite.Radius > ctx.Config.Horde.Radius, "elite is bigger");
+        ctx.Combat.DamageMonster(elite, 1000f, DamageSource.Weapon);
+        Check(ctx.Experience.Chests.Count == 1, "elite drops a chest");
+        Check(ctx.Experience.Active[0].Value == 25, "elite xp x5");
+
+        // 宝箱放到玩家脚边：靠近自动打开 → 下一步弹三选一
+        var chest = ctx.Experience.Chests[0];
+        chest.Position = ctx.Player.State.Position;
+        ctx.Session.Tick(1f / 60f);
+        Check(ctx.Progression.PendingChests == 0 || ctx.Session.Phase == RunPhase.Chest, "chest opened");
+        Check(ctx.Session.Phase == RunPhase.Chest, "chest selection pauses the game");
+        Check(ctx.Session.TryChooseUpgrade(0), "choose");
+        Check(ctx.Session.Phase == RunPhase.Playing || ctx.Session.Phase == RunPhase.LevelUp, "back to the game");
+    }
+
+    private static void PickupRange()
+    {
+        var ctx = World();
+        ctx.Experience.SpawnOrb(ctx.Player.State.Position + new Vec2(2.3f, 0f), 7);
+        ctx.Experience.SpawnOrb(ctx.Player.State.Position + new Vec2(4f, 0f), 7);
+        for (int i = 0; i < 60; i++) ctx.Experience.Tick(1f / 60f);
+        Check(ctx.Progression.Xp == 7, "orb inside 2.5 (100 px) is collected, the one outside is not");
+    }
+
+    private static void HurtBuildsMarkEnemies()
+    {
+        var ctx = World(c => { for (int i = 0; i < c.Horde.Kinds.Length; i++) c.Horde.Kinds[i].MaxHp = 1000f; });
+        ctx.Loadout.Equip(WeaponKind.Spear);
+        ApplyBuild(ctx, BuildId.SpearHurtMarks);
+        MonsterEntity m = Spawn(ctx, new Vec2(3f, 0f));
+        Check(ctx.Combat.DamagePlayer(1f, DamageSource.Monster), "hurt");
+        Check(m.SpearMarks == 2, "spear: nearest enemy gets 2 marks when hurt");
+
+        var water = World();
+        ApplyBuild(water, BuildId.WaterHurtPuddle);
+        Check(water.Combat.DamagePlayer(1f, DamageSource.Monster), "hurt");
+        Check(water.Weapons.Puddles.Count == 1, "water: a puddle under the player when hurt");
+    }
+
+    private static void BurstRingHitsAround()
+    {
+        var ctx = World(c => { for (int i = 0; i < c.Horde.Kinds.Length; i++) c.Horde.Kinds[i].MaxHp = 100f; });
+        ApplyBuild(ctx, BuildId.WaterBurstRing);
+        MonsterEntity near = Spawn(ctx, new Vec2(2f, 0f));
+        MonsterEntity far = Spawn(ctx, new Vec2(8f, 0f));
+        ctx.Roll.TryRoll();
+        Check(Near(near.Hp, 92f), "burst ring: 8% max hp around the player");
+        Check(Near(far.Hp, 100f), "outside the ring untouched");
+    }
+
+    private static int _checks;
+
+    /// <summary>一局测试世界：不自动刷怪、不刷精英 / Boss、三把武器开局全部解锁。</summary>
+    private static ITurnContext World(Action<TurnConfig> configure = null)
     {
         var config = new TurnConfig();
-        config.Monster.VolcanoMaxHp = 60f;
-        config.Monster.OceanMaxHp = 45f;
-        config.Weapon.ProjectileLifetime = 3f;
-        return TurnFactory.Create(config, 42);
+        config.Horde.BaseCount = 0f;
+        config.Horde.CountPerWave = 0f;
+        config.Horde.EliteFromWave = 0;
+        config.Horde.BossEveryWaves = 0;
+        config.Loadout.UnlockWaves = new[] { 1, 1, 1 };
+        configure?.Invoke(config);
+        ITurnContext ctx = TurnFactory.Create(config, 777);
+        ctx.Session.Start();
+        return ctx;
     }
 
-    private static void MonsterShiftAndRatio()
+    private static MonsterEntity Spawn(ITurnContext ctx, Vec2 offset, MonsterKind kind = MonsterKind.Walker, int rank = 0)
     {
-        ITurnContext ctx = NewWorld();
-        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(0, 0), false);
-        Check(m.MaxHp == 60f && m.Form == PlaneId.Volcano, "volcano spawn form");
-        ctx.Combat.DamageMonster(m, 30f, DamageSource.Weapon);
-        ctx.Monsters.ApplyBurn(m, 4f, 3f);
-        ctx.Monsters.ShiftAll(new Vec2(0.8f, 0));
-        Check(Near(m.Position.X, 0.8f), "monster shift");
-        ctx.Monsters.SwapPlane(PlaneId.Volcano, PlaneId.Ocean);
-        Check(m.Form == PlaneId.Ocean && Near(m.MaxHp, 45f) && Near(m.Hp, 22.5f), "ocean HP ratio");
-        Check(m.Burning && Near(m.BurnLeft, 3f), "buff retained");
-        int id = m.Id;
-        ctx.Monsters.SwapPlane(PlaneId.Ocean, PlaneId.Volcano);
-        Check(m.Id == id && Near(m.MaxHp, 60f) && Near(m.Hp, 30f), "identity and round trip ratio");
+        return ctx.Monsters.SpawnKind(ctx.Player.State.Position + offset, kind, rank);
     }
 
-    private static void MonsterBoundaryClamp()
+    /// <summary>反复升级直到抽到指定词条并选中它。</summary>
+    private static void ApplyBuild(ITurnContext ctx, BuildId id)
     {
-        ITurnContext ctx = NewWorld();
-        MonsterEntity edge = ctx.Monsters.Spawn(new Vec2(19.5f, 0), false);
-        ctx.Monsters.ShiftAll(new Vec2(2f, 0));
-        Check(Near(edge.Position.X, 20f - ctx.Config.Monster.Radius), "shift obeys unified bounds");
+        for (int attempt = 0; attempt < 2000; attempt++)
+        {
+            ctx.Progression.AddXp(ctx.Progression.XpToNext);
+            ctx.Progression.RollOptions();
+            var list = ctx.Progression.Options;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (list[i].Build != id || list[i].Curse != ChestCurse.None) continue;
+                Check(ctx.Progression.TryApply(i), "apply " + id);
+                while (ctx.Progression.PendingLevelUps > 0) ctx.Progression.SkipPending();
+                return;
+            }
+            ctx.Progression.SkipPending();
+        }
+        throw new Exception("Could not sample " + id);
     }
 
-    private static void ProjectileLifetimeAndPlane()
+    private static void RunProjectiles(ITurnContext ctx, float seconds)
     {
-        ITurnContext ctx = NewWorld();
-        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(5f, 0), false);
-        ProjectileEntity p = ctx.Projectiles.Spawn(PlaneId.Volcano, Vec2.Zero, new Vec2(1f, 0), 0.2f, 10f, 1, 10f);
-        ctx.Projectiles.Tick(0.5f);
-        float distance = p.DistanceLeft;
-        ctx.Plane.Switch();
-        ctx.Monsters.SwapPlane(PlaneId.Volcano, PlaneId.Ocean);
-        ctx.Projectiles.OnPlaneSwitched(PlaneId.Volcano, PlaneId.Ocean);
-        Check(p.LifetimeExtended && Near(p.LifetimeLeft, 2.5f * 1.6f), "extend remaining time once");
-        Check(Near(p.DistanceLeft, distance), "range unchanged by plane switch");
-        ctx.Projectiles.Tick(0.5f);
-        Check(Near(p.Position.X, 1f) && Near(p.LifetimeLeft, 3.5f), "invisible projectile still simulates");
-        ctx.Plane.Switch();
-        ctx.Monsters.SwapPlane(PlaneId.Ocean, PlaneId.Volcano);
-        ctx.Projectiles.OnPlaneSwitched(PlaneId.Ocean, PlaneId.Volcano);
-        Check(Near(p.LifetimeLeft, 3.5f), "no repeat extension");
-        ctx.Projectiles.Tick(0.5f);
-        Check(p.Alive && m.Hp == m.MaxHp, "no premature hit");
-
-        // A projectile of the inactive plane cannot hit the active-plane monster even at overlap.
-        ProjectileEntity old = ctx.Projectiles.Spawn(PlaneId.Ocean, m.Position, Vec2.Zero, 0.2f, 10f, 1, 5f);
-        ctx.Projectiles.Tick(0.01f);
-        Check(old.Alive && Near(m.Hp, m.MaxHp), "cross-plane collision blocked");
+        for (float t = 0f; t < seconds; t += 1f / 60f) ctx.Projectiles.Tick(1f / 60f);
     }
 
-    private static void ProjectileRangeAndExpiry()
-    {
-        ITurnContext ctx = NewWorld();
-        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(1f, 0), false);
-        ProjectileEntity p = ctx.Projectiles.Spawn(PlaneId.Volcano, Vec2.Zero, new Vec2(1f, 0), 0.2f, 10f, 1, 0.5f);
-        ctx.Plane.Switch();
-        ctx.Monsters.SwapPlane(PlaneId.Volcano, PlaneId.Ocean);
-        ctx.Projectiles.OnPlaneSwitched(PlaneId.Volcano, PlaneId.Ocean);
-        ctx.Projectiles.Tick(0.5f);
-        Check(!p.Alive && Near(m.Hp, m.MaxHp), "distance cap still expires off-plane");
-        ProjectileEntity timeout = ctx.Projectiles.Spawn(PlaneId.Ocean, Vec2.Zero, Vec2.Zero, 0.2f, 10f, 1, 10f);
-        ctx.Projectiles.Tick(3.01f);
-        Check(!timeout.Alive, "time cap expires independently of distance");
-        ProjectileEntity active = ctx.Projectiles.Spawn(PlaneId.Ocean, m.Position, Vec2.Zero, 0.2f, 10f, 1, 10f);
-        ctx.Projectiles.Tick(0.01f);
-        Check(m.Hp < m.MaxHp, "same-plane projectile hits");
-    }
+    private static bool Near(float a, float b, float eps = .01f) => Math.Abs(a - b) < eps;
 
-    private static void EnemyProjectilePlaneCollision()
+    private static void Check(bool condition, string description)
     {
-        ITurnContext ctx = NewWorld();
-        PlayerState player = ctx.Player.State;
-        float hp = player.Hp;
-        ProjectileEntity p = ctx.Projectiles.SpawnEnemy(PlaneId.Volcano, player.Position, Vec2.Zero, 0.2f, 7f, 2f, 5f, EnemyProjectileKind.Bubble);
-        ctx.Plane.Switch();
-        ctx.Projectiles.OnPlaneSwitched(PlaneId.Volcano, PlaneId.Ocean);
-        ctx.Projectiles.Tick(0.1f);
-        Check(p.Alive && Near(player.Hp, hp), "enemy projectile cannot hit player across planes");
-        ctx.Plane.Switch();
-        ctx.Projectiles.OnPlaneSwitched(PlaneId.Ocean, PlaneId.Volcano);
-        ctx.Projectiles.Tick(0.1f);
-        Check(!p.Alive && player.Hp < hp, "enemy projectile hits on original plane");
-    }
-
-    private static void SweptEnemyProjectileCollision()
-    {
-        ITurnContext ctx = NewWorld();
-        PlayerState player = ctx.Player.State;
-        float hp = player.Hp;
-        ctx.Projectiles.SpawnEnemy(PlaneId.Volcano, player.Position + new Vec2(-2f, 0f),
-            new Vec2(20f, 0f), 0.15f, 7f, 2f, 10f, EnemyProjectileKind.Laser);
-        ctx.Projectiles.Tick(0.2f);
-        Check(player.Hp < hp, "high speed enemy projectile swept collision");
-    }
-
-    private static void SweptPlayerProjectileCollision()
-    {
-        ITurnContext ctx = NewWorld();
-        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(3f, 0f), false);
-        float hp = m.Hp;
-        ctx.Projectiles.Spawn(PlaneId.Volcano, Vec2.Zero, new Vec2(20f, 0f), .15f, 7f, 1, 10f);
-        ctx.Projectiles.Tick(.3f);
-        Check(m.Hp < hp, "high speed player projectile swept collision");
-    }
-
-    private static void FireballSplashAndHarpoonFalloff()
-    {
-        ITurnContext ctx = NewWorldWithForms();
-        MonsterEntity a = ctx.Monsters.Spawn(new Vec2(2f, 0), false);
-        MonsterEntity b = ctx.Monsters.Spawn(new Vec2(2.7f, 0), false);
-        ProjectileEntity fire = ctx.Projectiles.Spawn(PlaneId.Volcano, a.Position, Vec2.Zero, .2f, 10f, 1, 5f);
-        ctx.Projectiles.Tick(.01f);
-        Check(!fire.Alive && a.Hp < a.MaxHp && b.Hp < b.MaxHp, "fireball splash hits adjacent monster");
-        Check(a.Burning && b.Burning, "fireball applies burn in splash");
-
-        ctx.Plane.Switch();
-        ctx.Monsters.SwapPlane(PlaneId.Volcano, PlaneId.Ocean);
-        MonsterEntity c = ctx.Monsters.Spawn(new Vec2(4f, 0), false);
-        ProjectileEntity harpoon = ctx.Projectiles.Spawn(PlaneId.Ocean, a.Position, Vec2.Zero, 1f, 10f, 2, 5f);
-        float aHp = a.Hp, bHp = b.Hp;
-        ctx.Projectiles.Tick(.01f);
-        Check(Near(aHp - a.Hp, 10f) && Near(bHp - b.Hp, 7f), "harpoon second hit loses 30 percent");
-    }
-
-    private static void PaintbrushPoisonZone()
-    {
-        ITurnContext ctx = NewWorldWithForms();
-        ctx.Plane.EnterPair(PlanePairId.OfficeDream);
-        ctx.Plane.Switch();
-        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(2f, 0), false);
-        ctx.Projectiles.Spawn(PlaneId.Dream, m.Position, Vec2.Zero, .2f, 1f, 1, 5f);
-        ctx.Projectiles.Tick(.01f);
-        float hp = m.Hp;
-        ctx.Projectiles.Tick(.5f);
-        Check(m.Hp < hp, "paintbrush zone damages monster over time");
-    }
-
-    private static void PoisonZoneStopsAtConfiguredDuration()
-    {
-        ITurnContext ctx = NewWorldWithForms();
-        ctx.Plane.EnterPair(PlanePairId.OfficeDream);
-        ctx.Plane.Switch();
-        ctx.Config.Forms[(int)PlaneId.Dream].PoisonDuration = .5f;
-        ctx.Config.Forms[(int)PlaneId.Dream].PoisonDps = 4f;
-        MonsterEntity m = ctx.Monsters.Spawn(new Vec2(2f, 0f), false);
-        ctx.Projectiles.Spawn(PlaneId.Dream, m.Position, Vec2.Zero, .2f, 1f, 1, 5f);
-        ctx.Projectiles.Tick(.01f);
-        float hp = m.Hp;
-        ctx.Projectiles.Tick(.7f);
-        Check(Near(hp - m.Hp, 2f), "poison zone stops at exactly configured duration");
-        ctx.Projectiles.Tick(.7f);
-        Check(Near(hp - m.Hp, 2f), "expired poison zone does not reapply");
-    }
-
-    private static ITurnContext NewWorldWithForms()
-    {
-        var config = new TurnConfig();
-        config.Spawn.InitialCount = 0;
-        config.Forms[(int)PlaneId.Volcano] = new WeaponFormConfig { Map = PlaneId.Volcano, SplashRadius = 1.2f, BurnDps = 6f, BurnDuration = 2f };
-        config.Forms[(int)PlaneId.Ocean] = new WeaponFormConfig { Map = PlaneId.Ocean, HarpoonFalloff = .3f };
-        config.Forms[(int)PlaneId.Dream] = new WeaponFormConfig { Map = PlaneId.Dream, SplashRadius = 1.2f, PoisonDps = 5f, PoisonDuration = 3f };
-        return TurnFactory.Create(config, 123);
-    }
-
-    private static bool Near(float a, float b) => Math.Abs(a - b) < 0.001f;
-    private static void Check(bool ok, string message)
-    {
-        if (!ok) throw new Exception("FAIL: " + message);
+        _checks++;
+        if (!condition) throw new Exception("Test failed: " + description);
     }
 }

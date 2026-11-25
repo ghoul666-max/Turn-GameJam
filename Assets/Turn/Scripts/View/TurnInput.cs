@@ -38,6 +38,8 @@ namespace Turn.View
         public static bool DebugGodModePressed { get { return FKey(4); } }
         /// <summary>F5：调试 · 游戏速度 1× → 2× → 4× 循环。</summary>
         public static bool DebugSpeedPressed { get { return FKey(5); } }
+        /// <summary>F6：调试 · 切到下一把已解锁的武器（正式的换武器入口由程序B 的升级 / 宝箱选项接入）。</summary>
+        public static bool DebugNextWeaponPressed { get { return FKey(6); } }
 
         private static bool FKey(int n)
         {
@@ -49,6 +51,7 @@ namespace Turn.View
                 case 3: return kb.f3Key.wasPressedThisFrame;
                 case 4: return kb.f4Key.wasPressedThisFrame;
                 case 5: return kb.f5Key.wasPressedThisFrame;
+                case 6: return kb.f6Key.wasPressedThisFrame;
                 default: return false;
             }
 #else
@@ -57,6 +60,7 @@ namespace Turn.View
                 case 3: return Input.GetKeyDown(KeyCode.F3);
                 case 4: return Input.GetKeyDown(KeyCode.F4);
                 case 5: return Input.GetKeyDown(KeyCode.F5);
+                case 6: return Input.GetKeyDown(KeyCode.F6);
                 default: return false;
             }
 #endif
@@ -98,6 +102,39 @@ namespace Turn.View
                 return kb != null && (kb.rKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame);
 #else
                 return Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.Return);
+#endif
+            }
+        }
+
+        /// <summary>W：结算界面里「换武器重开」。</summary>
+        public static bool SwitchWeaponPressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                return kb != null && kb.wKey.wasPressedThisFrame;
+#else
+                return Input.GetKeyDown(KeyCode.W);
+#endif
+            }
+        }
+
+        /// <summary>武器选择页切换：← / A 返回 -1，→ / D 返回 +1，否则 0。</summary>
+        public static int SelectStepPressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb == null) return 0;
+                if (kb.leftArrowKey.wasPressedThisFrame || kb.aKey.wasPressedThisFrame) return -1;
+                if (kb.rightArrowKey.wasPressedThisFrame || kb.dKey.wasPressedThisFrame) return 1;
+                return 0;
+#else
+                if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A)) return -1;
+                if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) return 1;
+                return 0;
 #endif
             }
         }

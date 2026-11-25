@@ -7,28 +7,40 @@ namespace Turn.View
     [Serializable]
     public sealed class PlayerSettings
     {
-        [Tooltip("每秒移动的世界单位")]
+        [Tooltip("每秒移动的世界单位（策划 200 像素/秒，按 1 单位 = 40 像素 = 5）")]
         public float moveSpeed = 5f;
         [Min(1f)] public float maxHp = 100f;
         [Tooltip("碰撞半径（世界单位）")]
         public float radius = 0.35f;
+        [Tooltip("受伤后的无敌帧（秒，策划 0.3）")]
+        [Min(0f)] public float hurtInvincibleTime = 0.3f;
 
         public PlayerConfig ToConfig()
         {
-            return new PlayerConfig { MoveSpeed = moveSpeed, MaxHp = maxHp, Radius = radius };
+            return new PlayerConfig { MoveSpeed = moveSpeed, MaxHp = maxHp, Radius = radius, HurtInvincibleTime = hurtInvincibleTime };
         }
     }
 
+    /// <summary>翻滚 / 亚空间参数（新策划案 11/24）。默认值 = 策划书。</summary>
     [Serializable]
     public sealed class RollSettings
     {
-        [Tooltip("翻滚全局冷却（秒）")]
-        public float cooldown = 1.8f;
-        [Tooltip("B13 翻滚加速能压到的最低冷却（秒，策划 0.9）")]
-        public float minCooldown = 0.9f;
-        [Tooltip("翻滚无敌时长（秒）；B14 每层 +0.15，两层后 0.65")]
-        public float invincibleTime = 0.35f;
-        [Tooltip("翻滚动画 / 位移时长（秒）")]
+        [Tooltip("数据版本。F1 数值面板的旧存档（亚空间之前）读出来不是 2，会换成默认值。")]
+        [HideInInspector] public int version = 2;
+
+        [Header("翻滚冷却（每把武器独立，从回到常态空间开始计）")]
+        [Min(0f)] public float waterGunCooldown = 2f;
+        [Min(0f)] public float spearCooldown = 2.5f;
+        [Min(0f)] public float bladeCooldown = 3f;
+
+        [Header("亚空间")]
+        [Tooltip("亚空间持续时长（现实秒，策划 1）。全程无敌，结束后补满弹药、清空印记")]
+        [Min(0.05f)] public float subspaceDuration = 1f;
+        [Tooltip("亚空间里的游戏时间倍率（策划 0.3）")]
+        [UnityEngine.Range(0f, 1f)] public float subspaceTimeScale = 0.3f;
+
+        [Header("翻滚位移")]
+        [Tooltip("翻滚位移时长（游戏秒；亚空间里按慢放推进）")]
         public float duration = 0.2f;
         [Tooltip("翻滚移动距离（世界单位）")]
         public float distance = 0.8f;
@@ -37,9 +49,10 @@ namespace Turn.View
         {
             return new RollConfig
             {
-                Cooldown = cooldown,
-                MinCooldown = minCooldown,
-                InvincibleTime = invincibleTime,
+                WeaponCooldowns = new[] { waterGunCooldown, spearCooldown, bladeCooldown },
+                Cooldown = waterGunCooldown,
+                SubspaceDuration = subspaceDuration,
+                SubspaceTimeScale = subspaceTimeScale,
                 Duration = duration,
                 Distance = distance,
             };
@@ -139,7 +152,7 @@ namespace Turn.View
         private PlayerAnimState ResolveState(PlayerState s)
         {
             if (!s.Alive) return PlayerAnimState.Death;
-            if (s.IsRolling) return PlayerAnimState.Roll;
+            if (s.IsRolling || s.InSubspace) return PlayerAnimState.Roll;
             if (_hurtTimer > 0f) return PlayerAnimState.Hurt;
             if (s.MoveDir.SqrMagnitude > 0.01f) return PlayerAnimState.Move;
             return PlayerAnimState.Idle;
@@ -173,9 +186,9 @@ namespace Turn.View
                     bodyRenderer.color = new Color(0.45f, 0.45f, 0.5f, 1f);
                     return;
                 case PlayerAnimState.Roll:
-                    // 一次翻滚转一整圈，方向跟随翻滚的水平方向
-                    float total = Mathf.Max(0.05f, rollSettings.duration);
-                    float t = 1f - Mathf.Clamp01(s.RollTimer / total);
+                    // 一次翻滚转一整圈（整个亚空间期间，按现实时间），方向跟随翻滚的水平方向
+                    float total = Mathf.Max(0.05f, _ctx.Config.Roll.SubspaceDuration);
+                    float t = s.InSubspace ? 1f - Mathf.Clamp01(s.SubspaceLeft / total) : 1f;
                     _rollAngle = (s.RollDirection.X >= 0f ? -360f : 360f) * t;
                     body.localRotation = Quaternion.Euler(0f, 0f, _rollAngle);
                     body.localScale = new Vector3(0.85f, 0.85f, 1f);

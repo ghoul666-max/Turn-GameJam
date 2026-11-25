@@ -139,6 +139,10 @@ namespace Turn.View
         private Color _oceanColor = Color.white;
         private float _flashTimer;
         private float _deathTimer = -1f;
+        private bool _lookApplied;
+        private TextMesh _markLabel;
+        private string _markText = "";
+        private Color _stateTint = Color.white;
 
         public MonsterSettings Settings { get { return settings; } }
         public int EntityId { get { return entityId; } }
@@ -184,6 +188,71 @@ namespace Turn.View
                 hpFill.localPosition = new Vector3((ratio - 1f) * 0.5f, 0f, 0f);
             }
             if (burnMark != null) burnMark.enabled = burning;
+            ApplyLook(e);
+        }
+
+        /// <summary>
+        /// 新策划案的占位外观（白模）：按种类染色、按体型缩放（精英 / Boss 更大），
+        /// 蓄力时发红、眩晕时发灰，头顶显示印记层数（矛 / 剑）。
+        /// </summary>
+        private void ApplyLook(MonsterEntity e)
+        {
+            if (MonsterKinds.HordeIndex(e.Kind) < 0) return;
+            if (!_lookApplied)
+            {
+                _lookApplied = true;
+                Color c = ViewMath.MonsterColor(e.Kind);
+                if (e.Rank == 1) c = Color.Lerp(c, new Color(1f, 0.85f, 0.2f, 1f), 0.45f);
+                else if (e.Rank >= 2) c = Color.Lerp(c, new Color(0.75f, 0.1f, 0.15f, 1f), 0.55f);
+                _volcanoColor = c;
+                _oceanColor = c;
+                transform.localScale = Vector3.one * Mathf.Max(0.25f, e.Radius / 0.4f);
+                _stateTint = Color.white;
+                SetTint(_volcanoColor, _oceanColor);
+            }
+
+            bool windup = e.AiPhase == 1 && (e.Kind == MonsterKind.Charger || e.Kind == MonsterKind.Sniper);
+            Color tint = e.StunLeft > 0f ? new Color(0.55f, 0.55f, 0.65f, 1f)
+                : windup ? (Mathf.Repeat(Time.time * 10f, 1f) < 0.5f ? new Color(1f, 0.25f, 0.2f, 1f) : Color.white)
+                : Color.white;
+            if (_flashTimer <= 0f && _deathTimer < 0f && tint != _stateTint)
+            {
+                _stateTint = tint;
+                SetTint(_volcanoColor * tint, _oceanColor * tint);
+            }
+
+            string text = "";
+            if (e.SpearMarks > 0) text += "矛" + e.SpearMarks;
+            if (e.BladeMarks > 0) text += (text.Length > 0 ? " " : "") + "剑" + e.BladeMarks;
+            if (text != _markText)
+            {
+                _markText = text;
+                EnsureMarkLabel();
+                if (_markLabel != null)
+                {
+                    _markLabel.text = text;
+                    _markLabel.color = e.SpearMarks > 0 ? ViewMath.WeaponColor(WeaponKind.Spear) : ViewMath.WeaponColor(WeaponKind.Blade);
+                }
+            }
+        }
+
+        private void EnsureMarkLabel()
+        {
+            if (_markLabel != null) return;
+            Font font = UIFont.Chinese;
+            if (font == null) return;
+            var go = new GameObject("Marks");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(0f, 0.75f, 0f);
+            _markLabel = go.AddComponent<TextMesh>();
+            _markLabel.font = font;
+            _markLabel.fontSize = 48;
+            _markLabel.characterSize = 0.05f;
+            _markLabel.anchor = TextAnchor.MiddleCenter;
+            _markLabel.alignment = TextAlignment.Center;
+            var mr = go.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = font.material;
+            mr.sortingOrder = ViewMath.HpBarOrder + 1;
         }
 
         public void Flash()
@@ -197,6 +266,7 @@ namespace Turn.View
             _deathTimer = 0f;
             if (hpBar != null) hpBar.SetActive(false);
             if (burnMark != null) burnMark.enabled = false;
+            if (_markLabel != null) _markLabel.text = "";
         }
 
         private void Update()
@@ -215,7 +285,7 @@ namespace Turn.View
             {
                 _flashTimer -= Time.deltaTime;
                 SetTint(Color.white, Color.white);
-                if (_flashTimer <= 0f) SetTint(_volcanoColor, _oceanColor);
+                if (_flashTimer <= 0f) SetTint(_volcanoColor * _stateTint, _oceanColor * _stateTint);
             }
         }
 

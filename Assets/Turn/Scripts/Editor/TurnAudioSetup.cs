@@ -40,13 +40,14 @@ namespace Turn.EditorTools
             { "playerHurt", SfxDir + "/03-playerHurt/impactPunch_medium_000.ogg" },
             { "damageBlocked", SfxDir + "/04-damageBlocked/forceField_002.ogg" },
             { "playerDeath", SfxDir + "/05-playerDeath/lowFrequency_explosion_000.ogg" },
-            { "shot", SfxDir + "/06-shot/thrusterFire_000.ogg" },
+            // 通用开火：0.24 秒的短促“咻”。原来的 thrusterFire_000 长 5 秒，连发时叠成十几秒的轰鸣杂音（海洋鱼叉最明显）
+            { "shot", SfxDir + "/06-shot/laserSmall_000.ogg" },
+            { "fireballShot", SfxDir + "/06-shot/fireball_shot.ogg" }, // 程序生成（原创，无授权限制）：清脆短促版
             { "ammoEmpty", SfxDir + "/07-ammoEmpty/error_001.ogg" },
             { "monsterDeath", SfxDir + "/08-monsterDeath/impactSoft_medium_000.ogg" },
             { "orbPickup", SfxDir + "/09-orbPickup/handleCoins.ogg" },
             { "levelUp", SfxDir + "/10-levelUp/jingles_NES01.ogg" },
             { "lavaEruption", SfxDir + "/11-lavaEruption/lowFrequency_explosion_001.ogg" },
-            { "sharkAppear", SfxDir + "/12-sharkAppear/spaceEngineLow_000.ogg" },
             { "shockwave", SfxDir + "/13-shockwave/impactPlate_heavy_000.ogg" },
             { "phoneWarning", SfxDir + "/14-phoneWarning/zapTwoTone.ogg" },
             { "phoneLand", SfxDir + "/15-phoneLand/impactGlass_heavy_000.ogg" },
@@ -116,9 +117,21 @@ namespace Turn.EditorTools
                 if (Assign(so, Cues[i, 0] + ".clip", Cues[i, 1])) filled++;
                 else missing++;
             }
+            // 鲨鱼出现：原来的 spaceEngineLow_000 是 5 秒的引擎低鸣，进海洋时像一段意义不明的杂音，现在留空（不播）
+            ClearClip(so, "sharkAppear.clip");
+            // 火球每 0.7 秒一发，音量略收
+            SerializedProperty fireballVolume = so.FindProperty("fireballShot.volume");
+            if (fireballVolume != null) fireballVolume.floatValue = 0.8f;
+
             so.ApplyModifiedProperties();
             EditorUtility.SetDirty(audio);
             return filled;
+        }
+
+        private static void ClearClip(SerializedObject so, string property)
+        {
+            SerializedProperty prop = so.FindProperty(property);
+            if (prop != null) prop.objectReferenceValue = null;
         }
 
         private static bool Assign(SerializedObject so, string property, string path)

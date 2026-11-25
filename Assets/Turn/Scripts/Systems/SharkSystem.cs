@@ -30,7 +30,8 @@ namespace Turn.Systems
 
         public void SyncWithPlane()
         {
-            if (_ctx.Plane.Active == PlaneId.Ocean)
+            // 新策划案：位面机制总开关关闭时没有鲨鱼
+            if (_ctx.Plane.Active == PlaneId.Ocean && _ctx.Config.Environment.MechanicsEnabled)
             {
                 if (_active.Count == 0) SpawnAll();
             }

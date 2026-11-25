@@ -25,6 +25,7 @@ namespace Turn.Systems
         public IProjectileSystem Projectiles { get; internal set; }
         public IExperienceSystem Experience { get; internal set; }
         public IProgressionSystem Progression { get; internal set; }
+        public ILoadoutSystem Loadout { get; internal set; }
     }
 
     /// <summary>唯一的组装点：要替换某个系统的实现，只改这里。</summary>
@@ -43,14 +44,15 @@ namespace Turn.Systems
             ctx.Obstacles = new ObstacleSystem(ctx);
             ctx.Combat = new CombatSystem(ctx);
             ctx.Player = new PlayerSystem(ctx, config.Player, config.Environment);
-            ctx.Progression = new ProgressionSystem(ctx, config.Upgrades, config.Experience);
-            ctx.Roll = new RollSystem(ctx, config.Roll, config.Upgrades);
-            ctx.Monsters = new MonsterSystem(ctx, config.Monster, config.Environment);
+            ctx.Progression = new ProgressionSystem(ctx, config.Builds, config.Experience);
+            ctx.Loadout = new LoadoutSystem(ctx, config.Loadout);
+            ctx.Roll = new RollSystem(ctx, config.Roll);
+            ctx.Monsters = new MonsterSystem(ctx, config.Horde);
             ctx.Sharks = new SharkSystem(ctx, config.Shark);
             ctx.Environment = new EnvironmentSystem(ctx, config.Environment, config.Monster);
-            ctx.Spawner = new SpawnSystem(ctx, config.Spawn, config.Penalty);
-            ctx.Weapons = new WeaponSystem(ctx, config.Weapon, config.Forms, config.Upgrades);
-            ctx.Projectiles = new ProjectileSystem(ctx, config.Upgrades);
+            ctx.Spawner = new SpawnSystem(ctx, config.Horde);
+            ctx.Weapons = new WeaponSystem(ctx, config.Arsenal, config.Weapon.InitialAmmo);
+            ctx.Projectiles = new ProjectileSystem(ctx);
             ctx.Experience = new ExperienceSystem(ctx, config.Experience);
             ctx.Session = new SessionSystem(ctx);
 

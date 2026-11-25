@@ -24,6 +24,43 @@ namespace Turn.Monsters
             return result;
         }
 
+        /// <summary>
+        /// 新策划案五种怪物的基础数值（= 首次出现那一波的数值），按 Walker / Spore / Charger / Rotter / Sniper 顺序。
+        /// 像素换算：1 单位 = 40 像素。冲锋触发距离 / 狙击射程策划书没给，暂定 6 / 9。
+        /// </summary>
+        public static HordeKindConfig[] CreateHordeDefaults()
+        {
+            return new[]
+            {
+                //        生命  移速   伤害  间隔  蓄力  距离  经验 首波 权重
+                Horde(30f, 2f,    5f,  .5f, 0f,   0f,  5,  1,  5f),   // 游荡尸：80 px/s，碰撞 5，1 次 / 0.5 秒
+                Horde(50f, 1f,    3f,  3f,  0f,   0f,  8,  3,  2f),   // 弹幕孢：40 px/s，弹幕 3 / 发，3 秒一圈
+                Horde(80f, 1.5f,  15f, 4f,  .8f,  6f,  12, 5,  1.5f), // 疾冲兽：60 px/s，冲锋 15，蓄力 0.8，冷却 4
+                Horde(60f, 1.75f, 4f,  .5f, 0f,   0f,  10, 7,  1.5f), // 毒腐体：70 px/s，碰撞 4
+                Horde(70f, 1.25f, 20f, 5f,  1.5f, 9f,  15, 10, 1f),   // 狙击械：50 px/s，激光 20，蓄力 1.5，间隔 5
+            };
+        }
+
+        private static HordeKindConfig Horde(float hp, float speed, float damage, float interval, float windup, float range, int xp, int debut, float weight)
+        {
+            return new HordeKindConfig
+            {
+                MaxHp = hp, Speed = speed, Damage = damage, AttackInterval = interval, Windup = windup,
+                Range = range, Xp = xp, DebutWave = debut, Weight = weight,
+            };
+        }
+
+        /// <summary>按 MonsterKinds.HordeCount 补齐（Inspector 数组缺项 / 生命 ≤ 0 时用默认值）。</summary>
+        public static HordeKindConfig[] NormalizeHorde(HordeKindConfig[] configured)
+        {
+            HordeKindConfig[] defaults = CreateHordeDefaults();
+            if (configured == null) return defaults;
+            var result = new HordeKindConfig[defaults.Length];
+            for (int i = 0; i < result.Length; i++)
+                result[i] = i < configured.Length && configured[i] != null && configured[i].MaxHp > 0f ? configured[i] : defaults[i];
+            return result;
+        }
+
         private static MonsterArchetype Stats(float hp, float speed, float damage, float interval, float windup, float range, int xp)
         {
             return new MonsterArchetype { MaxHp = hp, Speed = speed, Damage = damage, AttackInterval = interval, Windup = windup, Range = range, Xp = xp };

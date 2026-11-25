@@ -38,6 +38,9 @@ namespace Turn.View
         private float _flashTimer;
         private float _rejectTimer;
         private float _hurtTimer;
+        /// <summary>新武器解锁提示的剩余显示时间（现实秒）。</summary>
+        private float _unlockTimer;
+        private WeaponKind _unlockWeapon;
 
         public const float FlashTime = 0.35f;
 
@@ -56,8 +59,10 @@ namespace Turn.View
             ctx.Events.Subscribe<RollRejectedEvent>(OnRollRejected);
             ctx.Events.Subscribe<PlayerDamagedEvent>(OnPlayerDamaged);
             ctx.Events.Subscribe<PhaseChangedEvent>(OnPhaseChanged);
+            ctx.Events.Subscribe<WeaponUnlockedEvent>(OnWeaponUnlocked);
             _flashTimer = 0f;
             _rejectTimer = 0f;
+            _unlockTimer = 0f;
             _hurtTimer = 0f;
             SetPaused(false);
             if (defeatPanel != null) defeatPanel.SetActive(false);
@@ -70,6 +75,7 @@ namespace Turn.View
             _ctx.Events.Unsubscribe<RollRejectedEvent>(OnRollRejected);
             _ctx.Events.Unsubscribe<PlayerDamagedEvent>(OnPlayerDamaged);
             _ctx.Events.Unsubscribe<PhaseChangedEvent>(OnPhaseChanged);
+            _ctx.Events.Unsubscribe<WeaponUnlockedEvent>(OnWeaponUnlocked);
             _ctx = null;
         }
 
@@ -104,6 +110,12 @@ namespace Turn.View
         private void OnPlayerDamaged(PlayerDamagedEvent evt)
         {
             _hurtTimer = 0.25f;
+        }
+
+        private void OnWeaponUnlocked(WeaponUnlockedEvent evt)
+        {
+            _unlockWeapon = evt.Weapon;
+            _unlockTimer = 3f;
         }
 
         private void OnPhaseChanged(PhaseChangedEvent evt)
@@ -141,15 +153,22 @@ namespace Turn.View
             if (ammoText != null)
             {
                 var sb = new System.Text.StringBuilder();
-                sb.Append(w.CurrentForm.Name).Append("  ");
-                for (int i = 0; i < w.Capacity; i++) sb.Append(i < w.Ammo ? "■" : "□");
+                sb.Append(WeaponKinds.DisplayName(w.Current)).Append("  ");
+                // 弹药条：最多画 20 格，按比例
+                int cells = Mathf.Min(20, Mathf.Max(1, w.Capacity));
+                int filled = w.Capacity > 0 ? Mathf.CeilToInt((float)w.Ammo / w.Capacity * cells) : 0;
+                for (int i = 0; i < cells; i++) sb.Append(i < filled ? "■" : "□");
                 sb.Append("  ").Append(w.Ammo).Append('/').Append(w.Capacity);
+                // 铺垫进度：当前武器的痕迹 / 印记
+                if (w.Current == WeaponKind.WaterGun) sb.Append("   水渍 ").Append(w.Puddles.Count);
+                else if (w.Current == WeaponKind.Spear) sb.Append("   矛印记 ").Append(w.TotalSpearMarks);
+                else sb.Append("   剑气印记 ").Append(w.TotalBladeMarks).Append("（斩击 +").Append(Mathf.RoundToInt(w.TotalBladeMarks * _ctx.Config.Arsenal.Blade.MarkBonus * 100f)).Append("%）");
                 ammoText.text = sb.ToString();
-                ammoText.color = ViewMath.MapColor(w.Form);
+                ammoText.color = ViewMath.WeaponColor(w.Current);
             }
             if (ammoWarning != null)
             {
-                bool empty = w.Ammo < Mathf.Max(1, _ctx.Config.Weapon.AmmoPerShot);
+                bool empty = w.Ammo <= 0;
                 ammoWarning.enabled = empty && Mathf.Repeat(Time.unscaledTime * 3f, 1f) < 0.7f;
             }
 
@@ -158,33 +177,51 @@ namespace Turn.View
             if (xpFill != null) xpFill.anchorMax = new Vector2(prog.XpToNext > 0 ? Mathf.Clamp01((float)prog.Xp / prog.XpToNext) : 0f, 1f);
             if (levelText != null) levelText.text = "Lv " + prog.Level + "   " + prog.Xp + " / " + prog.XpToNext;
 
-            // MapUI
+            // MapUI（新策划案：波次 + 当前武器 + 翻滚 / 亚空间状态）
             PlaneId map = _ctx.Plane.Active;
+            bool mechanics = _ctx.Config.Environment.MechanicsEnabled;
+            ILoadoutSystem loadout = _ctx.Loadout;
             if (mapText != null)
             {
-                mapText.text = "当前地图：" + PlaneIds.DisplayName(map) + PlaneStatus(map);
-                mapText.color = ViewMath.MapColor(map);
+                string wave = "第 " + _ctx.Session.Wave + " 波" + (_ctx.Session.WaveTimeLeft > 0f ? "  下一波 " + FormatTime(_ctx.Session.WaveTimeLeft) : "");
+                string weapon = "   武器：" + WeaponKinds.DisplayName(loadout.Equipped) + "（已解锁 " + loadout.UnlockedCount + "/" + WeaponKinds.Count + "）";
+                string unlock = _unlockTimer > 0f ? "   新武器解锁：" + WeaponKinds.DisplayName(_unlockWeapon) : "";
+                mapText.text = wave + weapon + unlock + (mechanics ? "   " + PlaneIds.DisplayName(map) + PlaneStatus(map) : "");
+                mapText.color = _unlockTimer > 0f ? new Color(1f, 0.85f, 0.3f, 1f) : (mechanics ? ViewMath.MapColor(map) : Color.white);
             }
-            float cd = _ctx.Roll.EffectiveCooldown;
-            float ready = cd > 0f ? 1f - Mathf.Clamp01(p.RollCooldownLeft / cd) : 1f;
+            float ready;
+            if (p.InSubspace)
+            {
+                float total = Mathf.Max(0.05f, _ctx.Config.Roll.SubspaceDuration);
+                ready = Mathf.Clamp01(p.SubspaceLeft / total);
+            }
+            else
+            {
+                float cd = _ctx.Roll.EffectiveCooldown;
+                ready = cd > 0f ? 1f - Mathf.Clamp01(p.RollCooldownLeft / cd) : 1f;
+            }
             if (rollFill != null) rollFill.anchorMax = new Vector2(ready, 1f);
             if (rollFillImage != null)
             {
-                Color c = ready >= 1f ? new Color(0.5f, 1f, 0.6f, 1f) : new Color(0.6f, 0.6f, 0.7f, 1f);
+                Color c = p.InSubspace ? new Color(0.85f, 0.85f, 0.85f, 1f)
+                    : (ready >= 1f ? new Color(0.5f, 1f, 0.6f, 1f) : new Color(0.6f, 0.6f, 0.7f, 1f));
                 if (_rejectTimer > 0f) c = new Color(1f, 0.3f, 0.3f, 1f);
                 rollFillImage.color = c;
             }
             if (rollText != null)
             {
-                rollText.text = p.RollCooldownLeft > 0f
-                    ? "翻滚冷却 " + p.RollCooldownLeft.ToString("0.0") + "s"
-                    : "翻滚就绪 [Space]  → " + PlaneIds.DisplayName(PlaneIds.Other(map)) + "  +" + _ctx.Config.Penalty.Count + " 怪";
+                if (p.InSubspace) rollText.text = "亚空间 " + p.SubspaceLeft.ToString("0.0") + "s";
+                else if (p.RollCooldownLeft > 0f) rollText.text = "翻滚冷却 " + p.RollCooldownLeft.ToString("0.0") + "s";
+                else rollText.text = "翻滚就绪 [Space]  → 亚空间爆发 + 补满弹药";
             }
-            if (terrainText != null) terrainText.text = "脚下：" + TerrainName(p.Terrain);
+            if (terrainText != null) terrainText.text = mechanics ? "脚下：" + TerrainName(p.Terrain) : "";
+            if (_unlockTimer > 0f) _unlockTimer -= dt;
             if (statsText != null)
             {
                 float left = _ctx.Session.LevelTimeLeft;
-                string level = "第 " + ((int)_ctx.Plane.ActivePair + 1) + " 关" + (left > 0f ? "  过关还剩 " + FormatTime(left) : "");
+                string level = _ctx.Config.Level.Endless
+                    ? "无尽"
+                    : "第 " + ((int)_ctx.Plane.ActivePair + 1) + " 关" + (left > 0f ? "  过关还剩 " + FormatTime(left) : "");
                 statsText.text = level + "   " + FormatTime(_ctx.Session.Time) + "   击杀 " + prog.Kills + "   怪物 " + _ctx.Monsters.AliveCount +
                                  "   翻滚 " + _ctx.Roll.RollCount;
             }

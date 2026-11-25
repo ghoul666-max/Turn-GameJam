@@ -14,7 +14,10 @@ namespace Turn.Core
     /// <summary>本关存活够时间。Victory = 这是最后一关（三组位面全部通过）。</summary>
     public struct LevelClearedEvent { public PlanePairId Pair; public float Time; public bool Victory; }
 
-    /// <summary>一次成功的翻滚。翻滚时序里的全部效果（无敌 / 切位面 / 怪物偏移换皮 / 弹幕 / 惩罚刷怪 / 装填 / 位面进入结算）都执行完毕后才发布。</summary>
+    /// <summary>
+    /// 一次成功的翻滚（已进入亚空间、爆发已结算）。表现层用它播翻滚音效 / 传送门特效。
+    /// 新策划案里翻滚不再切位面（FromPlane = ToPlane）、不刷惩罚怪（PenaltySpawned = 0）、不立刻装填（AmmoAfter = AmmoBefore，退出亚空间时才装填）。
+    /// </summary>
     public struct RollPerformedEvent
     {
         public Vec2 Position;
@@ -28,6 +31,28 @@ namespace Turn.Core
         /// <summary>B18 双程翻滚的免费第二次（没有刷怪、没有装填）。</summary>
         public bool Free;
     }
+
+    /// <summary>
+    /// 进入亚空间（翻滚的瞬间）。这一刻就是「全图所有铺垫痕迹 / 印记同步爆发」的唯一时机：
+    /// 程序B 的武器订阅它，在回调里立刻结算爆发伤害（经 ICombatSystem），不得修改 RollSystem / PlayerState。
+    /// Weapon = 翻滚时装备的武器（爆发按这把武器的规则结算）。Duration 为现实秒。
+    /// </summary>
+    public struct SubspaceEnteredEvent { public Vec2 Position; public WeaponKind Weapon; public float Duration; public float TimeScale; }
+
+    /// <summary>
+    /// 回到常态空间：弹药已经补满（Weapons.Reload 已执行），翻滚冷却已开始。
+    /// 程序B 的武器订阅它，清空全部铺垫痕迹 / 印记。
+    /// </summary>
+    public struct SubspaceExitedEvent { public Vec2 Position; public WeaponKind Weapon; public float Cooldown; }
+
+    /// <summary>新的一波开始（开局发布第 1 波）。只由 SessionSystem 发布。</summary>
+    public struct WaveStartedEvent { public int Wave; }
+
+    /// <summary>达到指定波次，解锁了一把武器。只由 LoadoutSystem 发布。</summary>
+    public struct WeaponUnlockedEvent { public WeaponKind Weapon; public int Wave; }
+
+    /// <summary>换了武器。只由 LoadoutSystem 发布。</summary>
+    public struct WeaponEquippedEvent { public WeaponKind From; public WeaponKind To; }
 
     /// <summary>冷却中按了空格：什么效果都没有发生。</summary>
     public struct RollRejectedEvent { public float CooldownLeft; }

@@ -63,6 +63,8 @@ namespace Turn.View
 
         [Header("战斗")]
         [SerializeField] private SoundCue shot = new SoundCue(0.05f);
+        [Tooltip("火山 · 火球专用的发射音效；空着时火球也用上面的通用开火音效")]
+        [SerializeField] private SoundCue fireballShot = new SoundCue(0.05f);
         [SerializeField] private SoundCue ammoEmpty = new SoundCue(0.5f);
         [SerializeField] private SoundCue monsterDeath = new SoundCue(0.05f);
         [SerializeField] private SoundCue orbPickup = new SoundCue(0.05f);
@@ -180,7 +182,11 @@ namespace Turn.View
         private void OnPlayerDamaged(PlayerDamagedEvent evt) { Play(playerHurt); }
         private void OnDamageBlocked(DamageBlockedEvent evt) { Play(damageBlocked); }
         private void OnPlayerDied(PlayerDiedEvent evt) { Play(playerDeath); }
-        private void OnShot(ShotFiredEvent evt) { Play(shot); }
+        private void OnShot(ShotFiredEvent evt)
+        {
+            bool fireball = evt.Weapon == WeaponKind.WaterGun && fireballShot != null && fireballShot.clip != null;
+            Play(fireball ? fireballShot : shot);
+        }
         private void OnAmmoEmpty(AmmoEmptiedEvent evt) { Play(ammoEmpty); }
         private void OnMonsterDied(MonsterDiedEvent evt) { Play(monsterDeath); }
         private void OnOrb(OrbCollectedEvent evt) { Play(orbPickup); }

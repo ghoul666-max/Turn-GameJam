@@ -7,28 +7,43 @@ namespace Turn.Core
     // 世界数据（程序A）：玩家、翻滚、鲨鱼、环境、位面、地形。战斗数据在 Models.Combat.cs（程序B）。
     // 配置数据：由 Unity 层的 TurnConfigReader 从 Inspector 参数转换而来，运行时只读。
     // 默认值 = 题目给出的推荐手感参数。
+    // 新策划案（11/24）的数值写的是像素：统一按 1 世界单位 = 40 像素换算（200 像素/秒 = 5 单位/秒）。
     // ==================================================================
 
     public sealed class PlayerConfig
     {
+        /// <summary>移动速度（单位/秒）。策划 200 像素/秒 = 5。</summary>
         public float MoveSpeed = 5f;
         public float MaxHp = 100f;
         /// <summary>碰撞半径（世界单位）。</summary>
         public float Radius = 0.35f;
+        /// <summary>受伤后的无敌帧（秒，策划 0.3）。</summary>
+        public float HurtInvincibleTime = 0.3f;
     }
 
     public sealed class RollConfig
     {
-        /// <summary>全局冷却（秒）。</summary>
-        public float Cooldown = 1.8f;
-        /// <summary>B13 缩短冷却后的下限（秒，策划 0.9）。</summary>
-        public float MinCooldown = 0.9f;
-        /// <summary>无敌帧（秒）；B14 每层 +0.15，两层后 0.65。</summary>
-        public float InvincibleTime = 0.35f;
-        /// <summary>翻滚动画 / 位移时长（秒）。</summary>
+        /// <summary>按 (int)WeaponKind：每把武器独立的翻滚冷却（秒，策划 水枪 2 / 投矛 2.5 / 陌刀 3）。从回到常态空间开始计。</summary>
+        public float[] WeaponCooldowns = { 2f, 2.5f, 3f };
+        /// <summary>数组缺项时的兜底冷却（秒）。</summary>
+        public float Cooldown = 2f;
+        /// <summary>亚空间持续时长（现实秒，策划 1）。全程无敌。</summary>
+        public float SubspaceDuration = 1f;
+        /// <summary>亚空间里的游戏时间倍率（策划 0.3）。</summary>
+        public float SubspaceTimeScale = 0.3f;
+        /// <summary>翻滚位移时长（游戏秒；亚空间里按慢放推进）。</summary>
         public float Duration = 0.2f;
         /// <summary>翻滚位移距离（世界单位）。</summary>
         public float Distance = 0.8f;
+    }
+
+    /// <summary>武器装备与解锁（新策划案）。</summary>
+    public sealed class LoadoutConfig
+    {
+        /// <summary>开局装备的武器（策划：水枪）。</summary>
+        public WeaponKind StartWeapon = WeaponKind.WaterGun;
+        /// <summary>按 (int)WeaponKind：达到第几波解锁（≤ 1 = 开局就解锁）。策划书没给具体波次，暂定 1 / 4 / 8。</summary>
+        public int[] UnlockWaves = { 1, 4, 8 };
     }
 
     public sealed class SharkConfig
@@ -47,6 +62,11 @@ namespace Turn.Core
     public sealed class EnvironmentConfig
     {
         public PlaneId StartPlane = PlaneId.Volcano;
+        /// <summary>
+        /// 旧位面机制总开关（岩浆喷发、浅水回血、工位困意、梦境减速 / 来电、海洋鲨鱼）。
+        /// 新策划案是单地图 + 亚空间，默认关闭；关闭后地图只保留地面与遮挡物。
+        /// </summary>
+        public bool MechanicsEnabled;
         /// <summary>岩浆 / 浅水 / 灼烧的结算间隔（秒）。按间隔结算，与帧率无关。</summary>
         public float DotTickInterval = 0.25f;
         public float PlayerLavaDps = 10f;
@@ -78,9 +98,16 @@ namespace Turn.Core
         public float PhoneIntervalMax = 6f;
     }
 
-    /// <summary>关卡：一关 = 一组位面。存活够时间就过关（翻页），最后一组过关 = 胜利。</summary>
+    /// <summary>
+    /// 关卡流程。新策划案：无尽生存（Endless），波次无限推进，没有通关终点。
+    /// 旧流程（一关 = 一组位面，存活够时间翻页，最后一组过关 = 胜利）保留，Endless = false 时生效。
+    /// </summary>
     public sealed class LevelConfig
     {
+        /// <summary>无尽模式：永不过关。</summary>
+        public bool Endless = true;
+        /// <summary>每一波的时长（游戏秒）。策划书没给，暂定 30。≤ 0 = 永远第 1 波。</summary>
+        public float WaveSeconds = 30f;
         /// <summary>每关需要存活的秒数；≤ 0 表示不会过关（无尽测试用）。</summary>
         public float SurviveSeconds = 300f;
         /// <summary>最后一关的位面组：这一组过关即胜利。</summary>
@@ -93,6 +120,7 @@ namespace Turn.Core
         public LevelConfig Level = new LevelConfig();
         public PlayerConfig Player = new PlayerConfig();
         public RollConfig Roll = new RollConfig();
+        public LoadoutConfig Loadout = new LoadoutConfig();
         public SharkConfig Shark = new SharkConfig();
         public EnvironmentConfig Environment = new EnvironmentConfig();
 
@@ -223,10 +251,17 @@ namespace Turn.Core
         public float RollSpeed;
         /// <summary>RollSystem 写：翻滚冷却剩余。</summary>
         public float RollCooldownLeft;
-        /// <summary>RollSystem 写：无敌剩余时间。&gt; 0 时 CombatSystem 拒绝一切对玩家的伤害。</summary>
+        /// <summary>RollSystem 写：额外无敌剩余时间（目前只有调试无敌在用）。&gt; 0 时 CombatSystem 拒绝一切对玩家的伤害。</summary>
         public float InvincibleLeft;
+        /// <summary>RollSystem 写：是否处在亚空间（翻滚后）。亚空间里全程无敌。</summary>
+        public bool InSubspace;
+        /// <summary>RollSystem 写：亚空间剩余现实秒数。</summary>
+        public float SubspaceLeft;
+        /// <summary>PlayerSystem 写：受伤后的无敌帧剩余时间（PlayerConfig.HurtInvincibleTime）。</summary>
+        public float HurtInvincibleLeft;
 
-        public bool Invincible { get { return InvincibleLeft > 0f; } }
+        /// <summary>任何一种无敌：调试无敌 / 亚空间 / 受伤无敌帧。CombatSystem 只看这一个。</summary>
+        public bool Invincible { get { return InvincibleLeft > 0f || InSubspace || HurtInvincibleLeft > 0f; } }
     }
 
     /// <summary>鲨鱼：海洋专属，没有生命值，不能被击杀。SharkSystem 写全部字段。</summary>

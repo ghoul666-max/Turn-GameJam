@@ -10713,8 +10713,13 @@ MonoBehaviour:
     pitchJitter: 0.05
     minInterval: 0
   shot:
-    clip: {fileID: 8300000, guid: 368556dc77076874fb668c41f054cbca, type: 3}
+    clip: {fileID: 8300000, guid: e3c7361bb225bfb4292693a63cced32b, type: 3}
     volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.05
+  fireballShot:
+    clip: {fileID: 8300000, guid: ece9d71e528100149a12875d37a924b9, type: 3}
+    volume: 0.8
     pitchJitter: 0.05
     minInterval: 0.05
   ammoEmpty:
@@ -10743,7 +10748,7 @@ MonoBehaviour:
     pitchJitter: 0.05
     minInterval: 0
   sharkAppear:
-    clip: {fileID: 8300000, guid: b991670ace3b95c4ebb2d563148b9d4f, type: 3}
+    clip: {fileID: 0}
     volume: 1
     pitchJitter: 0.05
     minInterval: 0

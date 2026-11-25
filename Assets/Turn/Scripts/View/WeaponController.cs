@@ -101,7 +101,11 @@ namespace Turn.View
     /// </summary>
     public sealed class WeaponController : MonoBehaviour
     {
-        [Header("弹匣与射击")]
+        [Header("新策划案（11/24）· 三把武器：水枪 / 投矛 / 陌刀（1 单位 = 40 像素）")]
+        [Tooltip("新系统只读这一组。下面的旧武器参数只保留子弹 Prefab：水弹借用火球 Prefab、长矛借用鱼叉 Prefab")]
+        [SerializeField] private ArsenalConfig arsenal = new ArsenalConfig();
+
+        [Header("旧方案（保留子弹 Prefab 引用）· 弹匣与射击")]
         [SerializeField] private WeaponSettings settings = new WeaponSettings();
         [Header("火山武器：火球")]
         [SerializeField] private WeaponFormSettings fireball = new WeaponFormSettings();
@@ -135,7 +139,7 @@ namespace Turn.View
         [SerializeField] private SpriteRenderer formIcon;
 
         [Header("运行时只读")]
-        [SerializeField] private PlaneId currentForm;
+        [SerializeField] private WeaponKind currentWeapon;
         [SerializeField] private string currentFormName;
         [SerializeField] private int currentAmmo;
         [SerializeField] private int capacity;
@@ -143,6 +147,15 @@ namespace Turn.View
         private ITurnContext _ctx;
 
         public WeaponSettings Settings { get { return settings; } }
+        public ArsenalConfig Arsenal { get { return arsenal; } }
+
+        /// <summary>新策划案：某把武器子弹的 Prefab（水弹 = 火球 Prefab，长矛 = 鱼叉 Prefab；陌刀没有子弹）。</summary>
+        public Projectile GetPrefab(WeaponKind weapon)
+        {
+            if (weapon == WeaponKind.WaterGun) return fireball != null ? fireball.prefab : null;
+            if (weapon == WeaponKind.Spear) return harpoon != null ? harpoon.prefab : null;
+            return null;
+        }
 
         /// <summary>该位面绑定的武器形态；还没做的位面返回 null（程序B 补齐其余 4 把）。</summary>
         public WeaponFormSettings GetForm(PlaneId map)
@@ -171,14 +184,14 @@ namespace Turn.View
         {
             if (_ctx == null) return;
             IWeaponSystem w = _ctx.Weapons;
-            currentForm = w.Form;
-            currentFormName = w.CurrentForm.Name;
+            currentWeapon = w.Current;
+            currentFormName = WeaponKinds.DisplayName(currentWeapon);
             currentAmmo = w.Ammo;
             capacity = w.Capacity;
 
             if (formIcon != null)
             {
-                Color c = ViewMath.MapColor(currentForm);
+                Color c = ViewMath.WeaponColor(currentWeapon);
                 if (currentAmmo <= 0) c.a = 0.3f; // 打空时变暗
                 formIcon.color = c;
             }

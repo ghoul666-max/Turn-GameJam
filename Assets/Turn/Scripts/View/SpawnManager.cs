@@ -66,7 +66,11 @@ namespace Turn.View
         [SerializeField] private MonsterController monsterPrefab;
         [SerializeField] private SharkAI sharkPrefab;
 
-        [Header("常规刷怪")]
+        [Header("新策划案（11/24）· 五种怪物 + 波次 + 精英 / Boss（1 单位 = 40 像素）")]
+        [Tooltip("新系统只读这一组。Kinds 按 游荡尸 / 弹幕孢 / 疾冲兽 / 毒腐体 / 狙击械 的顺序，数值 = 首次出现那一波的数值")]
+        [SerializeField] private HordeConfig horde = new HordeConfig();
+
+        [Header("旧方案（不再使用）· 常规刷怪")]
         [SerializeField] private SpawnSettings spawn = new SpawnSettings();
         [Header("翻滚惩罚")]
         [SerializeField] private PenaltySettings penalty = new PenaltySettings();
@@ -74,6 +78,7 @@ namespace Turn.View
         public MonsterController MonsterPrefab { get { return monsterPrefab; } }
         public SharkAI SharkPrefab { get { return sharkPrefab; } }
         public SpawnSettings Spawn { get { return spawn; } }
+        public HordeConfig Horde { get { return horde; } }
         public PenaltySettings Penalty { get { return penalty; } }
     }
 }

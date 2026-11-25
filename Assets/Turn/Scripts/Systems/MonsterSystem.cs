@@ -6,66 +6,108 @@ using Turn.Monsters;
 namespace Turn.Systems
 {
     /// <summary>
-    /// 普通怪物。跨地图保留的实体：地图切换时这里什么都不做 —— 不销毁、不重建、不改坐标 / 血量 / Buff。
-    /// （皮肤是纯表现，由 MonsterController 按当前地图切换。）
-    /// 每步：移出死亡实体 → 直线追踪玩家 → 互相挤开 → 统一边界 → 接触伤害 → 灼烧。
-    /// 岩浆伤害不在这里：切到火山时由 EnvironmentSystem 一次性结算。
-    /// 注意：怪物在浅水区没有任何回血逻辑（这是规则，不是遗漏）。
-    /// 位置 / 存活 / 计时 / 灼烧字段只有这里能写；生命由 CombatSystem 写。
+    /// 怪物（新策划案 11/24：五种基础怪物，数值见 HordeConfig / MonsterCatalog.CreateHordeDefaults）。
+    ///   · 游荡尸：直线追玩家，接触造成碰撞伤害；
+    ///   · 弹幕孢：缓慢追玩家，每 3 秒向四周发射一圈 8 发环形弹幕；
+    ///   · 疾冲兽：远处正常移动，进入冲锋范围后原地蓄力（锁定方向），随后高速直线冲锋，路径上撞到玩家造成高额伤害；
+    ///   · 毒腐体：近战追玩家；死亡时原地留下毒潭（站在里面持续掉血）；
+    ///   · 狙击械：保持中远距离，锁定玩家方向蓄力，蓄力结束发射一道横穿全屏的穿透激光（不被遮挡物挡住）。
+    /// 通用：每推进 1 波血量 +10%、伤害 +5%（从该怪物首次出现的波次算起）；精英 / Boss 再乘倍率。
+    /// 接触伤害有单位时间上限：同一只怪每 AttackInterval 秒（游荡尸 / 毒腐体 0.5 秒）最多一次。
+    /// 宝箱代价「狂怒 / 疾行」：怪物伤害 / 移速按层数提高。
+    /// 位置 / 存活 / 计时 / 状态字段只有这里能写；生命由 CombatSystem 写；印记由 WeaponSystem 写。
+    /// 亚空间里 SessionSystem 不调用 Tick：敌人停止移动、停止攻击，毒潭也暂停。
     /// </summary>
     public sealed partial class MonsterSystem : IMonsterSystem
     {
-        /// <summary>互相挤开的力度（每步最多推开的距离）。</summary>
         public const float SeparationStrength = 0.5f;
         public const float MaxSeparationStep = 0.2f;
 
         private readonly ITurnContext _ctx;
-        private readonly MonsterConfig _config;
-        private readonly EnvironmentConfig _env;
+        private readonly HordeConfig _horde;
         private readonly List<MonsterEntity> _active = new List<MonsterEntity>();
-        private static readonly MonsterArchetype[] DefaultStats = MonsterCatalog.CreateDefaults();
+        private readonly List<PoisonPool> _pools = new List<PoisonPool>();
         private int _nextId = 1;
+        private int _nextPoolId = 1;
+        private float _poolTimer;
 
         public IReadOnlyList<MonsterEntity> Active { get { return _active; } }
+        public IReadOnlyList<PoisonPool> Pools { get { return _pools; } }
         public int AliveCount { get; private set; }
 
-        public MonsterSystem(ITurnContext ctx, MonsterConfig config, EnvironmentConfig env)
+        public MonsterSystem(ITurnContext ctx, HordeConfig horde)
         {
             _ctx = ctx;
-            _config = config;
-            _env = env;
+            _horde = horde ?? new HordeConfig();
+            _horde.Kinds = MonsterCatalog.NormalizeHorde(_horde.Kinds);
         }
 
-        // ---------------- 生成 / 死亡 / Buff ----------------
+        private HordeKindConfig Stats(MonsterKind kind)
+        {
+            int i = MonsterKinds.HordeIndex(kind);
+            HordeKindConfig[] kinds = _horde.Kinds;
+            return i >= 0 && i < kinds.Length && kinds[i] != null ? kinds[i] : kinds[0];
+        }
+
+        private int Wave { get { return Math.Max(1, _ctx.Session.Wave); } }
+
+        // ---------------- 生成 / 死亡 / 状态 ----------------
 
         public MonsterEntity Spawn(Vec2 position, bool penalty)
         {
-            MonsterKind kind = MonsterSpawnPool.Pick(_ctx.Plane.Active, _ctx.Config.Spawn,
-                _ctx.Random, _ctx.Session.Time);
-            return SpawnKind(position, penalty, kind, 0);
+            MonsterKind kind = MonsterSpawnPool.Pick(_horde, Wave, _ctx.Random);
+            MonsterEntity m = SpawnKind(position, kind, 0);
+            m.Penalty = penalty;
+            return m;
         }
 
-        private MonsterEntity SpawnKind(Vec2 position, bool penalty, MonsterKind kind, int parentId)
+        public MonsterEntity SpawnKind(Vec2 position, MonsterKind kind, int rank)
         {
+            if (MonsterKinds.HordeIndex(kind) < 0 || MonsterKinds.HordeIndex(kind) >= MonsterKinds.HordeCount) kind = MonsterKinds.First;
+            HordeKindConfig k = Stats(kind);
+            int waves = Math.Max(0, Wave - Math.Max(1, k.DebutWave));
+            float hp = k.MaxHp * (1f + _horde.HpPerWave * waves);
+            float damage = 1f + _horde.DamagePerWave * waves;
+            float radius = MathF.Max(0.1f, _horde.Radius);
+            int xp = Math.Max(0, k.Xp);
+            if (rank == 1)
+            {
+                hp *= MathF.Max(1f, _horde.EliteHp);
+                damage *= MathF.Max(1f, _horde.EliteDamage);
+                radius *= MathF.Max(1f, _horde.EliteScale);
+                xp *= Math.Max(1, _horde.EliteXp);
+            }
+            else if (rank >= 2)
+            {
+                rank = 2;
+                hp *= MathF.Max(1f, _horde.BossHp);
+                damage *= MathF.Max(1f, _horde.BossDamage);
+                radius *= MathF.Max(1f, _horde.BossScale);
+                xp *= Math.Max(1, _horde.BossXp);
+            }
+
             var m = new MonsterEntity();
             m.Id = _nextId++;
             m.Kind = kind;
+            m.Rank = rank;
             m.Form = _ctx.Plane.Active;
             m.SpawnPlane = m.Form;
-            m.ParentId = parentId;
-            m.SplitTimer = MathF.Max(.01f, _config.SplitInterval);
-            m.Position = _ctx.Bounds.Clamp(position, _config.Radius);
-            m.Position = _ctx.Bounds.Clamp(_ctx.Obstacles.ResolveMove(m.Position, m.Position, _config.Radius, ObstacleMask.Units), _config.Radius);
-            MonsterArchetype stats = Stats(m);
-            m.MaxHp = MaxHpFor(m.Form, stats);
+            m.Radius = radius;
+            m.DamageScale = damage;
+            m.MaxHp = MathF.Max(1f, hp);
             m.Hp = m.MaxHp;
-            m.XpValue = stats.Xp;
-            m.Alive = true;
-            m.Penalty = penalty;
+            m.XpValue = xp;
+            m.Position = _ctx.Bounds.Clamp(position, radius);
+            m.Position = _ctx.Bounds.Clamp(_ctx.Obstacles.ResolveMove(m.Position, m.Position, radius, ObstacleMask.Units), radius);
             m.Terrain = _ctx.Terrain.Sample(m.Position);
+            m.Alive = true;
+            // 远程怪错开第一次攻击，避免同时开火
+            if (kind == MonsterKind.Spore) m.AiTimer = (float)_ctx.Random.NextDouble() * MathF.Max(0.1f, k.AttackInterval);
+            else if (kind == MonsterKind.Sniper) m.AiTimer = MathF.Max(0.1f, k.AttackInterval) * (0.4f + 0.6f * (float)_ctx.Random.NextDouble());
+            else if (kind == MonsterKind.Charger) m.AiTimer = 1f;
             _active.Add(m);
             AliveCount++;
-            _ctx.Events.Publish(new MonsterSpawnedEvent { MonsterId = m.Id, Penalty = penalty });
+            _ctx.Events.Publish(new MonsterSpawnedEvent { MonsterId = m.Id, Penalty = false, Rank = rank });
             return m;
         }
 
@@ -74,6 +116,24 @@ namespace Turn.Systems
             if (monster == null || !monster.Alive) return;
             monster.Alive = false;
             AliveCount--;
+            if (monster.Kind == MonsterKind.Rotter) CreatePool(monster);
+        }
+
+        /// <summary>毒腐体亡语：原地留下毒潭。</summary>
+        private void CreatePool(MonsterEntity m)
+        {
+            float radius = MathF.Max(0.1f, _horde.PoolRadius) * (m.Rank > 0 ? MathF.Sqrt(m.Radius / MathF.Max(0.1f, _horde.Radius)) : 1f);
+            var pool = new PoisonPool
+            {
+                Id = _nextPoolId++,
+                Position = m.Position,
+                Radius = radius,
+                Duration = MathF.Max(0.1f, _horde.PoolDuration),
+                TimeLeft = MathF.Max(0.1f, _horde.PoolDuration),
+                Damage = _horde.PoolDamage * MathF.Max(1f, m.DamageScale),
+            };
+            _pools.Add(pool);
+            _ctx.Events.Publish(new PoisonPoolCreatedEvent { PoolId = pool.Id, Position = pool.Position, Radius = pool.Radius, Duration = pool.Duration });
         }
 
         public void ApplyBurn(MonsterEntity monster, float dps, float duration)
@@ -91,291 +151,264 @@ namespace Turn.Systems
             monster.SlowLeft = MathF.Max(monster.SlowLeft, duration);
         }
 
+        public void ApplyStun(MonsterEntity monster, float duration)
+        {
+            if (monster == null || !monster.Alive || duration <= 0f) return;
+            monster.StunLeft = MathF.Max(monster.StunLeft, duration);
+        }
+
         // ---------------- 每步更新 ----------------
 
         public void Tick(float dt)
         {
             Compact();
-
             PlayerState player = _ctx.Player.State;
-            Vec2 target = player.Position;
+            BuildConfig builds = _ctx.Config.Builds;
+            float speedCurse = 1f + MathF.Max(0f, builds.HasteSpeed) * _ctx.Progression.CurseStacks(ChestCurse.Haste);
+            float damageCurse = 1f + MathF.Max(0f, builds.FuryDamage) * _ctx.Progression.CurseStacks(ChestCurse.Fury);
 
-            // 1) 按形态寻敌 / 站桩 / 冲锋；存活列表可能在攻击阶段产生虫崽，故计数快照。
-            int originalCount = _active.Count;
-            for (int i = 0; i < originalCount; i++)
+            int count = _active.Count;
+            for (int i = 0; i < count; i++)
             {
                 MonsterEntity m = _active[i];
                 if (!m.Alive) continue;
-                MonsterArchetype stats = Stats(m);
-                if (m.SlowLeft > 0f)
-                {
-                    m.SlowLeft = MathF.Max(0f, m.SlowLeft - dt);
-                    if (m.SlowLeft <= 0f) m.SlowFactor = 1f;
-                }
-                Vec2 to = target - m.Position;
+                HordeKindConfig k = Stats(m.Kind);
+                TickStatus(m, dt);
+                if (m.ContactTimer > 0f) m.ContactTimer = MathF.Max(0f, m.ContactTimer - dt);
+
+                Vec2 to = player.Position - m.Position;
                 float dist = to.Magnitude;
-                m.Velocity = dist > .05f && stats.Speed > 0f ? to / dist * stats.Speed * m.SlowFactor : Vec2.Zero;
-                if (m.AiPhase == 2 && IsCharger(m.Kind))
-                    m.Velocity = m.AttackDirection * ChargeSpeed(m.Kind) * m.SlowFactor;
-                if (m.AiPhase == 2 && m.Kind == MonsterKind.StoneGolem)
-                    m.Velocity = Vec2.Zero;
-                if (m.StunLeft > 0f || m.AiPhase == 1 || (m.AiPhase == 5 && m.Kind == MonsterKind.FutureSoldier) || m.Kind == MonsterKind.Alarm || m.Kind == MonsterKind.VineDemon)
-                    m.Velocity = Vec2.Zero;
-                Vec2 desired = m.Position + m.Velocity * dt;
-                Vec2 resolved = _ctx.Obstacles.ResolveMove(m.Position, desired, _config.Radius, ObstacleMask.Units);
-                m.Position = _ctx.Bounds.Clamp(resolved, _config.Radius);
-                if (m.AiPhase == 2 && IsCharger(m.Kind) && Vec2.SqrDistance(m.Position, desired) > .01f)
+                Vec2 toward = dist > 0.05f ? to / dist : Vec2.Zero;
+                float speed = MathF.Max(0f, k.Speed) * m.SlowFactor * speedCurse;
+                Vec2 velocity = toward * speed;
+
+                if (m.StunLeft > 0f) velocity = Vec2.Zero;
+                else if (player.Alive)
                 {
-                    m.AiPhase = 0;
-                    m.AiTimer = 0f;
-                    if (m.Kind == MonsterKind.Boar) m.StunLeft = _config.BoarStunDuration;
+                    switch (m.Kind)
+                    {
+                        case MonsterKind.Spore: TickSpore(m, k, damageCurse, dt); break;
+                        case MonsterKind.Charger: velocity = TickCharger(m, k, player, toward, dist, velocity, damageCurse, dt); break;
+                        case MonsterKind.Sniper: velocity = TickSniper(m, k, player, toward, dist, speed, damageCurse, dt); break;
+                    }
                 }
+
+                m.Velocity = velocity;
+                Vec2 desired = m.Position + velocity * dt;
+                Vec2 resolved = _ctx.Bounds.Clamp(_ctx.Obstacles.ResolveMove(m.Position, desired, m.Radius, ObstacleMask.Units), m.Radius);
+                if (m.Kind == MonsterKind.Charger && m.AiPhase == 2)
+                {
+                    m.ChargeTravelled += Vec2.Distance(m.Position, resolved);
+                    // 撞墙 / 撞边界或走满距离：冲锋结束
+                    if (Vec2.SqrDistance(resolved, desired) > 0.0004f || m.ChargeTravelled >= _horde.ChargeMaxDistance) EndCharge(m, k);
+                }
+                m.Position = resolved;
             }
 
-            // 2) 互相挤开（数量在一两百以内，两两检测足够便宜）
             Separate();
-
-            // 3) 遮挡物 + 统一边界（程序A 补）。没动也要过一次：切位面后站在新位面遮挡物里的怪会被推到外侧。
-            //    这里只做“推出去 / 贴边滑动”，没有寻路：绕障碍属于怪物 AI，由程序B 决定要不要做。
             for (int i = 0; i < _active.Count; i++)
             {
                 MonsterEntity m = _active[i];
                 if (!m.Alive) continue;
-                Vec2 resolved = _ctx.Obstacles.ResolveMove(m.Position, m.Position, _config.Radius, ObstacleMask.Units);
-                m.Position = _ctx.Bounds.Clamp(resolved, _config.Radius);
-            }
-
-            float interval = MathF.Max(0.02f, _env.DotTickInterval);
-            float contactRange = _config.Radius + _ctx.Player.Config.Radius;
-
-            int attackCount = _active.Count;
-            for (int i = 0; i < attackCount; i++)
-            {
-                MonsterEntity m = _active[i];
-                if (!m.Alive) continue;
-                MonsterArchetype stats = Stats(m);
-                if (m.StunLeft > 0f) m.StunLeft = MathF.Max(0f, m.StunLeft - dt);
-                if (m.Kind == MonsterKind.NullPointer) TickSplit(m, dt);
-                TickAttack(m, stats, player, contactRange, dt);
-
+                m.Position = _ctx.Bounds.Clamp(_ctx.Obstacles.ResolveMove(m.Position, m.Position, m.Radius, ObstacleMask.Units), m.Radius);
                 m.Terrain = _ctx.Terrain.Sample(m.Position);
+            }
 
-                // 6) 灼烧（持续 Buff，跨地图保留）
-                if (m.Burning)
+            // 接触伤害（游荡尸 / 毒腐体）：每只怪每 AttackInterval 秒最多一次
+            if (player.Alive)
+            {
+                float playerRadius = _ctx.Player.Config.Radius;
+                for (int i = 0; i < _active.Count; i++)
                 {
-                    m.BurnLeft -= dt;
-                    m.BurnTimer += dt;
-                    while (m.BurnTimer >= interval && m.Alive)
-                    {
-                        m.BurnTimer -= interval;
-                        _ctx.Combat.DamageMonster(m, m.BurnDps * interval, DamageSource.Burn);
-                    }
-                    if (m.BurnLeft <= 0f)
-                    {
-                        m.BurnLeft = 0f;
-                        m.BurnDps = 0f;
-                        m.BurnTimer = 0f;
-                    }
+                    MonsterEntity m = _active[i];
+                    if (!m.Alive || m.StunLeft > 0f || m.ContactTimer > 0f) continue;
+                    if (m.Kind != MonsterKind.Walker && m.Kind != MonsterKind.Rotter) continue;
+                    float reach = m.Radius + playerRadius;
+                    if (Vec2.SqrDistance(m.Position, player.Position) > reach * reach) continue;
+                    HordeKindConfig k = Stats(m.Kind);
+                    m.ContactTimer = MathF.Max(0.1f, k.AttackInterval);
+                    _ctx.Combat.DamagePlayer(k.Damage * m.DamageScale * damageCurse, DamageSource.Monster);
+                    if (!player.Alive) break;
                 }
             }
+
+            TickPools(dt, player, damageCurse);
+            TickBurn(dt);
         }
 
-        private MonsterArchetype Stats(MonsterEntity m)
+        private static void TickStatus(MonsterEntity m, float dt)
         {
-            MonsterArchetype[] all = _config.Archetypes;
-            int index = (int)m.Kind;
-            MonsterArchetype stats = all != null && index >= 0 && index < all.Length ? all[index] : null;
-            return stats ?? DefaultStats[index];
-        }
-
-        private static bool IsCharger(MonsterKind kind)
-        {
-            return kind == MonsterKind.BlackPot || kind == MonsterKind.Boar || kind == MonsterKind.RepairRobot || kind == MonsterKind.DataWorm;
-        }
-
-        private float ChargeSpeed(MonsterKind kind)
-        {
-            if (kind == MonsterKind.RepairRobot) return _config.RobotChargeSpeed;
-            if (kind == MonsterKind.Boar) return _config.BoarChargeSpeed;
-            if (kind == MonsterKind.DataWorm) return StatsFor(kind).Speed;
-            return _config.ChargeSpeed;
-        }
-
-        private MonsterArchetype StatsFor(MonsterKind kind)
-        {
-            var all = _config.Archetypes;
-            int index = (int)kind;
-            return all != null && index >= 0 && index < all.Length && all[index] != null
-                ? all[index] : DefaultStats[index];
-        }
-
-        private void TickSplit(MonsterEntity parent, float dt)
-        {
-            parent.SplitTimer -= dt;
-            if (parent.SplitTimer > 0f) return;
-            parent.SplitTimer += MathF.Max(.1f, _config.SplitInterval);
-            int children = 0;
-            for (int i = 0; i < _active.Count; i++)
-                if (_active[i].Alive && _active[i].Kind == MonsterKind.Buglet && _active[i].ParentId == parent.Id) children++;
-            if (children >= _config.BugletLimitPerParent) return;
-            Vec2 delta = Vec2.FromAngle((float)(_ctx.Random.NextDouble() * Math.PI * 2));
-            SpawnKind(parent.Position + delta, false, MonsterKind.Buglet, parent.Id);
-        }
-
-        private void TickAttack(MonsterEntity m, MonsterArchetype stats, PlayerState player, float contactRange, float dt)
-        {
-            if (!player.Alive || m.StunLeft > 0f) return;
-            if (m.ContactTimer > 0f) m.ContactTimer = MathF.Max(0f, m.ContactTimer - dt);
-            float dist = Vec2.Distance(m.Position, player.Position);
-            if (m.Kind == MonsterKind.Alarm)
+            if (m.SlowLeft > 0f)
             {
-                if (dist <= _config.AlarmAuraRadius + _config.Radius)
-                    _ctx.Combat.DamagePlayer(stats.Damage * dt, DamageSource.Monster);
-                return;
+                m.SlowLeft = MathF.Max(0f, m.SlowLeft - dt);
+                if (m.SlowLeft <= 0f) m.SlowFactor = 1f;
             }
-            if (m.Kind == MonsterKind.NullPointer && dist <= contactRange && m.ContactTimer <= 0f)
+            if (m.StunLeft > 0f) m.StunLeft = MathF.Max(0f, m.StunLeft - dt);
+        }
+
+        /// <summary>弹幕孢：每 AttackInterval 秒向四周发射一圈 SporeBullets 发环形弹幕。</summary>
+        private void TickSpore(MonsterEntity m, HordeKindConfig k, float damageCurse, float dt)
+        {
+            m.AiTimer -= dt;
+            if (m.AiTimer > 0f) return;
+            m.AiTimer = MathF.Max(0.1f, k.AttackInterval);
+            int bullets = Math.Max(1, _horde.SporeBullets * (m.Rank >= 2 ? 2 : 1));
+            float offset = (float)_ctx.Random.NextDouble() * MathF.PI * 2f;
+            float speed = MathF.Max(0.1f, _horde.SporeBulletSpeed);
+            float life = MathF.Max(0.1f, _horde.SporeBulletLifetime);
+            for (int b = 0; b < bullets; b++)
             {
-                m.ContactTimer = MathF.Max(.1f, stats.AttackInterval);
-                _ctx.Combat.DamagePlayer(stats.Damage, DamageSource.Monster);
+                Vec2 dir = Vec2.FromAngle(offset + b * MathF.PI * 2f / bullets);
+                _ctx.Projectiles.SpawnEnemy(m.Position + dir * m.Radius, dir * speed, _horde.SporeBulletRadius,
+                    k.Damage * m.DamageScale * damageCurse, life, speed * life, EnemyProjectileKind.Bubble);
             }
-            if (m.AiPhase == 2)
+        }
+
+        /// <summary>疾冲兽：0 追击（冷却）→ 1 蓄力（锁定方向，不动）→ 2 冲锋（一次冲锋最多撞一次）。</summary>
+        private Vec2 TickCharger(MonsterEntity m, HordeKindConfig k, PlayerState player, Vec2 toward, float dist, Vec2 chase, float damageCurse, float dt)
+        {
+            if (m.AiPhase == 0)
             {
-                m.AiTimer -= dt;
-                if (IsCharger(m.Kind) && dist <= contactRange && m.ContactTimer <= 0f)
+                if (m.AiTimer > 0f) m.AiTimer -= dt;
+                if (m.AiTimer <= 0f && dist <= k.Range + m.Radius)
                 {
-                    m.ContactTimer = MathF.Max(.1f, stats.AttackInterval);
-                    bool damaged = _ctx.Combat.DamagePlayer(stats.Damage, DamageSource.Monster);
-                    if (damaged && m.Kind == MonsterKind.RepairRobot)
-                    {
-                        Vec2 away = (player.Position - m.Position).Normalized;
-                        _ctx.Events.Publish(new RobotKnockbackHitEvent
-                        {
-                            MonsterId = m.Id, Plane = m.Form,
-                            Direction = away.SqrMagnitude > .01f ? away : m.AttackDirection,
-                            Distance = MathF.Max(0f, _config.RobotKnockbackDistance),
-                        });
-                    }
-                    if (m.Kind == MonsterKind.DataWorm) Despawn(m);
+                    m.AiPhase = 1;
+                    m.AiTimer = MathF.Max(0.01f, k.Windup);
+                    m.AttackDirection = toward.SqrMagnitude > 0.5f ? toward : Vec2.Right;
+                    return Vec2.Zero;
                 }
-                if (m.AiTimer <= 0f)
-                {
-                    if (m.Kind == MonsterKind.DataWorm && m.Alive)
-                    {
-                        if (dist <= _config.DataWormExplosionRadius) _ctx.Combat.DamagePlayer(stats.Damage, DamageSource.Monster);
-                        Despawn(m); // 一次性自爆；不会产经验（设计待确认）。
-                        return;
-                    }
-                    m.AiPhase = 0;
-                    m.AiTimer = MathF.Max(0f, stats.AttackInterval - stats.Windup);
-                }
-                return;
-            }
-            if (m.AiPhase == 5 && m.Kind == MonsterKind.FutureSoldier)
-            {
-                float active = MathF.Min(dt, MathF.Max(0f, m.AiTimer));
-                m.AiTimer -= dt;
-                if (active > 0f && m.Form == _ctx.Plane.Active && player.Alive)
-                {
-                    Vec2 ray = m.AttackDirection.SqrMagnitude > .01f ? m.AttackDirection : Vec2.Right;
-                    Vec2 end = m.Position + ray * MathF.Max(0f, stats.Range);
-                    float width = MathF.Max(0f, _config.LaserWidth) + _ctx.Player.Config.Radius;
-                    if (SegmentSqrDistance(player.Position, m.Position, end) <= width * width &&
-                        !_ctx.Obstacles.SegmentBlocked(m.Position, player.Position, 0f, ObstacleMask.Projectiles))
-                        _ctx.Combat.DamagePlayer(stats.Damage * active, DamageSource.Monster);
-                }
-                if (m.AiTimer <= 0f)
-                {
-                    m.AiPhase = 0;
-                    m.AiTimer = MathF.Max(0f, stats.AttackInterval - stats.Windup);
-                }
-                return;
-            }
-            if (m.AiPhase == 4)
-            {
-                m.AiTimer -= dt;
-                if (m.AiTimer > 0f) return;
-                float radius = MathF.Max(0f, _config.RockImpactRadius) + _ctx.Player.Config.Radius;
-                if (m.Form == _ctx.Plane.Active && player.Alive &&
-                    Vec2.SqrDistance(player.Position, m.TargetPosition) <= radius * radius)
-                    _ctx.Combat.DamagePlayer(stats.Damage, DamageSource.Monster);
-                m.AiPhase = 0;
-                m.AiTimer = MathF.Max(0f, stats.AttackInterval - stats.Windup);
-                return;
-            }
-            if (m.AiPhase == 3)
-            {
-                m.AiTimer -= dt;
-                if (m.AiTimer > 0f) return;
-                FireAttack(m, stats, player, contactRange);
-                m.BurstShotsLeft--;
-                if (m.BurstShotsLeft <= 0) { m.AiPhase = 0; m.AiTimer = stats.AttackInterval; }
-                else m.AiTimer = MathF.Max(.01f, _config.CodeShotInterval);
-                return;
+                return chase;
             }
             if (m.AiPhase == 1)
             {
                 m.AiTimer -= dt;
-                if (m.AiTimer > 0f) return;
-                if (m.Kind == MonsterKind.Bug)
-                {
-                    m.AiPhase = 3;
-                    m.AiTimer = MathF.Max(.01f, _config.CodeShotInterval);
-                    m.BurstShotsLeft = Math.Max(1, _config.CodeBurstShots) - 1;
-                    FireAttack(m, stats, player, contactRange);
-                    if (m.BurstShotsLeft <= 0) { m.AiPhase = 0; m.AiTimer = stats.AttackInterval; }
-                }
-                else if (m.Kind == MonsterKind.RockThrower)
-                {
-                    m.TargetPosition = player.Position;
-                    m.AiPhase = 4;
-                    m.AiTimer = MathF.Max(0f, _config.RockWarning);
-                    _ctx.Events.Publish(new RockImpactWarnedEvent
-                    {
-                        Position = m.TargetPosition, Plane = m.Form, WarningSeconds = m.AiTimer,
-                    });
-                }
-                else if (m.Kind == MonsterKind.FutureSoldier)
-                {
-                    m.AiPhase = 5;
-                    m.AiTimer = MathF.Max(.01f, _config.LaserDuration);
-                }
-                else
-                {
-                    m.AiPhase = IsCharger(m.Kind) || m.Kind == MonsterKind.StoneGolem ? 2 : 0;
-                    m.AiTimer = m.AiPhase == 2 ? (m.Kind == MonsterKind.StoneGolem ? _config.StoneRecovery : _config.ChargeDuration) : stats.AttackInterval;
-                    FireAttack(m, stats, player, contactRange);
-                }
-                return;
+                if (m.AiTimer > 0f) return Vec2.Zero;
+                m.AiPhase = 2;
+                m.ChargeTravelled = 0f;
+                m.ContactTimer = 0f;
+                m.TargetPosition = Vec2.Zero; // X 用作「本次冲锋已撞过」的标记
             }
-            m.AiTimer -= dt;
-            if (m.AiTimer > 0f || dist > stats.Range + _config.Radius) return;
-            m.AiPhase = 1;
-            m.AiTimer = MathF.Max(0.01f, m.Kind == MonsterKind.FutureSoldier ? _config.LaserWarning : stats.Windup);
-            m.AttackDirection = (player.Position - m.Position).Normalized;
-            if (m.Kind == MonsterKind.FutureSoldier)
-                _ctx.Events.Publish(new LaserAttackWarnedEvent
-                {
-                    Origin = m.Position, Direction = m.AttackDirection,
-                    Plane = m.Form, WarningSeconds = m.AiTimer, Range = stats.Range,
-                });
+            // 冲锋
+            Vec2 velocity = m.AttackDirection * MathF.Max(0f, _horde.ChargeSpeed) * m.SlowFactor;
+            float reach = m.Radius + _ctx.Player.Config.Radius;
+            if (m.TargetPosition.X < 0.5f && Vec2.SqrDistance(m.Position, player.Position) <= reach * reach)
+            {
+                m.TargetPosition = new Vec2(1f, 0f);
+                _ctx.Combat.DamagePlayer(k.Damage * m.DamageScale * damageCurse, DamageSource.Monster);
+            }
+            return velocity;
         }
 
-        private void FireAttack(MonsterEntity m, MonsterArchetype stats, PlayerState player, float contactRange)
+        private static void EndCharge(MonsterEntity m, HordeKindConfig k)
         {
-            Vec2 direction = m.AttackDirection.SqrMagnitude > .01f ? m.AttackDirection : (player.Position - m.Position).Normalized;
-            if (m.Kind == MonsterKind.StoneGolem || m.Kind == MonsterKind.NullPointer || m.Kind == MonsterKind.Buglet || m.Kind == MonsterKind.VineDemon)
+            m.AiPhase = 0;
+            m.AiTimer = MathF.Max(0.1f, k.AttackInterval);
+            m.ChargeTravelled = 0f;
+        }
+
+        /// <summary>狙击械：保持 [SniperMinRange, SniperMaxRange] 的距离；冷却好了就锁定方向蓄力，蓄力结束发射全屏激光。</summary>
+        private Vec2 TickSniper(MonsterEntity m, HordeKindConfig k, PlayerState player, Vec2 toward, float dist, float speed, float damageCurse, float dt)
+        {
+            if (m.AiPhase == 1)
             {
-                if (Vec2.Distance(m.Position, player.Position) <= MathF.Max(contactRange, stats.Range))
-                    _ctx.Combat.DamagePlayer(stats.Damage, DamageSource.Monster);
+                m.AiTimer -= dt;
+                if (m.AiTimer > 0f) return Vec2.Zero;
+                FireLaser(m, k, player, damageCurse);
+                m.AiPhase = 0;
+                m.AiTimer = MathF.Max(0.1f, k.AttackInterval);
+                return Vec2.Zero;
+            }
+
+            m.AiTimer -= dt;
+            if (m.AiTimer <= 0f && dist <= MathF.Max(k.Range, _horde.SniperMaxRange) + 1f)
+            {
+                m.AiPhase = 1;
+                m.AiTimer = MathF.Max(0.01f, k.Windup);
+                m.AttackDirection = toward.SqrMagnitude > 0.5f ? toward : Vec2.Right;
+                _ctx.Events.Publish(new LaserAttackWarnedEvent
+                {
+                    Origin = m.Position, Direction = m.AttackDirection, Plane = _ctx.Plane.Active,
+                    WarningSeconds = m.AiTimer, Range = LaserLength,
+                });
+                return Vec2.Zero;
+            }
+            if (dist < _horde.SniperMinRange) return toward * -speed;
+            if (dist > _horde.SniperMaxRange) return toward * speed;
+            // 距离合适：绕着玩家慢慢横移
+            return new Vec2(-toward.Y, toward.X) * (speed * 0.35f * ((m.Id & 1) == 0 ? 1f : -1f));
+        }
+
+        /// <summary>激光长度：边界对角线（= 横穿全屏）。</summary>
+        private float LaserLength
+        {
+            get
+            {
+                Vec2 size = _ctx.Bounds.Rect.Size;
+                return MathF.Sqrt(size.X * size.X + size.Y * size.Y);
+            }
+        }
+
+        private void FireLaser(MonsterEntity m, HordeKindConfig k, PlayerState player, float damageCurse)
+        {
+            float length = LaserLength;
+            Vec2 end = m.Position + m.AttackDirection * length;
+            float reach = MathF.Max(0f, _horde.LaserWidth) * MathF.Max(1f, m.Radius / MathF.Max(0.1f, _horde.Radius)) + _ctx.Player.Config.Radius;
+            bool hit = player.Alive && SegmentSqrDistance(player.Position, m.Position, end) <= reach * reach;
+            if (hit) _ctx.Combat.DamagePlayer(k.Damage * m.DamageScale * damageCurse, DamageSource.Laser);
+            _ctx.Events.Publish(new LaserFiredEvent { Origin = m.Position, Direction = m.AttackDirection, Range = length, Width = reach - _ctx.Player.Config.Radius, HitPlayer = hit });
+        }
+
+        /// <summary>毒潭：按 PoolInterval 结算；玩家站在任意一个毒潭里就掉一次血（多个毒潭不叠加，取最大）。</summary>
+        private void TickPools(float dt, PlayerState player, float damageCurse)
+        {
+            for (int i = _pools.Count - 1; i >= 0; i--)
+            {
+                _pools[i].TimeLeft -= dt;
+                if (_pools[i].TimeLeft <= 0f) _pools.RemoveAt(i);
+            }
+            if (_pools.Count == 0)
+            {
+                _poolTimer = 0f;
                 return;
             }
-            if (IsCharger(m.Kind) || m.Kind == MonsterKind.RockThrower || m.Kind == MonsterKind.FutureSoldier) return;
-            EnemyProjectileKind kind = m.Kind == MonsterKind.Anglerfish ? EnemyProjectileKind.Bubble
-                : m.Kind == MonsterKind.Bug ? EnemyProjectileKind.Code
-                : m.Kind == MonsterKind.RockThrower ? EnemyProjectileKind.Rock : EnemyProjectileKind.Laser;
-            float speed = m.Kind == MonsterKind.Anglerfish ? _config.BubbleSpeed : MathF.Max(1f, stats.Speed * 2f);
-            _ctx.Projectiles.SpawnEnemy(m.Form, m.Position, direction * speed, _config.EnemyProjectileRadius,
-                stats.Damage, _config.EnemyProjectileLifetime, stats.Range, kind);
+            float interval = MathF.Max(0.05f, _horde.PoolInterval);
+            _poolTimer += dt;
+            while (_poolTimer >= interval)
+            {
+                _poolTimer -= interval;
+                if (!player.Alive) return;
+                float damage = 0f;
+                for (int i = 0; i < _pools.Count; i++)
+                {
+                    PoisonPool pool = _pools[i];
+                    float r = pool.Radius + _ctx.Player.Config.Radius * 0.5f;
+                    if (Vec2.SqrDistance(pool.Position, player.Position) <= r * r) damage = MathF.Max(damage, pool.Damage);
+                }
+                if (damage > 0f) _ctx.Combat.DamagePlayer(damage * damageCurse, DamageSource.Poison);
+            }
+        }
+
+        private void TickBurn(float dt)
+        {
+            float interval = MathF.Max(0.02f, _ctx.Config.Environment.DotTickInterval);
+            for (int i = 0; i < _active.Count; i++)
+            {
+                MonsterEntity m = _active[i];
+                if (!m.Alive || !m.Burning) continue;
+                m.BurnLeft -= dt;
+                m.BurnTimer += dt;
+                while (m.BurnTimer >= interval && m.Alive)
+                {
+                    m.BurnTimer -= interval;
+                    _ctx.Combat.DamageMonster(m, m.BurnDps * interval, DamageSource.Burn);
+                }
+                if (m.BurnLeft <= 0f)
+                {
+                    m.BurnLeft = 0f;
+                    m.BurnDps = 0f;
+                    m.BurnTimer = 0f;
+                }
+            }
         }
 
         private static float SegmentSqrDistance(Vec2 point, Vec2 a, Vec2 b)
@@ -390,8 +423,6 @@ namespace Turn.Systems
 
         private void Separate()
         {
-            float minDist = _config.Radius * 2f;
-            float minSq = minDist * minDist;
             for (int i = 0; i < _active.Count; i++)
             {
                 MonsterEntity a = _active[i];
@@ -400,15 +431,18 @@ namespace Turn.Systems
                 {
                     MonsterEntity b = _active[j];
                     if (!b.Alive) continue;
+                    float minDist = a.Radius + b.Radius;
                     Vec2 d = a.Position - b.Position;
                     float sq = d.SqrMagnitude;
-                    if (sq >= minSq) continue;
+                    if (sq >= minDist * minDist) continue;
 
                     float dist = MathF.Sqrt(sq);
                     Vec2 dir = dist > 0.0001f ? d / dist : Vec2.FromAngle(a.Id * 2.399f); // 完全重合时按 Id 给固定方向
                     float push = MathF.Min(MaxSeparationStep, (minDist - dist) * 0.5f * SeparationStrength);
-                    a.Position += dir * push;
-                    b.Position -= dir * push;
+                    // 大体型（精英 / Boss）推小怪更多、自己被推得更少
+                    float total = a.Radius + b.Radius;
+                    a.Position += dir * (push * 2f * b.Radius / total);
+                    b.Position -= dir * (push * 2f * a.Radius / total);
                 }
             }
         }
@@ -434,8 +468,20 @@ namespace Turn.Systems
             {
                 MonsterEntity m = _active[i];
                 if (!m.Alive) continue;
-                float r = radius + _config.Radius;
+                float r = radius + m.Radius;
                 if (Vec2.SqrDistance(center, m.Position) <= r * r) results.Add(m);
+            }
+        }
+
+        public void QuerySegment(Vec2 a, Vec2 b, float halfWidth, List<MonsterEntity> results)
+        {
+            results.Clear();
+            for (int i = 0; i < _active.Count; i++)
+            {
+                MonsterEntity m = _active[i];
+                if (!m.Alive) continue;
+                float r = halfWidth + m.Radius;
+                if (SegmentSqrDistance(m.Position, a, b) <= r * r) results.Add(m);
             }
         }
 
@@ -453,56 +499,6 @@ namespace Turn.Systems
                 best = m;
             }
             return best;
-        }
-
-        // ---------------- 翻滚第 6 步（程序B） ----------------
-
-        public void ShiftAll(Vec2 offset)
-        {
-            for (int i = 0; i < _active.Count; i++)
-            {
-                MonsterEntity m = _active[i];
-                if (!m.Alive) continue;
-                // 平移后落在新位面的遮挡物里就推到外侧（程序A 补）
-                Vec2 shifted = _ctx.Obstacles.ResolveMove(m.Position, m.Position + offset, _config.Radius, ObstacleMask.Units);
-                m.Position = _ctx.Bounds.Clamp(shifted, _config.Radius);
-                m.Terrain = _ctx.Terrain.Sample(m.Position);
-            }
-        }
-
-        public void SwapPlane(PlaneId from, PlaneId to)
-        {
-            if (PlaneIds.PairOf(from) != PlaneIds.PairOf(to)) return;
-            for (int i = 0; i < _active.Count; i++)
-            {
-                MonsterEntity m = _active[i];
-                if (!m.Alive || m.Form != from) continue;
-                if (m.Kind == MonsterKind.Buglet && to != PlaneId.Office)
-                {
-                    Despawn(m); // 只属于工位；不能映射到闹钟。
-                    continue;
-                }
-                float ratio = m.MaxHp > 0f ? MathF.Max(0f, MathF.Min(1f, m.Hp / m.MaxHp)) : 0f;
-                m.Kind = MonsterCatalog.ForPlane(m.Kind, to);
-                m.Form = to;
-                MonsterArchetype stats = Stats(m);
-                m.MaxHp = MaxHpFor(to, stats);
-                m.Hp = m.MaxHp * ratio;
-                m.XpValue = stats.Xp;
-                m.Velocity = Vec2.Zero;
-                m.AiPhase = 0;
-                m.AiTimer = 0f;
-                m.TargetPosition = Vec2.Zero;
-                m.ContactTimer = 0f;
-                m.Terrain = _ctx.Terrain.Sample(m.Position);
-            }
-        }
-
-        private float MaxHpFor(PlaneId plane, MonsterArchetype stats)
-        {
-            if (plane == PlaneId.Volcano) return MathF.Max(1f, _config.VolcanoMaxHp);
-            if (plane == PlaneId.Ocean) return MathF.Max(1f, _config.OceanMaxHp);
-            return MathF.Max(1f, stats.MaxHp);
         }
     }
 }

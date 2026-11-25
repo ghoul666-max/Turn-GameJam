@@ -115,6 +115,16 @@ namespace Turn.View
     [Serializable]
     public sealed class ExperienceSettings
     {
+        [Header("新策划案（11/24）")]
+        [Tooltip("1 级升 2 级所需经验（策划 50）")]
+        [Min(1)] public int firstLevelXp = 50;
+        [Tooltip("每级所需经验递增比例（策划 0.2 = 20%）")]
+        [Min(0f)] public float xpGrowthRate = 0.2f;
+        [Tooltip("经验拾取范围（单位，策划 100 像素 = 2.5）：进入后经验球飞向玩家")]
+        [Min(0.1f)] public float pickupRange = 2.5f;
+        [Tooltip("宝箱：玩家靠近到这个距离自动打开（单位）")]
+        [Min(0.1f)] public float chestOpenRadius = 1f;
+        [Header("旧方案")]
         [Tooltip("升级经验阈值：1 级升 2 级所需经验")]
         [Min(1)] public int baseXpToLevel = 4;
         [Tooltip("经验成长参数：每升一级，下一级多需要的经验")]
@@ -140,7 +150,11 @@ namespace Turn.View
                 MaxLevel = maxLevel,
                 PickupRadius = pickupRadius,
                 MagnetRadius = magnetRadius,
-                MagnetSpeed = magnetSpeed,
+                MagnetSpeed = magnetSpeed > 0f ? magnetSpeed : 10f,
+                FirstLevelXp = firstLevelXp > 0 ? firstLevelXp : 50,
+                XpGrowthRate = xpGrowthRate >= 0f ? xpGrowthRate : 0.2f,
+                PickupRange = pickupRange > 0f ? pickupRange : 2.5f,
+                ChestOpenRadius = chestOpenRadius > 0f ? chestOpenRadius : 1f,
             };
         }
     }
@@ -154,13 +168,18 @@ namespace Turn.View
         [Header("Prefab（生成器自动拖好）")]
         [SerializeField] private ExperienceOrb experienceOrbPrefab;
 
-        [Header("升级词条")]
+        [Header("新策划案（11/24）· 三把武器的词条表 + 宝箱")]
+        [Tooltip("Builds 按 BuildId 顺序（水枪 17 条 → 投矛 15 条 → 陌刀 14 条）：MaxLevel 最大层数、Value 每层效果、Value2 附加参数。名字和说明见 Weapons/WeaponBuilds.cs")]
+        [SerializeField] private BuildConfig builds = new BuildConfig();
+
+        [Header("旧方案（不再使用）· 升级词条")]
         [SerializeField] private UpgradeSettings upgrades = new UpgradeSettings();
         [Header("经验")]
         [SerializeField] private ExperienceSettings experience = new ExperienceSettings();
 
         public ExperienceOrb ExperienceOrbPrefab { get { return experienceOrbPrefab; } }
         public UpgradeSettings Upgrades { get { return upgrades; } }
+        public BuildConfig Builds { get { return builds; } }
         public ExperienceSettings Experience { get { return experience; } }
     }
 }

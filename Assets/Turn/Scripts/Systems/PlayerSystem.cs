@@ -12,6 +12,8 @@ namespace Turn.Systems
     /// 环境：读当前激活地图的地形 —— 岩浆按间隔扣血（经 CombatSystem，无敌时被拒绝），
     /// 浅水按间隔回血；火山地图没有任何回血来源。
     /// 生命由 CombatSystem 负责（初始化除外）；翻滚相关字段由 RollSystem 负责。
+    /// 受伤无敌帧：收到 PlayerDamagedEvent（真的扣了血）后写 HurtInvincibleLeft = PlayerConfig.HurtInvincibleTime（策划 0.3 秒）。
+    /// 位面机制总开关（EnvironmentConfig.MechanicsEnabled）关闭时不结算岩浆 / 浅水。
     /// </summary>
     public sealed class PlayerSystem : IPlayerSystem
     {
@@ -44,6 +46,14 @@ namespace Turn.Systems
             ClearSpeedModifiers();
             // B 的 MonsterSystem 只发“机器人已命中”的事实；玩家位置只在这里写。
             ctx.Events.Subscribe<RobotKnockbackHitEvent>(OnRobotKnockbackHit);
+            ctx.Events.Subscribe<PlayerDamagedEvent>(OnPlayerDamaged);
+        }
+
+        private void OnPlayerDamaged(PlayerDamagedEvent evt)
+        {
+            PlayerState s = State;
+            if (!s.Alive) return;
+            s.HurtInvincibleLeft = MathF.Max(s.HurtInvincibleLeft, MathF.Max(0f, Config.HurtInvincibleTime));
         }
 
         private void OnRobotKnockbackHit(RobotKnockbackHitEvent evt)
@@ -119,6 +129,7 @@ namespace Turn.Systems
                 _pendingKnockback = Vec2.Zero;
                 return;
             }
+            if (s.HurtInvincibleLeft > 0f) s.HurtInvincibleLeft = MathF.Max(0f, s.HurtInvincibleLeft - dt);
 
             // 0) 维修机器人击退：分小步经遮挡物修正，再 Clamp 进边界
             if (_pendingKnockback.SqrMagnitude > 0.0001f)
@@ -158,7 +169,7 @@ namespace Turn.Systems
 
             // 3) 地形（当前激活地图）
             s.Terrain = _ctx.Terrain.Sample(s.Position);
-            TickEnvironment(dt);
+            if (_env.MechanicsEnabled) TickEnvironment(dt);
         }
 
         /// <summary>按固定间隔结算岩浆 / 浅水。换了地形就从头计时，避免把上一块地形的计时带过来。</summary>

@@ -1,146 +1,103 @@
 using System;
-using System.Collections.Generic;
 using Turn.Core;
+using Turn.Monsters;
 
 namespace Turn.Systems
 {
     /// <summary>
-    /// 刷怪：开局一批、定时刷（优先用当前地图的刷怪点）、翻滚惩罚。
-    /// 所有新怪物都通过 IMonsterSystem.Spawn 加入同一个管理列表；这里永远不会动已有的怪物。
-    /// 翻滚惩罚不受常规存活上限限制：数量由 RollSystem 传入（基础 = PenaltyConfig.Count，B17 减免在 RollSystem 里算）。
+    /// 刷怪（新策划案 11/24）：
+    ///   · 常规：每 SpawnInterval 秒从地图边缘随机位置刷一批，每批数量 = BaseCount + CountPerWave × (波次 − 1)（线性，小数部分累积），
+    ///     存活上限 MaxAlive；种类从已解锁的里面按权重随机（游荡尸第 1 波、弹幕孢第 3 波、疾冲兽第 5 波、毒腐体第 7 波、狙击械第 10 波）；
+    ///   · 每波开始：第 EliteFromWave 波起刷 1 只精英；每 BossEveryWaves 波刷 1 只 Boss（精英 / Boss 死亡掉宝箱）。
+    /// 只通过 IMonsterSystem 生成。亚空间里 SessionSystem 不调用 Tick。
     /// </summary>
     public sealed class SpawnSystem : ISpawnSystem
     {
-        /// <summary>刷怪点附近的随机散布半径。</summary>
-        public const float SpawnPointJitter = 1f;
-
         private readonly ITurnContext _ctx;
-        private readonly SpawnConfig _spawn;
-        private readonly PenaltyConfig _penalty;
-        private readonly List<Vec2> _candidates = new List<Vec2>();
+        private readonly HordeConfig _horde;
         private float _timer;
+        private float _fraction;
+        private int _handledWave = 1;
 
-        public SpawnSystem(ITurnContext ctx, SpawnConfig spawn, PenaltyConfig penalty)
+        public SpawnSystem(ITurnContext ctx, HordeConfig horde)
         {
             _ctx = ctx;
-            _spawn = spawn;
-            _penalty = penalty;
+            _horde = horde ?? new HordeConfig();
         }
 
         public void SpawnInitial()
         {
-            for (int i = 0; i < _spawn.InitialCount; i++) SpawnRegular();
-            _timer = _spawn.Interval;
+            int count = Math.Max(0, (int)MathF.Floor(_horde.BaseCount));
+            for (int i = 0; i < count; i++) _ctx.Monsters.Spawn(EdgePoint(), false);
+            _timer = MathF.Max(0.1f, _horde.SpawnInterval);
         }
 
         public void Tick(float dt, float time)
         {
+            int wave = Math.Max(1, _ctx.Session.Wave);
+            while (_handledWave < wave)
+            {
+                _handledWave++;
+                OnWaveStarted(_handledWave);
+            }
+
             _timer -= dt;
             if (_timer > 0f) return;
-            _timer += MathF.Max(0.1f, _spawn.Interval);
+            _timer += MathF.Max(0.1f, _horde.SpawnInterval);
 
-            int ramp = _spawn.RampInterval > 0f ? (int)(time / _spawn.RampInterval) * _spawn.RampAmount : 0;
-            int count = _spawn.CountPerSpawn + ramp;
+            float exact = MathF.Max(0f, _horde.BaseCount + _horde.CountPerWave * (wave - 1)) + _fraction;
+            int count = (int)MathF.Floor(exact);
+            _fraction = exact - count;
             for (int i = 0; i < count; i++)
             {
-                if (_ctx.Monsters.AliveCount >= _spawn.MaxAlive) break;
-                SpawnRegular();
+                if (_ctx.Monsters.AliveCount >= Math.Max(1, _horde.MaxAlive)) break;
+                _ctx.Monsters.Spawn(EdgePoint(), false);
             }
+        }
+
+        private void OnWaveStarted(int wave)
+        {
+            if (_horde.EliteFromWave > 0 && wave >= _horde.EliteFromWave)
+                _ctx.Monsters.SpawnKind(EdgePoint(), MonsterSpawnPool.PickUnlocked(_horde, wave, _ctx.Random), 1);
+            if (_horde.BossEveryWaves > 0 && wave % _horde.BossEveryWaves == 0)
+                _ctx.Monsters.SpawnKind(EdgePoint(), MonsterSpawnPool.PickUnlocked(_horde, wave, _ctx.Random), 2);
         }
 
         public int SpawnPenalty(int count)
         {
             count = Math.Max(0, count);
-            for (int i = 0; i < count; i++) _ctx.Monsters.Spawn(FreePosition(PenaltyPosition()), true);
+            for (int i = 0; i < count; i++) _ctx.Monsters.Spawn(EdgePoint(), true);
             if (count > 0) _ctx.Events.Publish(new PenaltySpawnedEvent { Count = count });
             return count;
         }
 
-        // ---------------- 位置 ----------------
-
-        private void SpawnRegular()
+        /// <summary>地图边缘的随机点：按边长加权选一条边，离玩家太近或压在遮挡物上就重新随机（最多 12 次）。</summary>
+        public Vec2 EdgePoint()
         {
-            _ctx.Monsters.Spawn(FreePosition(RegularPosition()), false);
-        }
-
-        /// <summary>当前地图的刷怪点里离玩家不小于 MinDistance 的随机一个；没有可用点时在玩家周围的圆环上找。</summary>
-        private Vec2 RegularPosition()
-        {
+            BoundsRect rect = _ctx.Bounds.Rect;
+            float inset = MathF.Max(0f, _horde.EdgeInset);
+            float minX = rect.Min.X + inset, maxX = rect.Max.X - inset;
+            float minY = rect.Min.Y + inset, maxY = rect.Max.Y - inset;
+            if (maxX < minX) maxX = minX;
+            if (maxY < minY) maxY = minY;
+            float w = maxX - minX, h = maxY - minY;
             Vec2 player = _ctx.Player.State.Position;
-            List<Vec2> points = _ctx.Config.SpawnPoints[(int)_ctx.Plane.Active];
-            float minSq = _spawn.MinDistance * _spawn.MinDistance;
-
-            _candidates.Clear();
-            for (int i = 0; i < points.Count; i++)
-            {
-                if (Vec2.SqrDistance(points[i], player) >= minSq) _candidates.Add(points[i]);
-            }
-            if (_candidates.Count > 0)
-            {
-                Vec2 p = _candidates[_ctx.Random.Next(_candidates.Count)];
-                return p + Vec2.FromAngle(NextAngle()) * ((float)_ctx.Random.NextDouble() * SpawnPointJitter);
-            }
-            return RingPosition(player, _spawn.MinDistance, _spawn.MaxDistance);
-        }
-
-        private Vec2 PenaltyPosition()
-        {
-            Vec2 player = _ctx.Player.State.Position;
-            if (_penalty.Area == PenaltyArea.AnywhereInBounds)
-            {
-                float minSq = _penalty.MinDistance * _penalty.MinDistance;
-                Vec2 best = _ctx.Bounds.RandomPoint(0.5f);
-                for (int attempt = 0; attempt < 12 && Vec2.SqrDistance(best, player) < minSq; attempt++)
-                {
-                    best = _ctx.Bounds.RandomPoint(0.5f);
-                }
-                return best;
-            }
-            return RingPosition(player, _penalty.MinDistance, _penalty.MaxDistance);
-        }
-
-        /// <summary>玩家周围 [minDist, maxDist] 圆环上的随机点，限制进边界；被边界压得太近就换个角度重试。</summary>
-        private Vec2 RingPosition(Vec2 center, float minDist, float maxDist)
-        {
-            float lo = MathF.Max(0f, MathF.Min(minDist, maxDist));
-            float hi = MathF.Max(minDist, maxDist);
-            float wantSq = lo * 0.75f * (lo * 0.75f);
-
-            Vec2 best = center;
-            float bestSq = -1f;
-            for (int attempt = 0; attempt < 10; attempt++)
-            {
-                float r = lo + (float)_ctx.Random.NextDouble() * (hi - lo);
-                Vec2 p = _ctx.Bounds.Clamp(center + Vec2.FromAngle(NextAngle()) * r, 0.5f);
-                float sq = Vec2.SqrDistance(p, center);
-                if (sq >= wantSq) return p;
-                if (sq > bestSq)
-                {
-                    best = p;
-                    bestSq = sq;
-                }
-            }
-            return best;
-        }
-
-        private Vec2 FreePosition(Vec2 desired)
-        {
-            Vec2 player = _ctx.Player.State.Position;
-            float radius = _ctx.Config.Monster.Radius;
+            float minSq = _horde.MinPlayerDistance * _horde.MinPlayerDistance;
+            Vec2 best = new Vec2(minX, minY);
             for (int attempt = 0; attempt < 12; attempt++)
             {
-                Vec2 point = attempt == 0 ? desired : RingPosition(player, _spawn.MinDistance, _spawn.MaxDistance);
-                point = _ctx.Bounds.Clamp(point, radius);
-                if (!_ctx.Obstacles.Overlaps(point, radius, ObstacleMask.Units) &&
-                    Vec2.SqrDistance(point, player) >= (radius + _ctx.Player.Config.Radius) * (radius + _ctx.Player.Config.Radius))
-                    return point;
+                float roll = (float)_ctx.Random.NextDouble() * (2f * (w + h));
+                Vec2 p;
+                if (roll < w) p = new Vec2(minX + roll, minY);
+                else if (roll < 2f * w) p = new Vec2(minX + roll - w, maxY);
+                else if (roll < 2f * w + h) p = new Vec2(minX, minY + roll - 2f * w);
+                else p = new Vec2(maxX, minY + roll - 2f * w - h);
+                best = p;
+                if (Vec2.SqrDistance(p, player) < minSq) continue;
+                if (_ctx.Obstacles.Overlaps(p, _horde.Radius, ObstacleMask.Units)) continue;
+                return p;
             }
-            return _ctx.Bounds.Clamp(desired, radius);
-        }
-
-        private float NextAngle()
-        {
-            return (float)(_ctx.Random.NextDouble() * Math.PI * 2.0);
+            return best;
         }
     }
 }

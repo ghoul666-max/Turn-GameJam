@@ -1,182 +1,213 @@
 using System;
-using System.Linq;
 using Turn.Core;
 using Turn.Monsters;
 using Turn.Systems;
 
+/// <summary>程序B：五种怪物、波次成长 / 解锁、精英、边缘刷新的纯模拟回归测试（新策划案 11/24）。运行：dotnet run。</summary>
 internal static class Program
 {
+    private const float Step = 1f / 60f;
+
     private static void Main()
     {
-        CatalogAndPools();
-        PairSwapAndBuff();
-        SplitAndClear();
-        SlowAndProjectiles();
-        RockImpactWarningAndDodge();
-        FutureSoldierLaserWarningAndDodge();
-        RobotKnockbackHitEventOnlyOnDamage();
-        Console.WriteLine("Monster checks passed.");
+        WaveScalingFromDebut();
+        DebutGatesSpawnPool();
+        WalkerContactCap();
+        SporeFiresRings();
+        ChargerChargesAndHits();
+        RotterLeavesPool();
+        SniperLaser();
+        EdgeSpawnAndElites();
+        Console.WriteLine($"Monster checks passed ({_checks} assertions).");
     }
 
-    private static ITurnContext NewWorld(PlaneId plane = PlaneId.Volcano)
+    private static void RunMonsters(ITurnContext ctx, float seconds)
+    {
+        int steps = (int)MathF.Round(seconds / Step);
+        for (int i = 0; i < steps; i++)
+        {
+            ctx.Player.Tick(Step);
+            ctx.Monsters.Tick(Step);
+            ctx.Projectiles.Tick(Step);
+        }
+    }
+
+    private static void WaveScalingFromDebut()
+    {
+        var ctx = World(c => c.Level.WaveSeconds = .5f);
+        Check(Near(Spawn(ctx, new Vec2(8f, 0f)).MaxHp, 30f), "walker 30 hp at wave 1");
+        for (int i = 0; i < 63; i++) ctx.Session.Tick(Step);
+        Check(ctx.Session.Wave == 3, "wave 3");
+        MonsterEntity walker = Spawn(ctx, new Vec2(8f, 0f));
+        Check(Near(walker.MaxHp, 36f) && Near(walker.DamageScale, 1.1f), "+10% hp / +5% damage per wave");
+        Check(Near(Spawn(ctx, new Vec2(8f, 2f), MonsterKind.Spore).MaxHp, 50f), "spore 50 hp at its debut wave 3");
+    }
+
+    private static void DebutGatesSpawnPool()
+    {
+        var horde = new HordeConfig();
+        var random = new Random(5);
+        for (int i = 0; i < 200; i++) Check(MonsterSpawnPool.Pick(horde, 1, random) == MonsterKind.Walker, "wave 1: walkers only");
+        bool sniper = false, charger = false;
+        for (int i = 0; i < 2000; i++)
+        {
+            MonsterKind k = MonsterSpawnPool.Pick(horde, 10, random);
+            sniper |= k == MonsterKind.Sniper;
+            charger |= k == MonsterKind.Charger;
+        }
+        Check(sniper && charger, "wave 10: all five unlocked");
+        for (int i = 0; i < 500; i++) Check(MonsterSpawnPool.Pick(horde, 6, random) != MonsterKind.Sniper, "sniper locked before wave 10");
+    }
+
+    private static void WalkerContactCap()
+    {
+        var ctx = World();
+        Spawn(ctx, new Vec2(.2f, 0f));
+        int hits = 0;
+        ctx.Events.Subscribe<PlayerDamagedEvent>(e => hits++);
+        RunMonsters(ctx, .45f);
+        Check(hits == 1, "at most one contact hit per 0.5 s");
+        RunMonsters(ctx, .7f);
+        Check(hits == 3 && Near(ctx.Player.State.Hp, 85f), "5 damage per hit, every 0.5 s");
+    }
+
+    private static void SporeFiresRings()
+    {
+        var ctx = World();
+        MonsterEntity spore = Spawn(ctx, new Vec2(6f, 0f), MonsterKind.Spore);
+        spore.AiTimer = .5f; // 固定第一圈的时间（生成时是随机错开的）
+        int lastId = 0, rings = 0;
+        for (int i = 0; i < 60 * 5; i++)
+        {
+            RunMonsters(ctx, Step);
+            int fresh = 0;
+            var list = ctx.Projectiles.Active;
+            int maxId = lastId;
+            for (int k = 0; k < list.Count; k++)
+            {
+                if (list[k].Id <= lastId) continue;
+                fresh++;
+                if (list[k].Id > maxId) maxId = list[k].Id;
+            }
+            if (fresh > 0)
+            {
+                Check(fresh == 8, "each ring has 8 bullets");
+                rings++;
+            }
+            lastId = maxId;
+        }
+        Check(rings == 2, "one ring every 3 s (rings at 0.5 s and 3.5 s)");
+    }
+
+    private static void ChargerChargesAndHits()
+    {
+        var ctx = World();
+        MonsterEntity c = Spawn(ctx, new Vec2(4f, 0f), MonsterKind.Charger);
+        bool windup = false;
+        float hp = ctx.Player.State.Hp;
+        for (int i = 0; i < 240 && Near(ctx.Player.State.Hp, hp); i++)
+        {
+            RunMonsters(ctx, Step);
+            windup |= c.AiPhase == 1;
+        }
+        Check(windup, "charger winds up before charging");
+        Check(Near(hp - ctx.Player.State.Hp, 15f), "charge hits for 15");
+    }
+
+    private static void RotterLeavesPool()
+    {
+        var ctx = World();
+        MonsterEntity r = Spawn(ctx, new Vec2(.5f, 0f), MonsterKind.Rotter);
+        ctx.Combat.DamageMonster(r, 1000f, DamageSource.Weapon);
+        Check(ctx.Monsters.Pools.Count == 1, "rotter leaves a poison pool");
+        Check(Near(ctx.Monsters.Pools[0].Radius, 1.5f), "pool radius 1.5 (60 px)");
+        float hp = ctx.Player.State.Hp;
+        RunMonsters(ctx, 1.1f);
+        Check(Near(hp - ctx.Player.State.Hp, 4f), "standing in the pool: 2 per 0.5 s");
+        RunMonsters(ctx, 4.5f);
+        Check(ctx.Monsters.Pools.Count == 0, "pool lasts 5 s");
+    }
+
+    private static void SniperLaser()
+    {
+        var ctx = World();
+        Spawn(ctx, new Vec2(8f, 0f), MonsterKind.Sniper);
+        bool warned = false, fired = false, hit = false;
+        ctx.Events.Subscribe<LaserAttackWarnedEvent>(e => warned = true);
+        ctx.Events.Subscribe<LaserFiredEvent>(e => { fired = true; hit = e.HitPlayer; });
+        for (int i = 0; i < 60 * 8 && !fired; i++) RunMonsters(ctx, Step);
+        Check(warned && fired, "sniper warns then fires");
+        Check(hit && Near(ctx.Player.State.MaxHp - ctx.Player.State.Hp, 20f), "laser hits a standing player for 20");
+    }
+
+    private static void EdgeSpawnAndElites()
+    {
+        var ctx = World(c => { c.Horde.EliteFromWave = 2; c.Level.WaveSeconds = .5f; });
+        BoundsRect rect = ctx.Bounds.Rect;
+        for (int i = 0; i < 50; i++)
+        {
+            Vec2 p = ctx.Spawner.EdgePoint();
+            float edge = MathF.Min(MathF.Min(p.X - rect.Min.X, rect.Max.X - p.X), MathF.Min(p.Y - rect.Min.Y, rect.Max.Y - p.Y));
+            Check(edge < 1f, "spawn points are on the map edge");
+        }
+        for (int i = 0; i < 40; i++) ctx.Session.Tick(Step);
+        bool elite = false;
+        for (int i = 0; i < ctx.Monsters.Active.Count; i++) elite |= ctx.Monsters.Active[i].Rank == 1;
+        Check(ctx.Session.Wave == 2 && elite, "an elite spawns when wave 2 starts");
+    }
+
+    private static int _checks;
+
+    /// <summary>一局测试世界：不自动刷怪、不刷精英 / Boss、三把武器开局全部解锁。</summary>
+    private static ITurnContext World(Action<TurnConfig> configure = null)
     {
         var config = new TurnConfig();
-        config.Environment.StartPlane = plane;
-        config.Spawn.InitialCount = 0;
-        config.Spawn.CountPerSpawn = 0;
-        config.Monster.SplitInterval = .25f;
-        if (plane == PlaneId.Primal) config.Spawn.KindWeights[(int)MonsterKind.VineDemon] = -1f;
-        return TurnFactory.Create(config, 21);
+        config.Horde.BaseCount = 0f;
+        config.Horde.CountPerWave = 0f;
+        config.Horde.EliteFromWave = 0;
+        config.Horde.BossEveryWaves = 0;
+        config.Loadout.UnlockWaves = new[] { 1, 1, 1 };
+        configure?.Invoke(config);
+        ITurnContext ctx = TurnFactory.Create(config, 777);
+        ctx.Session.Start();
+        return ctx;
     }
 
-    private static void CatalogAndPools()
+    private static MonsterEntity Spawn(ITurnContext ctx, Vec2 offset, MonsterKind kind = MonsterKind.Walker, int rank = 0)
     {
-        MonsterArchetype[] stats = MonsterCatalog.CreateDefaults();
-        Check(stats.Length == 13 && stats.All(s => s != null && s.MaxHp > 0), "all archetypes configured");
-        Check(MonsterCatalog.ForPlane(MonsterKind.NullPointer, PlaneId.Dream) == MonsterKind.Alarm, "office pair mapping");
-        Check(MonsterCatalog.ForPlane(MonsterKind.Bug, PlaneId.Dream) == MonsterKind.BlackPot, "bug maps black pot");
-        Check(MonsterCatalog.ForPlane(MonsterKind.Boar, PlaneId.Future) == MonsterKind.DataWorm, "P2 pair mapping");
-        var random = new Random(7);
-        var spawn = new SpawnConfig { P2StartSeconds = 90f };
-        for (int i = 0; i < 200; i++) Check(MonsterSpawnPool.Pick(PlaneId.Primal, spawn, random, 0f) != MonsterKind.Boar, "P2 gated");
-        Check(MonsterSpawnPool.Pick(PlaneId.Volcano, spawn, random, 0f) == MonsterKind.StoneGolem, "volcano-only spawn");
+        return ctx.Monsters.SpawnKind(ctx.Player.State.Position + offset, kind, rank);
     }
 
-    private static void PairSwapAndBuff()
+    /// <summary>反复升级直到抽到指定词条并选中它。</summary>
+    private static void ApplyBuild(ITurnContext ctx, BuildId id)
     {
-        ITurnContext world = NewWorld();
-        MonsterEntity stone = world.Monsters.Spawn(new Vec2(3, 0), false);
-        Check(stone.Kind == MonsterKind.StoneGolem && stone.XpValue == 6, "stone spawn and XP");
-        world.Combat.DamageMonster(stone, 30f, DamageSource.Weapon);
-        world.Monsters.ApplyBurn(stone, 6f, 3f);
-        world.Monsters.ApplySlow(stone, .7f, 2f);
-        int id = stone.Id;
-        world.Plane.Switch();
-        world.Monsters.SwapPlane(PlaneId.Volcano, PlaneId.Ocean);
-        Check(stone.Id == id && stone.Kind == MonsterKind.Anglerfish && Math.Abs(stone.Hp - 22.5f) < .01f, "ratio and same instance");
-        Check(stone.Burning && stone.SlowLeft > 0 && stone.SlowFactor == .7f, "all statuses survive");
-        world.Monsters.Tick(.1f);
-        Check(stone.SlowLeft < 2f, "slow timer ticks");
-    }
-
-    private static void SplitAndClear()
-    {
-        ITurnContext world = NewWorld(PlaneId.Office);
-        MonsterEntity parent = world.Monsters.Spawn(new Vec2(6, 0), false);
-        for (int i = 0; i < 12 && parent.Kind != MonsterKind.NullPointer; i++)
+        for (int attempt = 0; attempt < 2000; attempt++)
         {
-            world.Monsters.Despawn(parent);
-            world.Monsters.Tick(.01f);
-            parent = world.Monsters.Spawn(new Vec2(6, 0), false);
+            ctx.Progression.AddXp(ctx.Progression.XpToNext);
+            ctx.Progression.RollOptions();
+            var list = ctx.Progression.Options;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (list[i].Build != id || list[i].Curse != ChestCurse.None) continue;
+                Check(ctx.Progression.TryApply(i), "apply " + id);
+                while (ctx.Progression.PendingLevelUps > 0) ctx.Progression.SkipPending();
+                return;
+            }
+            ctx.Progression.SkipPending();
         }
-        Check(parent.Kind == MonsterKind.NullPointer, "office spawn parent");
-        for (int i = 0; i < 50; i++) world.Monsters.Tick(.1f);
-        Check(world.Monsters.Active.Count(m => m.Alive && m.Kind == MonsterKind.Buglet && m.ParentId == parent.Id) == world.Config.Monster.BugletLimitPerParent, "per-parent split cap");
-        world.Plane.Switch();
-        world.Monsters.SwapPlane(PlaneId.Office, PlaneId.Dream);
-        Check(world.Monsters.Active.All(m => !m.Alive || m.Kind != MonsterKind.Buglet), "buglets clear on switch");
+        throw new Exception("Could not sample " + id);
     }
 
-    private static void SlowAndProjectiles()
+    private static void RunProjectiles(ITurnContext ctx, float seconds)
     {
-        ITurnContext world = NewWorld(PlaneId.Ocean);
-        MonsterEntity fish = world.Monsters.Spawn(new Vec2(4, 0), false);
-        Check(fish.Kind == MonsterKind.Anglerfish, "ocean fish");
-        for (int i = 0; i < 30; i++) world.Monsters.Tick(.1f);
-        Check(world.Projectiles.Active.Any(p => p.Enemy && p.EnemyKind == EnemyProjectileKind.Bubble), "fish fires bubble");
+        for (float t = 0f; t < seconds; t += 1f / 60f) ctx.Projectiles.Tick(1f / 60f);
     }
 
-    private static void RockImpactWarningAndDodge()
+    private static bool Near(float a, float b, float eps = .01f) => Math.Abs(a - b) < eps;
+
+    private static void Check(bool condition, string description)
     {
-        ITurnContext world = NewWorld(PlaneId.Primal);
-        world.Config.Monster.RockWarning = .3f;
-        world.Config.Monster.Archetypes[(int)MonsterKind.RockThrower].AttackInterval = 4f;
-        world.Config.Monster.Archetypes[(int)MonsterKind.RockThrower].Windup = .1f;
-        MonsterEntity rock = world.Monsters.Spawn(new Vec2(4f, 0), false);
-        int warnings = 0;
-        Vec2 locked = Vec2.Zero;
-        world.Events.Subscribe<RockImpactWarnedEvent>(evt => { warnings++; locked = evt.Position; });
-        for (int i = 0; i < 12 && warnings == 0; i++) world.Monsters.Tick(.1f);
-        Check(warnings == 1 && rock.AiPhase == 4, $"rock warning after windup (warnings={warnings}, phase={rock.AiPhase}, pos={rock.Position})");
-        float hp = world.Player.State.Hp;
-        world.Monsters.Tick(.1f);
-        Check(world.Player.State.Hp == hp, "rock warning causes no early damage");
-        world.Monsters.Tick(.21f);
-        Check(world.Player.State.Hp < hp, $"rock impacts locked location after warning (phase={rock.AiPhase}, timer={rock.AiTimer}, target={locked}, player={world.Player.State.Position})");
-        Check(locked.SqrMagnitude < .001f, "rock locked original player position");
-
-        ITurnContext dodge = NewWorld(PlaneId.Primal);
-        dodge.Config.Monster.RockWarning = .3f;
-        dodge.Config.Monster.Archetypes[(int)MonsterKind.RockThrower].Windup = .1f;
-        MonsterEntity second = dodge.Monsters.Spawn(new Vec2(4f, 0), false);
-        for (int i = 0; i < 12 && second.AiPhase != 4; i++) dodge.Monsters.Tick(.1f);
-        Check(second.AiPhase == 4, "dodge case rock warning");
-        float before = dodge.Player.State.Hp;
-        dodge.Player.State.Position = new Vec2(3f, 3f);
-        dodge.Monsters.Tick(.31f);
-        Check(second.AiPhase == 0 && dodge.Player.State.Hp == before, "player can dodge locked rock impact");
-    }
-
-    private static void FutureSoldierLaserWarningAndDodge()
-    {
-        ITurnContext world = NewWorld(PlaneId.Future);
-        world.Config.Spawn.KindWeights[(int)MonsterKind.RepairRobot] = -1f;
-        world.Config.Spawn.KindWeights[(int)MonsterKind.DataWorm] = -1f;
-        world.Config.Monster.LaserWarning = .4f;
-        world.Config.Monster.LaserDuration = 1f;
-        MonsterEntity soldier = world.Monsters.Spawn(new Vec2(4f, 0f), false);
-        Check(soldier.Kind == MonsterKind.FutureSoldier, "future soldier chosen");
-        int warnings = 0;
-        world.Events.Subscribe<LaserAttackWarnedEvent>(_ => warnings++);
-        for (int i = 0; i < 12 && warnings == 0; i++) world.Monsters.Tick(.1f);
-        Check(warnings == 1 && soldier.AiPhase == 1, "laser warns before attack");
-        float hp = world.Player.State.Hp;
-        world.Monsters.Tick(.2f);
-        Check(world.Player.State.Hp == hp, "laser warning deals no damage");
-        world.Monsters.Tick(.21f);
-        Check(soldier.AiPhase == 5 && world.Player.State.Hp == hp, "laser enters active beam after warning");
-        world.Monsters.Tick(.1f);
-        Check(world.Player.State.Hp < hp, "active laser hits on locked beam");
-
-        ITurnContext dodge = NewWorld(PlaneId.Future);
-        dodge.Config.Spawn.KindWeights[(int)MonsterKind.RepairRobot] = -1f;
-        dodge.Config.Monster.LaserWarning = .4f;
-        MonsterEntity other = dodge.Monsters.Spawn(new Vec2(4f, 0f), false);
-        for (int i = 0; i < 12 && other.AiPhase != 1; i++) dodge.Monsters.Tick(.1f);
-        Check(other.AiPhase == 1, "dodge case warns");
-        float before = dodge.Player.State.Hp;
-        dodge.Player.State.Position = new Vec2(0f, 3f);
-        dodge.Monsters.Tick(.5f);
-        dodge.Monsters.Tick(.1f);
-        Check(dodge.Player.State.Hp == before, "player dodges locked laser direction");
-    }
-
-    private static void RobotKnockbackHitEventOnlyOnDamage()
-    {
-        ITurnContext world = NewWorld(PlaneId.Future);
-        world.Config.Spawn.KindWeights[(int)MonsterKind.FutureSoldier] = -1f;
-        world.Config.Spawn.KindWeights[(int)MonsterKind.DataWorm] = -1f;
-        world.Config.Monster.Archetypes[(int)MonsterKind.RepairRobot].Windup = .1f;
-        world.Config.Monster.RobotKnockbackDistance = 1.5f;
-        MonsterEntity robot = world.Monsters.Spawn(new Vec2(1f, 0f), false);
-        Check(robot.Kind == MonsterKind.RepairRobot, "repair robot chosen");
-        int hits = 0;
-        RobotKnockbackHitEvent last = default;
-        world.Events.Subscribe<RobotKnockbackHitEvent>(evt => { hits++; last = evt; });
-        for (int i = 0; i < 30 && hits == 0; i++) world.Monsters.Tick(.1f);
-        Check(hits == 1 && last.MonsterId == robot.Id && last.Plane == PlaneId.Future &&
-            Math.Abs(last.Distance - 1.5f) < .001f, "robot emits hit knockback fact");
-        world.Player.State.InvincibleLeft = 1f;
-        robot.ContactTimer = 0f;
-        robot.AiPhase = 2;
-        robot.AiTimer = .2f;
-        robot.Position = world.Player.State.Position + new Vec2(.1f, 0f);
-        world.Monsters.Tick(.01f);
-        Check(hits == 1, "invincible player does not receive knockback event");
-    }
-
-    private static void Check(bool condition, string message)
-    {
-        if (!condition) throw new Exception(message);
+        _checks++;
+        if (!condition) throw new Exception("Test failed: " + description);
     }
 }

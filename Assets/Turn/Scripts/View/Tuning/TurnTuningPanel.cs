@@ -209,124 +209,38 @@ namespace Turn.View
 
         private void DrawFields(TurnTuningData d)
         {
-            if (Section("level", "关卡"))
+            if (Section("level", "关卡 / 波次 / 武器解锁"))
             {
-                // 旧存档没有这一组（version = 0）：换成默认值（300 秒），保存后生效
+                // 旧存档没有这一组（version = 0）：换成默认值，保存后生效；version 1（亚空间之前）补上新字段
                 if (d.level == null || d.level.version <= 0) d.level = new LevelSettings();
-                d.level.surviveSeconds = F("lv.survive", "每关存活多少秒过关（0 = 不过关）", d.level.surviveSeconds, 0f, 900f);
+                d.level.Upgrade();
+                d.level.endless = Toggle("无尽生存（永不过关）", d.level.endless);
+                d.level.waveSeconds = F("lv.wave", "每波时长（秒，0 = 永远第 1 波）", d.level.waveSeconds, 0f, 180f);
+                d.level.spearUnlockWave = I("lv.spear", "投矛在第几波解锁", d.level.spearUnlockWave, 1, 50);
+                d.level.bladeUnlockWave = I("lv.blade", "陌刀在第几波解锁", d.level.bladeUnlockWave, 1, 50);
+                d.level.surviveSeconds = F("lv.survive", "旧流程：每关存活多少秒过关（关掉无尽才生效）", d.level.surviveSeconds, 0f, 900f);
             }
             if (Section("player", "主角"))
             {
                 PlayerSettings p = d.player;
-                p.moveSpeed = F("p.speed", "移动速度", p.moveSpeed, 0.5f, 15f);
+                p.moveSpeed = F("p.speed", "移动速度（1 单位 = 40 像素）", p.moveSpeed, 0.5f, 15f);
                 p.maxHp = F("p.hp", "最大生命", p.maxHp, 1f, 500f);
                 p.radius = F("p.radius", "碰撞半径", p.radius, 0.05f, 2f);
+                p.hurtInvincibleTime = F("p.hurtInv", "受伤无敌帧（秒）", p.hurtInvincibleTime, 0f, 2f);
             }
-            if (Section("roll", "翻滚"))
+            if (Section("roll", "翻滚 / 亚空间"))
             {
                 RollSettings r = d.roll;
-                r.cooldown = F("r.cd", "冷却（秒）", r.cooldown, 0.1f, 10f);
-                r.minCooldown = F("r.mincd", "升级后最低冷却（秒）", r.minCooldown, 0f, 5f);
-                r.invincibleTime = F("r.inv", "无敌时间（秒）", r.invincibleTime, 0f, 3f);
-                r.duration = F("r.dur", "翻滚时长（秒）", r.duration, 0.05f, 1.5f);
+                r.waterGunCooldown = F("r.cdWater", "水枪：翻滚冷却（秒）", r.waterGunCooldown, 0f, 10f);
+                r.spearCooldown = F("r.cdSpear", "投矛：翻滚冷却（秒）", r.spearCooldown, 0f, 10f);
+                r.bladeCooldown = F("r.cdBlade", "陌刀：翻滚冷却（秒）", r.bladeCooldown, 0f, 10f);
+                r.subspaceDuration = F("r.subDur", "亚空间时长（现实秒）", r.subspaceDuration, 0.05f, 5f);
+                r.subspaceTimeScale = F("r.subScale", "亚空间时间倍率", r.subspaceTimeScale, 0f, 1f);
+                r.duration = F("r.dur", "翻滚位移时长（游戏秒）", r.duration, 0.05f, 1.5f);
                 r.distance = F("r.dist", "翻滚距离", r.distance, 0f, 10f);
             }
-            if (Section("weapon", "武器（火球 / 鱼叉共用）"))
-            {
-                WeaponSettings w = d.weapon;
-                w.magazineSize = I("w.mag", "弹匣容量", w.magazineSize, 1, 50);
-                w.ammoPerShot = I("w.ammo", "每发消耗弹药", w.ammoPerShot, 1, 10);
-                w.fireInterval = F("w.interval", "攻击间隔（秒）", w.fireInterval, 0.05f, 3f);
-                w.targetRange = F("w.target", "自动索敌范围", w.targetRange, 1f, 30f);
-                w.attackRange = F("w.range", "射程（子弹最远距离）", w.attackRange, 1f, 40f);
-                w.projectileLifetime = F("w.lifetime", "子弹存活秒数", w.projectileLifetime, 0.1f, 20f);
-                w.planeSwitchLifetimeMultiplier = F("w.planeLife", "首次切层剩余寿命倍率", w.planeSwitchLifetimeMultiplier, 1f, 4f);
-            }
-            if (Section("fireball", "火球（火山地图）")) Projectile("fb", d.fireball);
-            if (Section("harpoon", "鱼叉（海洋地图）")) Projectile("hp", d.harpoon);
-            if (Section("keyboard", "键盘（工位地图）")) Projectile("kb", d.keyboard);
-            if (Section("paintbrush", "画笔（梦境地图）")) Projectile("pb", d.paintbrush);
-            if (Section("crossbow", "弩（原始地图）")) Projectile("cb", d.crossbow);
-            if (Section("laser", "激光枪（未来地图）")) Projectile("ls", d.laser);
-            if (Section("builds", "Build 池（B01-B19）"))
-            {
-                d.battleVersion = 1;
-                UpgradeSettings u = d.upgrades;
-                if (u != null)
-                {
-                    u.optionCount = I("build.options", "每次升级候选数量", u.optionCount, 1, 8);
-                    u.commonWeight = I("build.common", "普通权重", u.commonWeight, 0, 100);
-                    u.rareWeight = I("build.rare", "稀有权重", u.rareWeight, 0, 100);
-                    u.epicWeight = I("build.epic", "史诗权重", u.epicWeight, 0, 100);
-                    if (u.buildMaxLevels != null)
-                        for (int i = 0; i < u.buildMaxLevels.Length; i++)
-                            u.buildMaxLevels[i] = I("build.max" + i, "B" + (i + 1).ToString("00") + " 上限", u.buildMaxLevels[i], 0, 10);
-                    u.damagePerLevel = F("build.damage", "B01 每层伤害提升", u.damagePerLevel, 0f, 1f);
-                    u.fireIntervalReductionPerLevel = F("build.speed", "B02 每层攻速提升", u.fireIntervalReductionPerLevel, 0f, .5f);
-                    u.criticalChancePerLevel = F("build.crit", "B08 每层暴击率", u.criticalChancePerLevel, 0f, 1f);
-                    u.hazardDamagePerLevel = F("build.hazard", "B10 每层地形增伤", u.hazardDamagePerLevel, 0f, 2f);
-                    // 翻滚机制词条（程序A 的 RollSystem 读取）
-                    u.rollCooldownReductionPerLevel = F("build.rollcd", "B13 每层翻滚冷却缩短（比例）", u.rollCooldownReductionPerLevel, 0f, .5f);
-                    u.rollInvinciblePerLevel = F("build.rollinv", "B14 每层无敌延长（秒）", u.rollInvinciblePerLevel, 0f, .5f);
-                    u.shockwaveBaseRadius = F("build.swRadius", "B15 冲击半径", u.shockwaveBaseRadius, 0f, 10f);
-                    u.shockwaveBaseDamage = F("build.swDamage", "B15 冲击伤害", u.shockwaveBaseDamage, 0f, 200f);
-                    u.shockwaveKnockback = F("build.swKnock", "B15 击退距离", u.shockwaveKnockback, 0f, 5f);
-                    u.penaltyReductionPerLevel = F("build.penalty", "B17 每层惩罚减免（比例）", u.penaltyReductionPerLevel, 0f, 1f);
-                    u.doubleRollWindow = F("build.dblWindow", "B18 免费再翻窗口（秒）", u.doubleRollWindow, 0f, 3f);
-                    u.doubleRollCooldown = F("build.dblCd", "B18 独立冷却（秒）", u.doubleRollCooldown, 0f, 60f);
-                    u.projectileLifetimeBonusPerLevel = F("build.linger", "B19 每层弹幕延寿", u.projectileLifetimeBonusPerLevel, 0f, 2f);
-                }
-            }
-            if (Section("experience", "经验曲线"))
-            {
-                ExperienceSettings e = d.experience;
-                if (e != null)
-                {
-                    e.baseXpToLevel = I("xp.base", "首级经验", e.baseXpToLevel, 1, 100);
-                    e.xpGrowthPerLevel = I("xp.growth", "每级经验增长", e.xpGrowthPerLevel, 0, 100);
-                    e.magnetRadius = F("xp.magnet", "经验吸附半径", e.magnetRadius, 0f, 20f);
-                }
-            }
-            if (Section("monster", "普通怪物"))
-            {
-                MonsterSettings m = d.monster;
-                m.volcanoMaxHp = F("m.hpVolcano", "火山怪最大生命（石头人）", m.volcanoMaxHp, 1f, 500f);
-                m.oceanMaxHp = F("m.hpOcean", "海洋怪最大生命（安康鱼）", m.oceanMaxHp, 1f, 500f);
-                m.maxHp = F("m.hp", "其他位面怪最大生命", m.maxHp, 1f, 500f);
-                m.moveSpeed = F("m.speed", "移动速度", m.moveSpeed, 0f, 10f);
-                m.contactDamage = F("m.dmg", "接触伤害", m.contactDamage, 0f, 100f);
-                m.contactInterval = F("m.interval", "接触伤害间隔（秒）", m.contactInterval, 0.05f, 5f);
-                m.radius = F("m.radius", "碰撞半径", m.radius, 0.05f, 2f);
-                m.lavaHitDamage = F("m.lava", "岩浆一次性伤害", m.lavaHitDamage, 0f, 200f);
-                m.xp = I("m.xp", "掉落经验", m.xp, 0, 20);
-                if (m.archetypes != null)
-                {
-                    for (int i = 0; i < m.archetypes.Length; i++)
-                    {
-                        MonsterArchetype a = m.archetypes[i];
-                        if (a == null) continue;
-                        string prefix = "m.type" + i;
-                        if (!Section(prefix, ((MonsterKind)i).ToString())) continue;
-                        a.MaxHp = F(prefix + ".hp", "最大生命", a.MaxHp, 1f, 500f);
-                        a.Speed = F(prefix + ".speed", "移动速度", a.Speed, 0f, 12f);
-                        a.Damage = F(prefix + ".damage", "攻击伤害", a.Damage, 0f, 100f);
-                        a.AttackInterval = F(prefix + ".interval", "攻击间隔", a.AttackInterval, .1f, 10f);
-                        a.Windup = F(prefix + ".windup", "攻击前摇", a.Windup, 0f, 5f);
-                        a.Range = F(prefix + ".range", "攻击范围", a.Range, 0f, 15f);
-                        a.Xp = I(prefix + ".xp", "击杀经验", a.Xp, 0, 100);
-                    }
-                }
-                m.splitInterval = F("m.splitSec", "虫崽分裂间隔", m.splitInterval, .1f, 20f);
-                m.bubbleSpeed = F("m.bubbleSpeed", "泡泡速度", m.bubbleSpeed, .1f, 20f);
-                m.enemyProjectileLifetime = F("m.enemyLife", "敌弹寿命", m.enemyProjectileLifetime, .1f, 20f);
-                m.rockWarning = F("m.rockWarn", "石块落点预警秒数", m.rockWarning, 0f, 3f);
-                m.rockImpactRadius = F("m.rockRadius", "石块落点伤害半径", m.rockImpactRadius, .1f, 5f);
-                m.laserWarning = F("m.laserWarn", "未来战士激光预警秒数", m.laserWarning, .05f, 3f);
-                m.laserDuration = F("m.laserDuration", "未来战士激光照射秒数", m.laserDuration, .1f, 5f);
-                m.laserWidth = F("m.laserWidth", "未来战士激光宽度", m.laserWidth, .01f, 2f);
-                m.robotKnockbackDistance = F("m.robotKnockback", "维修机器人击退距离", m.robotKnockbackDistance, 0f, 5f);
-            }
-            if (Section("shark", "鲨鱼（海洋地图）"))
+            DrawCombat(d);
+            if (Section("shark", "鲨鱼（海洋地图，位面机制开关打开时才有）"))
             {
                 SharkSettings s = d.shark;
                 s.spawnCount = I("s.count", "数量", s.spawnCount, 0, 10);
@@ -335,25 +249,6 @@ namespace Turn.View
                 s.attackInterval = F("s.interval", "攻击间隔（秒）", s.attackInterval, 0.05f, 5f);
                 s.radius = F("s.radius", "碰撞半径", s.radius, 0.05f, 3f);
                 s.minSpawnDistance = F("s.spawnDist", "生成时离玩家最小距离", s.minSpawnDistance, 0f, 20f);
-            }
-            if (Section("spawn", "刷怪"))
-            {
-                SpawnSettings s = d.spawn;
-                s.initialCount = I("sp.initial", "开局数量", s.initialCount, 0, 100);
-                s.interval = F("sp.interval", "刷怪间隔（秒）", s.interval, 0.1f, 20f);
-                s.countPerSpawn = I("sp.count", "每批数量", s.countPerSpawn, 0, 50);
-                s.rampInterval = F("sp.ramp", "每隔多少秒每批 +N", s.rampInterval, 0f, 300f);
-                s.rampAmount = I("sp.rampAmount", "每次增长 N", s.rampAmount, 0, 20);
-                s.maxAlive = I("sp.max", "存活上限", s.maxAlive, 1, 500);
-                s.minDistance = F("sp.min", "离玩家最小距离", s.minDistance, 0f, 30f);
-                s.maxDistance = F("sp.maxDist", "离玩家最大距离", s.maxDistance, 0f, 40f);
-            }
-            if (Section("penalty", "翻滚惩罚刷怪"))
-            {
-                PenaltySettings p = d.penalty;
-                p.countPerRoll = I("pe.count", "每次翻滚新增怪物", p.countPerRoll, 0, 50);
-                p.minDistance = F("pe.min", "离玩家最小距离", p.minDistance, 0f, 30f);
-                p.maxDistance = F("pe.max", "离玩家最大距离", p.maxDistance, 0f, 40f);
             }
             if (Section("env", "环境"))
             {
@@ -378,6 +273,156 @@ namespace Turn.View
             }
         }
 
+        /// <summary>新策划案（11/24）的战斗分组：三把武器、怪物与波次、精英 / Boss、词条表、宝箱、经验。（程序B）</summary>
+        private void DrawCombat(TurnTuningData d)
+        {
+            if (d.arsenal == null) d.arsenal = new ArsenalConfig();
+            if (d.horde == null) d.horde = new HordeConfig();
+            if (d.builds == null) d.builds = new BuildConfig();
+            ArsenalConfig a = d.arsenal;
+            if (Section("water", "水枪"))
+            {
+                WaterGunConfig w = a.WaterGun;
+                w.Ammo = I("wg.ammo", "弹药上限", w.Ammo, 1, 200);
+                w.FireInterval = F("wg.interval", "攻击间隔（秒 / 发）", w.FireInterval, 0.03f, 3f);
+                w.BulletSpeed = F("wg.speed", "水弹速度", w.BulletSpeed, 0.5f, 40f);
+                w.Damage = F("wg.dmg", "水弹伤害", w.Damage, 0f, 200f);
+                w.Range = F("wg.range", "索敌 / 射程", w.Range, 1f, 30f);
+                w.PuddleRadius = F("wg.puddle", "水渍半径（1 = 40 像素）", w.PuddleRadius, 0.1f, 5f);
+                w.FountainDamage = F("wg.fountain", "喷泉伤害", w.FountainDamage, 0f, 300f);
+                w.OverlapBonus = F("wg.overlap", "重叠加成（每多一滩）", w.OverlapBonus, 0f, 2f);
+                w.SpreadDegrees = F("wg.spread", "散射夹角（度）", w.SpreadDegrees, 0f, 60f);
+            }
+            if (Section("spear", "投矛"))
+            {
+                SpearConfig s = a.Spear;
+                s.Ammo = I("sp2.ammo", "弹药上限", s.Ammo, 1, 200);
+                s.FireInterval = F("sp2.interval", "攻击间隔（秒 / 发）", s.FireInterval, 0.03f, 3f);
+                s.Speed = F("sp2.speed", "长矛速度", s.Speed, 0.5f, 40f);
+                s.Damage = F("sp2.dmg", "长矛伤害", s.Damage, 0f, 200f);
+                s.Range = F("sp2.range", "索敌 / 射程", s.Range, 1f, 30f);
+                s.PierceFalloff = F("sp2.falloff", "每次穿透伤害衰减", s.PierceFalloff, 0f, 1f);
+                s.RecallDamage = F("sp2.recall", "回收伤害 / 根", s.RecallDamage, 0f, 300f);
+                s.RecallWidth = F("sp2.width", "回收路径半宽", s.RecallWidth, 0.05f, 3f);
+                s.StackBonus = F("sp2.stack", "每多一层矛的回收加成", s.StackBonus, 0f, 2f);
+            }
+            if (Section("blade", "陌刀"))
+            {
+                BladeConfig b = a.Blade;
+                b.Ammo = I("bl.ammo", "弹药上限", b.Ammo, 1, 200);
+                b.FireInterval = F("bl.interval", "攻击间隔（秒 / 发）", b.FireInterval, 0.03f, 3f);
+                b.Damage = F("bl.dmg", "剑气伤害", b.Damage, 0f, 200f);
+                b.Angle = F("bl.angle", "扇形角度（度）", b.Angle, 5f, 360f);
+                b.Range = F("bl.range", "剑气射程（7.5 = 300 像素）", b.Range, 1f, 30f);
+                b.RingThickness = F("bl.ring", "剑气厚度（命中最近一圈）", b.RingThickness, 0.1f, 10f);
+                b.SlashDamage = F("bl.slash", "一刀斩基础伤害", b.SlashDamage, 0f, 500f);
+                b.MarkBonus = F("bl.mark", "每层印记增伤", b.MarkBonus, 0f, 1f);
+                b.SlashHalfHeight = F("bl.height", "斩击半高", b.SlashHalfHeight, 0.1f, 10f);
+            }
+            if (Section("arsenal", "武器共用"))
+            {
+                a.CritMultiplier = F("ar.crit", "暴击倍率", a.CritMultiplier, 1f, 5f);
+                a.BurstRingRadius = F("ar.ring", "爆发一圈的半径（词条没配时）", a.BurstRingRadius, 0.5f, 15f);
+                a.HurtMarkRange = F("ar.hurt", "受伤叠印记的搜索半径", a.HurtMarkRange, 0.5f, 30f);
+            }
+
+            HordeConfig h = d.horde;
+            if (Section("horde", "怪物与波次"))
+            {
+                h.HpPerWave = F("hd.hp", "每波血量 +", h.HpPerWave, 0f, 1f);
+                h.DamagePerWave = F("hd.dmg", "每波伤害 +", h.DamagePerWave, 0f, 1f);
+                h.SpawnInterval = F("hd.interval", "刷怪间隔（秒）", h.SpawnInterval, 0.1f, 20f);
+                h.BaseCount = F("hd.base", "第 1 波每批数量", h.BaseCount, 0f, 30f);
+                h.CountPerWave = F("hd.perWave", "每波每批 +", h.CountPerWave, 0f, 10f);
+                h.MaxAlive = I("hd.max", "存活上限", h.MaxAlive, 1, 500);
+                h.MinPlayerDistance = F("hd.minDist", "刷新点离玩家最小距离", h.MinPlayerDistance, 0f, 30f);
+                h.Radius = F("hd.radius", "怪物碰撞半径", h.Radius, 0.05f, 2f);
+                h.SporeBullets = I("hd.sporeN", "弹幕孢：每圈弹幕数", h.SporeBullets, 1, 32);
+                h.SporeBulletSpeed = F("hd.sporeV", "弹幕孢：弹幕速度", h.SporeBulletSpeed, 0.1f, 20f);
+                h.ChargeSpeed = F("hd.chargeV", "疾冲兽：冲锋速度", h.ChargeSpeed, 0.5f, 30f);
+                h.ChargeMaxDistance = F("hd.chargeD", "疾冲兽：冲锋最远距离", h.ChargeMaxDistance, 0.5f, 40f);
+                h.PoolRadius = F("hd.poolR", "毒腐体：毒潭半径", h.PoolRadius, 0.1f, 10f);
+                h.PoolDuration = F("hd.poolT", "毒腐体：毒潭持续（秒）", h.PoolDuration, 0.1f, 30f);
+                h.PoolDamage = F("hd.poolDmg", "毒腐体：毒潭伤害 / 次", h.PoolDamage, 0f, 50f);
+                h.PoolInterval = F("hd.poolI", "毒腐体：毒潭结算间隔", h.PoolInterval, 0.05f, 5f);
+                h.SniperMinRange = F("hd.snMin", "狙击械：保持的最近距离", h.SniperMinRange, 0f, 30f);
+                h.SniperMaxRange = F("hd.snMax", "狙击械：保持的最远距离", h.SniperMaxRange, 0f, 40f);
+                h.LaserWidth = F("hd.laserW", "狙击械：激光半宽", h.LaserWidth, 0.01f, 3f);
+            }
+            if (h.Kinds != null)
+            {
+                for (int i = 0; i < h.Kinds.Length && i < MonsterKinds.HordeCount; i++)
+                {
+                    HordeKindConfig k = h.Kinds[i];
+                    if (k == null) continue;
+                    string prefix = "hk" + i;
+                    if (!Section(prefix, "怪物 · " + MonsterKinds.DisplayName((MonsterKind)((int)MonsterKinds.First + i)))) continue;
+                    k.MaxHp = F(prefix + ".hp", "生命（首次出现那一波）", k.MaxHp, 1f, 2000f);
+                    k.Speed = F(prefix + ".speed", "移动速度", k.Speed, 0f, 15f);
+                    k.Damage = F(prefix + ".dmg", "伤害", k.Damage, 0f, 200f);
+                    k.AttackInterval = F(prefix + ".interval", "攻击 / 接触间隔（秒）", k.AttackInterval, 0.05f, 20f);
+                    k.Windup = F(prefix + ".windup", "蓄力（秒）", k.Windup, 0f, 5f);
+                    k.Range = F(prefix + ".range", "触发距离", k.Range, 0f, 30f);
+                    k.Xp = I(prefix + ".xp", "掉落经验", k.Xp, 0, 200);
+                    k.DebutWave = I(prefix + ".debut", "第几波出现", k.DebutWave, 1, 100);
+                    k.Weight = F(prefix + ".weight", "刷新权重", k.Weight, 0f, 20f);
+                }
+            }
+            if (Section("elite", "精英 / Boss"))
+            {
+                h.EliteFromWave = I("el.from", "精英：从第几波开始（0 = 不刷）", h.EliteFromWave, 0, 100);
+                h.EliteHp = F("el.hp", "精英：生命倍率", h.EliteHp, 1f, 50f);
+                h.EliteDamage = F("el.dmg", "精英：伤害倍率", h.EliteDamage, 1f, 10f);
+                h.EliteScale = F("el.scale", "精英：体型倍率", h.EliteScale, 1f, 4f);
+                h.EliteXp = I("el.xp", "精英：经验倍率", h.EliteXp, 1, 50);
+                h.BossEveryWaves = I("bo.every", "Boss：每几波一只（0 = 不刷）", h.BossEveryWaves, 0, 100);
+                h.BossHp = F("bo.hp", "Boss：生命倍率", h.BossHp, 1f, 200f);
+                h.BossDamage = F("bo.dmg", "Boss：伤害倍率", h.BossDamage, 1f, 10f);
+                h.BossScale = F("bo.scale", "Boss：体型倍率", h.BossScale, 1f, 5f);
+                h.BossXp = I("bo.xp", "Boss：经验倍率", h.BossXp, 1, 200);
+            }
+
+            BuildConfig bc = d.builds;
+            if (Section("chest", "升级 / 宝箱"))
+            {
+                bc.OptionCount = I("ch.options", "候选数", bc.OptionCount, 1, 3);
+                bc.ChestLevels = I("ch.levels", "宝箱强化一次给几层", bc.ChestLevels, 1, 5);
+                bc.CurseBonusLevels = I("ch.bonus", "代价选项：随机给几层", bc.CurseBonusLevels, 1, 10);
+                bc.FrailMaxHp = F("ch.frail", "血契：每层最大生命 −", bc.FrailMaxHp, 0f, 100f);
+                bc.FuryDamage = F("ch.fury", "狂怒：每层怪物伤害 +", bc.FuryDamage, 0f, 2f);
+                bc.HasteSpeed = F("ch.haste", "疾行：每层怪物移速 +", bc.HasteSpeed, 0f, 2f);
+            }
+            if (bc.Builds != null)
+            {
+                for (int w = 0; w < WeaponKinds.Count; w++)
+                {
+                    WeaponKind weapon = (WeaponKind)w;
+                    if (!Section("bd" + w, "词条表 · " + WeaponKinds.DisplayName(weapon) + "（每层数值 / 最大层数）")) continue;
+                    for (int i = 0; i < bc.Builds.Length && i < BuildIds.Count; i++)
+                    {
+                        var id = (BuildId)i;
+                        BuildDef def = bc.Builds[i];
+                        if (def == null || BuildIds.WeaponOf(id) != weapon) continue;
+                        string name = Turn.Weapons.BuildCatalog.Name(id);
+                        def.Value = F("bd" + i + ".v", name + "：每层", def.Value, 0f, Mathf.Max(2f, def.Value * 4f));
+                        def.MaxLevel = I("bd" + i + ".max", name + "：最大层数", def.MaxLevel, 0, 10);
+                    }
+                }
+            }
+
+            if (Section("experience", "经验曲线"))
+            {
+                ExperienceSettings e = d.experience;
+                if (e != null)
+                {
+                    e.firstLevelXp = I("xp.first", "首级经验（策划 50）", e.firstLevelXp, 1, 500);
+                    e.xpGrowthRate = F("xp.rate", "每级递增比例（策划 0.2）", e.xpGrowthRate, 0f, 1f);
+                    e.pickupRange = F("xp.pickup", "拾取范围（2.5 = 100 像素）", e.pickupRange, 0.1f, 20f);
+                    e.chestOpenRadius = F("xp.chest", "靠近多近自动开宝箱", e.chestOpenRadius, 0.1f, 5f);
+                }
+            }
+        }
+
         private void Projectile(string key, ProjectileTuning t)
         {
             t.projectileSpeed = F(key + ".speed", "子弹速度", t.projectileSpeed, 0.5f, 40f);
@@ -391,6 +436,13 @@ namespace Turn.View
             t.poisonDuration = F(key + ".poisonSec", "毒区秒数", t.poisonDuration, 0f, 15f);
             t.poisonMaxStacks = I(key + ".poisonStack", "毒区最大叠层", t.poisonMaxStacks, 1, 10);
             t.harpoonFalloff = F(key + ".falloff", "鱼叉穿透后伤害衰减", t.harpoonFalloff, 0f, 1f);
+        }
+
+        private bool Toggle(string label, bool value)
+        {
+            bool next = GUILayout.Toggle(value, " " + label, GUILayout.Height(22f));
+            if (next != value) _dirty = true;
+            return next;
         }
 
         private bool Section(string key, string title)
@@ -484,7 +536,6 @@ namespace Turn.View
             if (d == null) return;
             if (d.spawn != null && d.spawn.maxDistance < d.spawn.minDistance) d.spawn.maxDistance = d.spawn.minDistance;
             if (d.penalty != null && d.penalty.maxDistance < d.penalty.minDistance) d.penalty.maxDistance = d.penalty.minDistance;
-            if (d.roll != null && d.roll.minCooldown > d.roll.cooldown) d.roll.minCooldown = d.roll.cooldown;
         }
 
         private void EnsureStyles()

@@ -5,8 +5,9 @@ namespace Turn.Systems
 {
     /// <summary>
     /// 生命增减。玩家与怪物的生命只有这里能改。
-    /// 玩家无敌（PlayerState.InvincibleLeft &gt; 0）时，怪物 / 鲨鱼 / 岩浆的伤害全部在这一个入口被拒绝。
-    /// 怪物死亡顺序：标记死亡（MonsterSystem）→ 掉经验球（ExperienceSystem）→ 计击杀（ProgressionSystem）→ 发事件。
+    /// 玩家无敌（PlayerState.Invincible：亚空间 / 受伤无敌帧 / 调试无敌）时，所有伤害都在这一个入口被拒绝。
+    /// 怪物死亡顺序：标记死亡（MonsterSystem，毒腐体在这里留毒潭）→ 掉经验球 → 精英 / Boss 掉宝箱 → 计击杀 → 发事件。
+    /// 吸血、暴击等武器词条在武器里结算，这里只管扣血与死亡。
     /// </summary>
     public sealed class CombatSystem : ICombatSystem
     {
@@ -50,31 +51,17 @@ namespace Turn.Systems
             if (healed > 0f) _ctx.Events.Publish(new PlayerHealedEvent { Amount = healed, Hp = player.Hp });
         }
 
-        public void DamageMonster(MonsterEntity monster, float amount, DamageSource source)
+        public void DamageMonster(MonsterEntity monster, float amount, DamageSource source, bool critical = false)
         {
             if (monster == null || !monster.Alive || amount <= 0f) return;
-            if (source == DamageSource.Weapon)
-            {
-                IProgressionSystem builds = _ctx.Progression;
-                int damageLevel = builds.GetLevel(BuildIds.Query(BuildId.B01));
-                amount *= 1f + damageLevel * _ctx.Config.Upgrades.DamagePerLevel;
-                int hazardLevel = builds.GetLevel(BuildIds.Query(BuildId.B10));
-                if (hazardLevel > 0 && _ctx.Environment.IsHazard(monster.Position))
-                    amount *= 1f + hazardLevel * _ctx.Config.Upgrades.HazardDamagePerLevel;
-            }
-            float applied = MathF.Min(monster.Hp, amount);
             monster.Hp -= amount;
-            if (source == DamageSource.Weapon && applied > 0f)
-            {
-                int level = _ctx.Progression.GetLevel(BuildIds.Query(BuildId.B07));
-                if (level > 0) HealPlayer(applied * level * _ctx.Config.Upgrades.LifestealPerLevel);
-            }
             _ctx.Events.Publish(new MonsterDamagedEvent
             {
                 MonsterId = monster.Id,
                 Position = monster.Position,
                 Amount = amount,
                 Source = source,
+                Critical = critical,
             });
             if (monster.Hp <= 0f) Kill(monster, source);
         }
@@ -84,14 +71,14 @@ namespace Turn.Systems
             monster.Hp = 0f;
             _ctx.Monsters.Despawn(monster);
             _ctx.Experience.SpawnOrb(monster.Position, monster.XpValue);
+            if (monster.Rank > 0) _ctx.Experience.SpawnChest(monster.Position, monster.Rank);
             _ctx.Progression.AddKill();
-            if (source == DamageSource.Weapon)
-            {
-                int refund = _ctx.Progression.GetLevel(BuildIds.Query(BuildId.B11));
-                if (refund > 0)
-                    _ctx.Events.Publish(new WeaponKillConfirmedEvent { MonsterId = monster.Id, Form = monster.Form });
-            }
-            _ctx.Events.Publish(new MonsterDiedEvent { MonsterId = monster.Id, Position = monster.Position });
+            if (source == DamageSource.Weapon || source == DamageSource.Burst)
+                _ctx.Events.Publish(new WeaponKillConfirmedEvent
+                {
+                    MonsterId = monster.Id, Weapon = _ctx.Loadout.Equipped, Source = source, Position = monster.Position,
+                });
+            _ctx.Events.Publish(new MonsterDiedEvent { MonsterId = monster.Id, Position = monster.Position, Rank = monster.Rank });
         }
     }
 }

@@ -50,5 +50,31 @@ namespace Turn.View
                 default: return Color.white;
             }
         }
+
+        /// <summary>三把武器的主题色（HUD / 子弹占位 / 特效）。</summary>
+        public static Color WeaponColor(WeaponKind weapon)
+        {
+            switch (weapon)
+            {
+                case WeaponKind.WaterGun: return new Color(0.3f, 0.75f, 1f, 1f);
+                case WeaponKind.Spear: return new Color(1f, 0.78f, 0.3f, 1f);
+                case WeaponKind.Blade: return new Color(0.95f, 0.35f, 0.4f, 1f);
+                default: return Color.white;
+            }
+        }
+
+        /// <summary>五种怪物的占位颜色（白模阶段区分种类；美术素材到位后可以去掉）。</summary>
+        public static Color MonsterColor(MonsterKind kind)
+        {
+            switch (kind)
+            {
+                case MonsterKind.Walker: return new Color(0.62f, 0.78f, 0.55f, 1f);
+                case MonsterKind.Spore: return new Color(0.85f, 0.55f, 0.95f, 1f);
+                case MonsterKind.Charger: return new Color(0.95f, 0.55f, 0.3f, 1f);
+                case MonsterKind.Rotter: return new Color(0.45f, 0.85f, 0.3f, 1f);
+                case MonsterKind.Sniper: return new Color(0.55f, 0.7f, 0.95f, 1f);
+                default: return Color.white;
+            }
+        }
     }
 }

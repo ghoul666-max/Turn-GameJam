@@ -1,89 +1,65 @@
 using System;
-using System.Collections.Generic;
 using Turn.Core;
 
 namespace Turn.Systems
 {
     /// <summary>
-    /// 翻滚（Turn）。整个游戏的核心操作：一次成功的 TryRoll 在这一个方法里按策划书「翻滚时序」原子执行全部效果，
-    /// 切位面、怪物偏移换皮、弹幕保留、装填、惩罚刷怪、位面进入结算的唯一调用方就是这里（程序A 编排，部分步骤由程序B 实现）。
-    /// 冷却中（或翻滚中、非 Playing 阶段、玩家已死亡）调用 TryRoll 直接返回 false，什么都不执行。
-    /// 写 PlayerState 的 IsRolling / RollTimer / RollDirection / RollSpeed / RollCooldownLeft / InvincibleLeft。
+    /// 翻滚 = Turn（新策划案 11/24）：常态空间 → 亚空间的图层翻转 + 铺垫伤害 → 爆发伤害的节奏翻转。
+    ///
+    /// TryRoll（一次调用里按顺序原子完成）：
+    ///   1) 进入亚空间：PlayerState.InSubspace = true，全程无敌（CombatSystem 只看 PlayerState.Invincible）；
+    ///   2) 翻滚位移：沿移动方向（没有输入时沿朝向）冲出 RollConfig.Distance，位移本身按游戏时间推进（亚空间里是慢放的）；
+    ///   3) 爆发：发布 SubspaceEnteredEvent —— 全图印记 / 痕迹同步爆发的唯一时机（程序B 的武器订阅结算）；
+    ///   4) 发布 RollPerformedEvent（表现层：音效 / 传送门特效）。
+    /// 亚空间期间（SessionSystem 负责）：游戏时间 × SubspaceTimeScale，敌人 / 刷怪 / 武器 / 子弹 / 环境全部暂停。
+    /// TickRealtime 按现实时间计满 SubspaceDuration 后自动退出：
+    ///   5) 回到常态空间 → 6) Weapons.Reload()（整个游戏唯一的装填入口）→ 7) 开启翻滚时那把武器的冷却 → 8) 发布 SubspaceExitedEvent（程序B 清空印记）。
+    /// 任意弹药状态都能翻滚；冷却中 / 亚空间中 / 非 Playing 阶段 / 已死亡时 TryRoll 返回 false（冷却中会发布 RollRejectedEvent）。
+    ///
+    /// 写 PlayerState 的 IsRolling / RollTimer / RollDirection / RollSpeed / RollCooldownLeft / InvincibleLeft / InSubspace / SubspaceLeft。
+    /// 旧方案的切位面、怪物偏移换皮、惩罚刷怪、B13/B14/B15/B17/B18 翻滚词条已从这里移除（旧代码见 _backup_20261124_subspace）。
     /// </summary>
     public sealed class RollSystem : IRollSystem
     {
         private readonly ITurnContext _ctx;
         private readonly RollConfig _config;
-        private readonly UpgradeConfig _upgrades;
-        private readonly List<MonsterEntity> _hits = new List<MonsterEntity>();
-        /// <summary>B18：上一次正常翻滚后免费再翻一次的剩余窗口（秒）。</summary>
-        private float _doubleRollWindowLeft;
-        /// <summary>B18：免费翻滚用掉后的独立冷却（秒）。</summary>
-        private float _doubleRollCooldownLeft;
+        /// <summary>翻滚时装备的武器：退出亚空间时按它开冷却（亚空间里不能换武器，这里只是保险）。</summary>
+        private WeaponKind _subspaceWeapon;
 
         public int RollCount { get; private set; }
 
-        public RollSystem(ITurnContext ctx, RollConfig config, UpgradeConfig upgrades)
+        public RollSystem(ITurnContext ctx, RollConfig config)
         {
             _ctx = ctx;
-            _config = config;
-            _upgrades = upgrades;
+            _config = config ?? new RollConfig();
         }
 
-        /// <summary>B13：冷却 = 基础 × (1 − 每级比例 × 层数)，不低于下限（策划 0.9 秒）。没有 B13 时就是基础冷却。</summary>
-        public float EffectiveCooldown
+        public bool InSubspace { get { return _ctx.Player.State.InSubspace; } }
+
+        public float SubspaceLeft { get { return _ctx.Player.State.InSubspace ? _ctx.Player.State.SubspaceLeft : 0f; } }
+
+        public float EffectiveCooldown { get { return CooldownFor(_ctx.Loadout.Equipped); } }
+
+        public float CooldownFor(WeaponKind weapon)
         {
-            get
-            {
-                int level = Level(BuildId.B13);
-                if (level <= 0) return _config.Cooldown;
-                float factor = MathF.Max(0f, 1f - level * _upgrades.RollCooldownReductionPerLevel);
-                float floor = MathF.Min(_config.MinCooldown, _config.Cooldown);
-                return MathF.Max(floor, _config.Cooldown * factor);
-            }
+            float[] list = _config.WeaponCooldowns;
+            int i = (int)weapon;
+            float cd = list != null && i >= 0 && i < list.Length ? list[i] : _config.Cooldown;
+            return MathF.Max(0f, cd);
         }
 
-        public float EffectiveInvincibleTime
-        {
-            get
-            {
-                // B14：基础 0.35 + 0.15 × 层数（上限 2 层 → 0.65 秒）
-                int level = Level(BuildId.B14);
-                return _config.InvincibleTime + level * _upgrades.RollInvinciblePerLevel;
-            }
-        }
+        public float EffectiveInvincibleTime { get { return SubspaceDuration; } }
+
+        private float SubspaceDuration { get { return MathF.Max(0.05f, _config.SubspaceDuration); } }
 
         public bool CanRoll
         {
             get
             {
                 PlayerState s = _ctx.Player.State;
-                if (_ctx.Session.Phase != RunPhase.Playing || !s.Alive || s.IsRolling) return false;
-                return s.RollCooldownLeft <= 0f || FreeRollAvailable;
+                if (_ctx.Session.Phase != RunPhase.Playing || !s.Alive || s.InSubspace) return false;
+                return s.RollCooldownLeft <= 0f;
             }
-        }
-
-        /// <summary>B18：正常翻滚后的窗口内、独立冷却已好时，可以免费再翻一次（不刷怪、不装填、不重置主冷却）。</summary>
-        public bool FreeRollAvailable
-        {
-            get { return _doubleRollWindowLeft > 0f && _doubleRollCooldownLeft <= 0f && Level(BuildId.B18) > 0; }
-        }
-
-        private int Level(BuildId id)
-        {
-            return _ctx.Progression.GetLevel(BuildIds.Query(id));
-        }
-
-        /// <summary>B17：惩罚数 = max(1, ceil(基础 × (1 − 每级比例 × 层数)))；基础为 0 时仍为 0。</summary>
-        private int PenaltyCount()
-        {
-            int baseCount = _ctx.Config.Penalty.Count;
-            if (baseCount <= 0) return 0;
-            int level = Level(BuildId.B17);
-            if (level <= 0) return baseCount;
-            float factor = MathF.Max(0f, 1f - level * _upgrades.PenaltyReductionPerLevel);
-            // 减去极小量，避免 5 × 0.6 = 3.0000002 被向上取整成 4
-            return Math.Max(1, (int)MathF.Ceiling(baseCount * factor - 1e-4f));
         }
 
         public bool TryRoll()
@@ -91,82 +67,54 @@ namespace Turn.Systems
             PlayerState s = _ctx.Player.State;
             if (!CanRoll)
             {
-                if (_ctx.Session.Phase == RunPhase.Playing && s.Alive)
+                if (_ctx.Session.Phase == RunPhase.Playing && s.Alive && !s.InSubspace)
                 {
                     _ctx.Events.Publish(new RollRejectedEvent { CooldownLeft = s.RollCooldownLeft });
                 }
                 return false;
             }
 
-            // B18 免费的第二次翻滚：主冷却还没好、但仍在窗口内。时序与正常翻滚完全相同，只跳过第 4 步（刷怪）与第 8 步（装填）。
-            bool free = s.RollCooldownLeft > 0f;
+            WeaponKind weapon = _ctx.Loadout.Equipped;
+            _subspaceWeapon = weapon;
+            float duration = SubspaceDuration;
 
-            // 策划书「翻滚时序」。步骤编号与策划书一致；第 4 步（惩罚刷怪）暂定挪到第 6b 步之后，
-            // 让惩罚怪直接按新位面生成（11/21 已确认）。第 7 步策划书缺失。
+            // 1) 进入亚空间：全程无敌
+            s.InSubspace = true;
+            s.SubspaceLeft = duration;
 
-            // 1) 无敌帧
-            float invincible = EffectiveInvincibleTime;
-            s.InvincibleLeft = MathF.Max(s.InvincibleLeft, invincible);
-
-            // 2) 传送门 VFX：表现层收到本方法末尾的 RollPerformedEvent 后在 Position 生成（同一帧）。
-
-            // 3) 翻滚位移（PlayerSystem 在之后的 Tick 里按 RollDirection × RollSpeed 推进）
+            // 2) 翻滚位移（PlayerSystem 在之后的 Tick 里按 RollDirection × RollSpeed 推进）
             Vec2 dir = s.MoveDir.SqrMagnitude > 0.01f ? s.MoveDir.Normalized : s.Facing.Normalized;
             if (dir.SqrMagnitude < 0.5f) dir = Vec2.Right;
-            float duration = MathF.Max(0.05f, _config.Duration);
+            float dashTime = MathF.Max(0.05f, _config.Duration);
             s.IsRolling = true;
-            s.RollTimer = duration;
+            s.RollTimer = dashTime;
             s.RollDirection = dir;
-            s.RollSpeed = _config.Distance / duration;
+            s.RollSpeed = MathF.Max(0f, _config.Distance) / dashTime;
             RollCount++;
 
-            // 5) 位面 Root 显隐互换：只改激活位面并发布 PlaneSwitchedEvent（表现层据此显隐）。
-            PlaneId from = _ctx.Plane.Active;
-            _ctx.Plane.Switch();
-            PlaneId to = _ctx.Plane.Active;
-
-            // 6) 所有怪物：位置 += 总偏移量（= 本次翻滚的总位移，保持与玩家的相对位置）；换 Skin / AI；重置冲锋态。（程序B 实现）
-            _ctx.Monsters.ShiftAll(dir * _config.Distance);
-            _ctx.Monsters.SwapPlane(from, to);
-
-            // 6b) 已飞出的弹幕保留、寿命 ×1.6、只对同层生效。（程序B 实现）
-            _ctx.Projectiles.OnPlaneSwitched(from, to);
-
-            // 4) 翻滚惩罚：在玩家周围为新位面刷一批怪；B17 减免在这里算好 count 再传。B18 免费翻滚不刷。（程序B 实现刷怪）
-            int penalty = free ? 0 : _ctx.Spawner.SpawnPenalty(PenaltyCount());
-
-            // 8) 武器装填 / 充能补满（武器已随位面切换）。这是整个游戏里唯一的装填入口。（程序B 实现）
-            // B18 免费翻滚不装填。
-            int ammoBefore = _ctx.Weapons.Ammo;
-            if (!free) _ctx.Weapons.Reload();
-
-            // 9) 位面进入事件：环境结算（清减速 / 困意归零 / 火山岩浆喷发等）+ 鲨鱼生成 / 销毁。
-            _ctx.Environment.OnPlaneEntered(to);
-            _ctx.Sharks.SyncWithPlane();
-
-            // 10) 开启 CD。B18：正常翻滚打开免费窗口；免费翻滚不动主冷却，只开 B18 自己的冷却。
-            if (free)
+            // 3) 爆发：全图铺垫痕迹 / 印记同步触发（程序B 的武器订阅这个事件，在回调里结算伤害）
+            int ammo = _ctx.Weapons.Ammo;
+            _ctx.Events.Publish(new SubspaceEnteredEvent
             {
-                _doubleRollWindowLeft = 0f;
-                _doubleRollCooldownLeft = MathF.Max(0f, _upgrades.DoubleRollCooldown);
-            }
-            else
-            {
-                s.RollCooldownLeft = EffectiveCooldown;
-                _doubleRollWindowLeft = Level(BuildId.B18) > 0 && _doubleRollCooldownLeft <= 0f ? MathF.Max(0f, _upgrades.DoubleRollWindow) : 0f;
-            }
+                Position = s.Position,
+                Weapon = weapon,
+                Duration = duration,
+                TimeScale = Clamp01(_config.SubspaceTimeScale),
+            });
 
+            // 4) 翻滚表现（音效 / 传送门）。不切位面、不刷怪、不在这里装填。
+            PlaneId plane = _ctx.Plane.Active;
             _ctx.Events.Publish(new RollPerformedEvent
             {
                 Position = s.Position,
                 Direction = dir,
-                FromPlane = from,
-                ToPlane = to,
-                AmmoBefore = ammoBefore,
-                AmmoAfter = _ctx.Weapons.Ammo,
-                PenaltySpawned = penalty,
-                InvincibleTime = invincible,
-                Free = free,
+                FromPlane = plane,
+                ToPlane = plane,
+                AmmoBefore = ammo,
+                AmmoAfter = ammo,
+                PenaltySpawned = 0,
+                InvincibleTime = duration,
+                Free = false,
             });
             return true;
         }
@@ -174,10 +122,9 @@ namespace Turn.Systems
         public void Tick(float dt)
         {
             PlayerState s = _ctx.Player.State;
-            if (s.RollCooldownLeft > 0f) s.RollCooldownLeft = MathF.Max(0f, s.RollCooldownLeft - dt);
+            // 冷却从回到常态空间开始计
+            if (!s.InSubspace && s.RollCooldownLeft > 0f) s.RollCooldownLeft = MathF.Max(0f, s.RollCooldownLeft - dt);
             if (s.InvincibleLeft > 0f) s.InvincibleLeft = MathF.Max(0f, s.InvincibleLeft - dt);
-            if (_doubleRollWindowLeft > 0f) _doubleRollWindowLeft = MathF.Max(0f, _doubleRollWindowLeft - dt);
-            if (_doubleRollCooldownLeft > 0f) _doubleRollCooldownLeft = MathF.Max(0f, _doubleRollCooldownLeft - dt);
 
             if (!s.IsRolling) return;
             s.RollTimer -= dt;
@@ -187,35 +134,34 @@ namespace Turn.Systems
             s.RollTimer = 0f;
             s.RollSpeed = 0f;
             _ctx.Events.Publish(new RollLandedEvent { Position = s.Position });
-            TriggerShockwave(s.Position);
         }
 
-        /// <summary>
-        /// B15 翻滚冲击：落地时对范围内普通怪物造成伤害并向外击退（鲨鱼不受影响）。
-        /// 1 层 = 半径 2.5 / 伤害 20 / 击退 ShockwaveKnockback；之后每层按 RadiusPerLevel / DamagePerLevel 递增（层数效果待策划定稿）。
-        /// 怪物位置只能由 MonsterSystem 写，击退走 IMonsterSystem.Knockback。
-        /// </summary>
-        private void TriggerShockwave(Vec2 position)
+        public void TickRealtime(float realDt)
         {
-            int level = Level(BuildId.B15);
-            if (level <= 0) return;
-
-            float radius = _upgrades.ShockwaveBaseRadius + (level - 1) * _upgrades.ShockwaveRadiusPerLevel;
-            float damage = _upgrades.ShockwaveBaseDamage + (level - 1) * _upgrades.ShockwaveDamagePerLevel;
-            _ctx.Monsters.QueryCircle(position, radius, _hits);
-            int hits = _hits.Count;
-            float knockback = MathF.Max(0f, _upgrades.ShockwaveKnockback);
-            for (int i = 0; i < _hits.Count; i++)
-            {
-                MonsterEntity m = _hits[i];
-                _ctx.Combat.DamageMonster(m, damage, DamageSource.Shockwave);
-                if (!m.Alive || knockback <= 0f) continue;
-                Vec2 away = m.Position - position;
-                Vec2 dir = away.SqrMagnitude > 0.0001f ? away.Normalized : Vec2.Right;
-                _ctx.Monsters.Knockback(m, dir, knockback);
-            }
-            _hits.Clear();
-            _ctx.Events.Publish(new ShockwaveTriggeredEvent { Position = position, Radius = radius, Hits = hits });
+            PlayerState s = _ctx.Player.State;
+            if (!s.InSubspace) return;
+            s.SubspaceLeft -= MathF.Max(0f, realDt);
+            if (s.SubspaceLeft > 0f) return;
+            ExitSubspace(s);
         }
+
+        private void ExitSubspace(PlayerState s)
+        {
+            // 5) 回到常态空间
+            s.InSubspace = false;
+            s.SubspaceLeft = 0f;
+
+            // 6) 弹药补满。整个游戏里唯一的装填入口。（程序B 实现）
+            _ctx.Weapons.Reload();
+
+            // 7) 翻滚冷却：按翻滚时那把武器
+            float cooldown = CooldownFor(_subspaceWeapon);
+            s.RollCooldownLeft = cooldown;
+
+            // 8) 清空全部铺垫痕迹 / 印记（程序B 订阅）
+            _ctx.Events.Publish(new SubspaceExitedEvent { Position = s.Position, Weapon = _subspaceWeapon, Cooldown = cooldown });
+        }
+
+        private static float Clamp01(float v) { return v < 0f ? 0f : (v > 1f ? 1f : v); }
     }
 }
