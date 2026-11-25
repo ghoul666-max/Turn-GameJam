@@ -6,7 +6,8 @@
             "moveSpeed": 4.199999809265137,
             "maxHp": 100.0,
             "radius": 0.3499999940395355,
-            "hurtInvincibleTime": 0.30000001192092896
+            "hurtInvincibleTime": 0.5,
+            "gravityExitProtectionTime": 0.5
         },
         "roll": {
             "version": 4,
@@ -429,6 +430,7 @@
             "surviveSeconds": 10.0
         },
         "arsenal": {
+            "FixedDamageMultiplier": 1.25,
             "WaterGun": {
                 "Ammo": 30,
                 "FireInterval": 0.20000000298023224,
@@ -521,7 +523,7 @@
                 "Width": 0.6000000238418579
             },
             "Poker": {
-                "HandSize": 5,
+                "HandSize": 1,
                 "DrawInterval": 1.0,
                 "HeartsPerPoint": 5,
                 "HeartDamage": 3.0,
@@ -561,6 +563,7 @@
                 "TargetRange": 8.0
             },
             "Hourglass": {
+                "SecondsToFloor": 5.0,
                 "DecayRate": 0.15000000596046448,
                 "FloorSpeed": 0.5
             },
@@ -595,7 +598,7 @@
             "Sword": {
                 "Ammo": 8,
                 "FireInterval": 0.8999999761581421,
-                "DashDistance": 3.0,
+                "DashDistance": 4.5,
                 "DashTime": 0.15000000596046448,
                 "Width": 0.6000000238418579,
                 "Damage": 14.0,
@@ -628,6 +631,8 @@
             "HurtMarkRange": 8.0
         },
         "horde": {
+            "NormalChaseSpeedMultiplier": 0.85,
+            "BossHpMultiplier": 2.0,
             "Kinds": [
                 {
                     "MaxHp": 30.0,
@@ -964,7 +969,8 @@
             "moveSpeed": 4.199999809265137,
             "maxHp": 100.0,
             "radius": 0.3499999940395355,
-            "hurtInvincibleTime": 0.30000001192092896
+            "hurtInvincibleTime": 0.5,
+            "gravityExitProtectionTime": 0.5
         },
         "roll": {
             "version": 4,
@@ -1387,6 +1393,7 @@
             "surviveSeconds": 300.0
         },
         "arsenal": {
+            "FixedDamageMultiplier": 1.25,
             "WaterGun": {
                 "Ammo": 30,
                 "FireInterval": 0.20000000298023224,
@@ -1479,7 +1486,7 @@
                 "Width": 0.6000000238418579
             },
             "Poker": {
-                "HandSize": 5,
+                "HandSize": 1,
                 "DrawInterval": 1.0,
                 "HeartsPerPoint": 5,
                 "HeartDamage": 3.0,
@@ -1519,6 +1526,7 @@
                 "TargetRange": 8.0
             },
             "Hourglass": {
+                "SecondsToFloor": 5.0,
                 "DecayRate": 0.15000000596046448,
                 "FloorSpeed": 0.5
             },
@@ -1553,7 +1561,7 @@
             "Sword": {
                 "Ammo": 8,
                 "FireInterval": 0.8999999761581421,
-                "DashDistance": 3.0,
+                "DashDistance": 4.5,
                 "DashTime": 0.15000000596046448,
                 "Width": 0.6000000238418579,
                 "Damage": 14.0,
@@ -1586,6 +1594,8 @@
             "HurtMarkRange": 8.0
         },
         "horde": {
+            "NormalChaseSpeedMultiplier": 0.85,
+            "BossHpMultiplier": 2.0,
             "Kinds": [
                 {
                     "MaxHp": 30.0,

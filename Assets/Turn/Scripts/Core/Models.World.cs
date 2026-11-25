@@ -17,8 +17,9 @@ namespace Turn.Core
         public float MaxHp = 100f;
         /// <summary>碰撞半径（世界单位）。</summary>
         public float Radius = 0.35f;
-        /// <summary>受伤后的无敌帧（秒，策划 0.3）。</summary>
-        public float HurtInvincibleTime = 0.3f;
+        /// <summary>受伤后的全局无敌帧（秒，本轮调整为 0.5）。</summary>
+        public float HurtInvincibleTime = 0.5f;
+        public float GravityExitProtectionTime = 0.5f;
     }
 
     public sealed class RollConfig

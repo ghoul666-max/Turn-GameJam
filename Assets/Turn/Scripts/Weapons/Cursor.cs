@@ -6,8 +6,9 @@ namespace Turn.Weapons
 {
     /// <summary>
     /// 副武器 · 光标（11/25 第三批策划案）。策略精准型：两次翻滚 = 按下 / 松开光标框选。
-    ///   · 第一次翻滚：以翻滚前站位为起点开始绘制，玩家移动时身后拖出选区边界（最长 MaxLength，超出丢掉最早的点）；
-    ///   · 之后每次翻滚（爆发前）：确认选区 = 轨迹首尾相连围成的多边形 + 边界 Thickness 范围，
+    ///   · 第一次翻滚：固定翻滚前站位为选区锚点；玩家当前位置为对角，实时显示轴对齐矩形。
+    ///   · MaxLength 保留为选区对角线最长距离，CursorArea 仍增加此上限；超限裁剪当前对角而不移动锚点。
+    ///   · 之后每次翻滚（爆发前）：确认矩形内部 + 边界 Thickness 范围，
     ///     范围内敌人受到降维打击并定身（PinnedLeft，表现层压扁贴地）；然后以当前站位为新起点无缝开始下一轮绘制。
     /// </summary>
     public sealed class CursorSubWeapon : SubWeaponBehavior
@@ -15,7 +16,8 @@ namespace Turn.Weapons
         private readonly List<Vec2> _trail = new List<Vec2>();
         private readonly List<MonsterEntity> _hits = new List<MonsterEntity>();
         private bool _drawing;
-        private float _length;
+        private Vec2 _anchor;
+        private Vec2 _opposite;
 
         public CursorSubWeapon(WeaponKit kit) : base(kit) { }
 
@@ -34,25 +36,14 @@ namespace Turn.Weapons
                 if (all[i].PinnedLeft > 0f) all[i].PinnedLeft = MathF.Max(0f, all[i].PinnedLeft - dt);
 
             if (!_drawing) return;
-            Vec2 p = Kit.PlayerPosition;
-            Vec2 last = _trail[_trail.Count - 1];
-            float d = Vec2.Distance(last, p);
-            if (d < MathF.Max(0.05f, Cfg.SampleSpacing)) return;
-            _trail.Add(p);
-            _length += d;
-            float max = MaxLength;
-            while (_length > max && _trail.Count > 2)
-            {
-                _length -= Vec2.Distance(_trail[0], _trail[1]);
-                _trail.RemoveAt(0);
-            }
+            UpdateRectangle(Kit.PlayerPosition);
         }
 
         public override void BeforeBurst(Vec2 rollOrigin)
         {
             if (_drawing)
             {
-                _trail.Add(rollOrigin);
+                UpdateRectangle(rollOrigin);
                 Strike();
             }
             StartDrawing(rollOrigin);
@@ -61,9 +52,8 @@ namespace Turn.Weapons
         private void StartDrawing(Vec2 at)
         {
             _drawing = true;
-            _trail.Clear();
-            _trail.Add(at);
-            _length = 0f;
+            _anchor = at;
+            UpdateRectangle(at);
             float haste = Kit.Value(BuildId.CursorDrawHaste);
             Kit.Ctx.Player.SetSpeedModifier(PlayerSpeedSource.CursorHaste, 1f + MathF.Max(0f, haste));
         }
@@ -98,28 +88,24 @@ namespace Turn.Weapons
             _hits.Clear();
         }
 
-        /// <summary>在轨迹首尾相连的多边形里，或者离边界不超过 margin。</summary>
-        private bool Inside(Vec2 p, float margin)
+        private void UpdateRectangle(Vec2 opposite)
         {
-            int n = _trail.Count;
-            if (n == 0) return false;
-            float marginSq = margin * margin;
-            bool inside = false;
-            for (int i = 0, j = n - 1; i < n; j = i++)
-            {
-                Vec2 a = _trail[i], b = _trail[j];
-                if (SegmentSqrDistance(p, a, b) <= marginSq) return true;
-                if (n >= 3 && ((a.Y > p.Y) != (b.Y > p.Y)) && p.X < (b.X - a.X) * (p.Y - a.Y) / (b.Y - a.Y) + a.X) inside = !inside;
-            }
-            return inside;
+            _opposite = _anchor + Vec2.ClampMagnitude(opposite - _anchor, MaxLength);
+            _trail.Clear();
+            _trail.Add(_anchor);
+            _trail.Add(new Vec2(_opposite.X, _anchor.Y));
+            _trail.Add(_opposite);
+            _trail.Add(new Vec2(_anchor.X, _opposite.Y));
         }
 
-        private static float SegmentSqrDistance(Vec2 p, Vec2 a, Vec2 b)
+        /// <summary>矩形内部或距矩形边界不超过 margin；拐角采用圆角半径，保留旧厚度语义。</summary>
+        private bool Inside(Vec2 p, float margin)
         {
-            Vec2 ab = b - a;
-            float len = ab.SqrMagnitude;
-            float t = len > 0.0001f ? MathF.Max(0f, MathF.Min(1f, WeaponKit.Dot(p - a, ab) / len)) : 0f;
-            return Vec2.SqrDistance(p, a + ab * t);
+            float minX = MathF.Min(_anchor.X, _opposite.X), maxX = MathF.Max(_anchor.X, _opposite.X);
+            float minY = MathF.Min(_anchor.Y, _opposite.Y), maxY = MathF.Max(_anchor.Y, _opposite.Y);
+            float closestX = MathF.Max(minX, MathF.Min(maxX, p.X));
+            float closestY = MathF.Max(minY, MathF.Min(maxY, p.Y));
+            return Vec2.SqrDistance(p, new Vec2(closestX, closestY)) <= margin * margin;
         }
 
         public override float DamageTakenMultiplier(MonsterEntity m)

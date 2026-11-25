@@ -13,6 +13,11 @@ internal static class Program
         PickupRange();
         HurtBuildsMarkEnemies();
         BurstRingHitsAround();
+        SimultaneousPlayerHitsShareProtection();
+        FixedAndPercentageDamageMultipliers();
+        BossChestOffersCarriedBuildsWithoutCurse();
+        BossChestHandlesLimitedCandidatesAndMixedQueue();
+        GravityProtectsOnlyAfterActualPullAndExit();
         Console.WriteLine($"Combat checks passed ({_checks} assertions).");
     }
 
@@ -93,6 +98,106 @@ internal static class Program
         ctx.Roll.TryRoll();
         Check(Near(near.Hp, 92f), "burst ring: 8% max hp around the player");
         Check(Near(far.Hp, 100f), "outside the ring untouched");
+    }
+
+    private static void SimultaneousPlayerHitsShareProtection()
+    {
+        var ctx = World();
+        float hp = ctx.Player.State.Hp;
+        int applied = 0;
+        for (int i = 0; i < 20; i++) if (ctx.Combat.DamagePlayer(2f, DamageSource.Monster)) applied++;
+        Check(applied == 1 && Near(hp - ctx.Player.State.Hp, 2f), "twenty same-frame monster hits only damage once");
+        ctx.Player.Tick(ctx.Player.Config.HurtInvincibleTime * .9f);
+        Check(!ctx.Combat.DamagePlayer(2f, DamageSource.Monster), "protection still active before interval");
+        ctx.Player.Tick(ctx.Player.Config.HurtInvincibleTime * .2f);
+        Check(ctx.Combat.DamagePlayer(2f, DamageSource.Monster), "next hit applies after global protection expires");
+    }
+
+    private static void FixedAndPercentageDamageMultipliers()
+    {
+        var ctx = World(c => { for (int i = 0; i < c.Horde.Kinds.Length; i++) c.Horde.Kinds[i].MaxHp = 1000f; });
+        var kit = new Turn.Weapons.WeaponKit(ctx, ctx.Config.Arsenal);
+        var m = Spawn(ctx, new Vec2(3f, 0f));
+        Check(Near(kit.Hit(m, 10f, DamageSource.Weapon), 12.5f), "fixed weapon damage x1.25");
+        Check(Near(kit.Hit(m, 10f, DamageSource.SubWeapon, percentageDamage: true), 10f), "max hp percentage damage is not multiplied");
+        var normal = Spawn(ctx, new Vec2(8f, 0f), MonsterKind.Walker, 0);
+        var elite = Spawn(ctx, new Vec2(10f, 0f), MonsterKind.Walker, 1);
+        var boss = Spawn(ctx, new Vec2(12f, 0f), MonsterKind.Walker, 2);
+        Check(Near(boss.MaxHp, 1000f * ctx.Config.Horde.BossHp * 2f), "boss only gains doubled HP");
+        Check(Near(boss.DamageScale, ctx.Config.Horde.BossDamage), "boss damage stays unchanged");
+        ctx.Monsters.Tick(.01f);
+        Check(Near(normal.Velocity.Magnitude / elite.Velocity.Magnitude, .85f), "only normal chase speed x.85");
+    }
+
+    private static void BossChestOffersCarriedBuildsWithoutCurse()
+    {
+        var ctx = World();
+        ctx.Experience.SpawnChest(ctx.Player.State.Position, 2);
+        ctx.Experience.Tick(.01f);
+        ctx.Progression.RollChestOptions();
+        Check(ctx.Progression.Options.Count == 3, "boss chest three carried options");
+        foreach (var option in ctx.Progression.Options)
+            Check(option.Curse == ChestCurse.None && ctx.Progression.IsCarried(option.Build), "boss chest equipment directed without curse");
+    }
+
+    private static void BossChestHandlesLimitedCandidatesAndMixedQueue()
+    {
+        var limited = World();
+        for (int i = 0; i < BuildIds.Count; i++)
+        {
+            BuildId id = (BuildId)i;
+            if (limited.Progression.IsCarried(id)) limited.Progression.DebugSetLevel(id, limited.Progression.MaxLevel(id));
+        }
+        limited.Progression.DebugSetLevel(BuildId.WaterAmmo, 0);
+        limited.Experience.SpawnChest(limited.Player.State.Position, 2);
+        limited.Experience.Tick(.01f);
+        limited.Progression.RollChestOptions();
+        Check(limited.Progression.Options.Count == 1 && limited.Progression.Options[0].Build == BuildId.WaterAmmo,
+            "boss with one eligible build shows one option");
+        limited.Progression.DebugSetLevel(BuildId.WaterAmmo, limited.Progression.MaxLevel(BuildId.WaterAmmo));
+        limited.Progression.RollChestOptions();
+        Check(limited.Progression.Options.Count == 0, "all builds maxed produces no unrelated boss reward");
+
+        var mixed = World();
+        mixed.Experience.SpawnChest(mixed.Player.State.Position, 1);
+        mixed.Experience.SpawnChest(mixed.Player.State.Position, 2);
+        mixed.Experience.Tick(.01f);
+        mixed.Progression.RollChestOptions();
+        bool curse = false;
+        foreach (var option in mixed.Progression.Options) if (option.Curse != ChestCurse.None) curse = true;
+        Check(curse, "first elite chest retains curse option");
+        Check(mixed.Progression.TryApply(0), "consume elite chest first");
+        mixed.Progression.RollChestOptions();
+        foreach (var option in mixed.Progression.Options)
+            Check(option.Curse == ChestCurse.None, "following boss chest keeps boss reward policy");
+    }
+
+    private static void GravityProtectsOnlyAfterActualPullAndExit()
+    {
+        var ctx = World(c => c.Loadout = new LoadoutConfig { Scheme = LoadoutScheme.MainAndSub, Main = WeaponKind.WaterGun, Sub = SubWeaponKind.GravityWell });
+        Spawn(ctx, new Vec2(2f, 0f));
+        Check(ctx.Roll.TryRoll(), "gravity roll succeeds");
+        Check(ctx.Player.State.HurtInvincibleLeft <= 0f, "gravity exit protection not spent during subspace");
+        for (int i = 0; i < 80 && ctx.Player.State.InSubspace; i++) ctx.Session.Tick(1f / 60f);
+        Check(!ctx.Player.State.InSubspace && ctx.Player.State.HurtInvincibleLeft > .4f, "actual gravity pull grants half-second protection at exit");
+        var empty = World(c => c.Loadout = new LoadoutConfig { Scheme = LoadoutScheme.MainAndSub, Main = WeaponKind.WaterGun, Sub = SubWeaponKind.GravityWell });
+        empty.Roll.TryRoll();
+        for (int i = 0; i < 80 && empty.Player.State.InSubspace; i++) empty.Session.Tick(1f / 60f);
+        Check(empty.Player.State.HurtInvincibleLeft <= 0f, "empty gravity pull grants no extra protection");
+        var noMove = World(c =>
+        {
+            c.Loadout = new LoadoutConfig { Scheme = LoadoutScheme.MainAndSub, Main = WeaponKind.WaterGun, Sub = SubWeaponKind.GravityWell };
+            c.Arsenal.Gravity.PullDistance = 0f;
+        });
+        Spawn(noMove, new Vec2(2f, 0f));
+        noMove.Roll.TryRoll();
+        for (int i = 0; i < 80 && noMove.Player.State.InSubspace; i++) noMove.Session.Tick(1f / 60f);
+        Check(noMove.Player.State.HurtInvincibleLeft <= 0f, "gravity finds monster but zero displacement grants no protection");
+        var reset = World();
+        reset.Events.Publish(new GravityDisplacedEvent { Moved = 1 });
+        reset.Player.Setup();
+        reset.Events.Publish(new SubspaceExitedEvent());
+        Check(reset.Player.State.HurtInvincibleLeft <= 0f, "player Setup clears pending gravity protection");
     }
 
     private static int _checks;

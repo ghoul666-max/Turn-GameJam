@@ -12,12 +12,13 @@ namespace Turn.View
         [Min(1f)] public float maxHp = 100f;
         [Tooltip("碰撞半径（世界单位）")]
         public float radius = 0.35f;
-        [Tooltip("受伤后的无敌帧（秒，策划 0.3）")]
-        [Min(0f)] public float hurtInvincibleTime = 0.3f;
+        [Tooltip("受伤后的无敌帧（秒，本轮调整为 0.5）")]
+        [Min(0f)] public float hurtInvincibleTime = 0.5f;
+        [Min(0f)] public float gravityExitProtectionTime = 0.5f;
 
         public PlayerConfig ToConfig()
         {
-            return new PlayerConfig { MoveSpeed = moveSpeed, MaxHp = maxHp, Radius = radius, HurtInvincibleTime = hurtInvincibleTime };
+            return new PlayerConfig { MoveSpeed = moveSpeed, MaxHp = maxHp, Radius = radius, HurtInvincibleTime = hurtInvincibleTime, GravityExitProtectionTime = gravityExitProtectionTime };
         }
     }
 

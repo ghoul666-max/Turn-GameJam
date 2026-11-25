@@ -147,8 +147,8 @@ internal static class Program
         Check(!ctx.Combat.DamagePlayer(5f, DamageSource.Monster), "second hit blocked by i-frames");
         Run(ctx, .25f);
         Check(!ctx.Combat.DamagePlayer(5f, DamageSource.Monster), "still blocked at 0.25 s");
-        Run(ctx, .1f);
-        Check(ctx.Combat.DamagePlayer(5f, DamageSource.Monster), "hit lands again after 0.3 s");
+        Run(ctx, .3f);
+        Check(ctx.Combat.DamagePlayer(5f, DamageSource.Monster), "hit lands again after 0.5 s");
         Check(Near(ctx.Player.State.Hp, ctx.Player.State.MaxHp - 10f), "two hits taken");
     }
 

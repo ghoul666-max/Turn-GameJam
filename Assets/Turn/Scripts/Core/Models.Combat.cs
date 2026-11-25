@@ -294,7 +294,7 @@ namespace Turn.Core
     {
         public int Ammo = 8;
         public float FireInterval = 0.9f;
-        public float DashDistance = 3f;
+        public float DashDistance = 4.5f;
         public float DashTime = 0.15f;
         public float Width = 0.6f;
         public float Damage = 14f;
@@ -351,6 +351,7 @@ namespace Turn.Core
     public sealed class HourglassConfig
     {
         public float DecayRate = 0.15f;
+        public float SecondsToFloor = 5f;
         /// <summary>移速下限（策划 1/2）。</summary>
         public float FloorSpeed = 0.5f;
     }
@@ -378,6 +379,7 @@ namespace Turn.Core
     [Serializable]
     public sealed class ArsenalConfig
     {
+        public float FixedDamageMultiplier = 1.25f;
         public WaterGunConfig WaterGun = new WaterGunConfig();
         public SpearConfig Spear = new SpearConfig();
         public BladeConfig Blade = new BladeConfig();
@@ -494,6 +496,8 @@ namespace Turn.Core
         public int EliteXp = 5;
         public int BossEveryWaves = 10;
         public float BossHp = 25f, BossDamage = 2f, BossScale = 2.2f;
+        public float BossHpMultiplier = 2f;
+        public float NormalChaseSpeedMultiplier = .85f;
         public int BossXp = 20;
     }
 
@@ -924,7 +928,7 @@ namespace Turn.Core
     }
 
     /// <summary>武器留在场上的东西（表现层只读）：手里剑（停住旋转 / 环绕）、梅花裂隙、剑痕（线段 Position → End）。</summary>
-    public enum WeaponFieldKind { Shuriken = 0, OrbitShuriken = 1, Rift = 2, SwordTrail = 3 }
+    public enum WeaponFieldKind { Shuriken = 0, OrbitShuriken = 1, Rift = 2, SwordTrail = 3, GroundSpear = 4 }
 
     public struct WeaponField
     {

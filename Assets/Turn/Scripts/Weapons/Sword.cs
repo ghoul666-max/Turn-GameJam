@@ -6,7 +6,7 @@ namespace Turn.Weapons
 {
     /// <summary>
     /// 剑（11/25 第三批策划案）。突进生存型。
-    /// 常态：面向方向（扇形 TargetAngle、距离 TargetRange）有敌人时，朝面向方向突进刺击 DashDistance；
+    /// 常态：不需要敌人，按正常攻击周期沿玩家最近移动朝向突进刺击 DashDistance，照常消耗弹药；
     ///       突进过程中玩家完全无敌（PlayerState.WeaponInvincible），只在两次突进之间的停留期会受伤；路径留下剑痕（铺垫）。
     /// 爆发：影子以 ShadowSpeed 倍速沿全部剑痕复刻刺击（结算是瞬时的，表现按顺序播放），伤害随剑痕条数提升；
     ///       影刺每击杀 KillsPerCharge 名敌人，永久 +1 突进次数上限（= 弹药上限），切换到其他主武器时清零。结算后剑痕清空。
@@ -58,27 +58,17 @@ namespace Turn.Weapons
             }
         }
 
+        /// <summary>正常周期主动突进，不以敌人是否存在或朝向为条件。</summary>
+        public override bool NeedsTarget { get { return false; } }
+
         public override bool WantsToFire(Vec2 origin, MonsterEntity nearest)
         {
-            if (_dashing) return false;
-            Vec2 facing = Facing;
-            float cos = MathF.Cos(MathF.Min(180f, Cfg.TargetAngle * 0.5f) * MathF.PI / 180f);
-            float rangeSq = Cfg.TargetRange * Cfg.TargetRange;
-            IReadOnlyList<MonsterEntity> all = Kit.Ctx.Monsters.Active;
-            for (int i = 0; i < all.Count; i++)
-            {
-                MonsterEntity m = all[i];
-                if (!m.Alive) continue;
-                Vec2 d = m.Position - origin;
-                float sq = d.SqrMagnitude;
-                if (sq > rangeSq) continue;
-                if (sq < 0.0001f || WeaponKit.Dot(d / MathF.Sqrt(sq), facing) >= cos) return true;
-            }
-            return false;
+            return !_dashing;
         }
 
         public override void Fire(Vec2 origin, MonsterEntity target)
         {
+            if (_dashing) return;
             StartDash(origin, Facing, Cfg.DashDistance * (1f + Kit.Value(BuildId.SwordRange)));
         }
 

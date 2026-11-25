@@ -65,8 +65,12 @@ namespace Turn.Weapons
                 if (!m.Alive || (!grabCharging && !WeaponKit.CanDisplace(m))) continue;
                 float dist = Vec2.Distance(center, m.Position);
                 float move = MathF.Min(pull, dist - MathF.Max(0f, Cfg.MinGap));
-                if (move > 0.01f) Kit.Ctx.Monsters.Knockback(m, WeaponKit.Direction(m.Position, center), move);
-                if (damageRatio > 0f) Kit.Hit(m, m.MaxHp * damageRatio, DamageSource.SubWeapon);
+                if (move > 0.01f)
+                {
+                    float moved = Kit.Ctx.Monsters.Knockback(m, WeaponKit.Direction(m.Position, center), move);
+                    if (moved > .01f) Kit.Ctx.Events.Publish(new GravityDisplacedEvent { Moved = 1 });
+                }
+                if (damageRatio > 0f) Kit.Hit(m, m.MaxHp * damageRatio, DamageSource.SubWeapon, percentageDamage: true);
                 if (vulnerable > 0f && m.Alive) m.BurstVulnerability = MathF.Max(m.BurstVulnerability, vulnerable);
                 count++;
             }

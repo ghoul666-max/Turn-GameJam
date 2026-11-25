@@ -79,7 +79,7 @@ namespace Turn.Systems
         {
             return WeaponKinds.IsValid(weapon) ? _weapons[(int)weapon] : null;
         }
-        public int Ammo { get { return _ammo[(int)Current]; } }
+        public int Ammo { get { return Current == WeaponKind.Poker ? _poker.Hand.Count : _ammo[(int)Current]; } }
         public int Capacity { get { return CapacityOf(Current); } }
         public IReadOnlyList<WaterMark> Puddles { get { return _kit.Puddles; } }
 
@@ -183,7 +183,7 @@ namespace Turn.Systems
             if (FireTimer > 0f) FireTimer -= dt;
             if (FireTimer > 0f) return;
 
-            if (_ammo[index] <= 0)
+            if (_ammo[index] <= 0 && kind != WeaponKind.Poker)
             {
                 // 打空：停火，等待翻滚补满（不会自动恢复）。
                 if (!_emptyAnnounced[index])
@@ -196,14 +196,14 @@ namespace Turn.Systems
             }
 
             MonsterEntity target = _ctx.Monsters.GetNearest(player.Position, weapon.TargetRange);
-            if (weapon.NeedsTarget && (target == null || !weapon.WantsToFire(player.Position, target)))
+            if ((weapon.NeedsTarget && target == null) || !weapon.WantsToFire(player.Position, target))
             {
                 FireTimer = 0f; // 有目标进入范围（掌：进入面向的扇形）时立刻开火
                 return;
             }
 
             weapon.Fire(player.Position, target);
-            _ammo[index]--;
+            if (kind != WeaponKind.Poker) _ammo[index]--;
             float speedUp = 1f + _kit.Value(weapon.RateBuild) + _haste;
             FireTimer = MathF.Max(0.03f, weapon.BaseInterval / MathF.Max(0.1f, speedUp));
             _ctx.Events.Publish(new ShotFiredEvent

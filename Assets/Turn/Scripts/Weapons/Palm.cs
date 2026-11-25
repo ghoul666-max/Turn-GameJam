@@ -6,8 +6,8 @@ namespace Turn.Weapons
 {
     /// <summary>
     /// 掌（11/25 双武器策划案）。
-    /// 常态：朝面向方向（玩家最近一次移动的方向）释放扇形掌击；扇形里没有敌人就不出手（不浪费弹药）。
-    ///       只命中最近一圈敌人（「透劲」每层多推进一圈），伤害 + 沿径向击退（冲锋中的疾冲兽免疫）+ 叠 1 层掌印（「印心」额外叠层）。
+    /// 常态：以玩家为中心释放 360° 圆形掌击；范围内没有可见敌人时不出手。
+    ///       圆内全部活怪均可命中，保留遮挡物视线判定；伤害 + 沿径向击退 + 叠掌印。
     /// 爆发：以自身为中心的圆形天降掌，每只敌人伤害 × (1 + 掌印层数 × 每层加成)；「二重掌」再落一段（第二段 50%）；结算后掌印清空。
     /// </summary>
     public sealed class PalmWeapon : WeaponBehavior
@@ -28,7 +28,7 @@ namespace Turn.Weapons
         public override float TargetRange { get { return Range; } }
 
         public float Range { get { return Cfg.Range * (1f + Kit.Value(BuildId.PalmRange)); } }
-        public float Angle { get { return MathF.Min(360f, Cfg.Angle * (1f + Kit.Value(BuildId.PalmAngle))); } }
+        public float Angle { get { return 360f; } }
 
         private Vec2 Facing
         {
@@ -56,24 +56,12 @@ namespace Turn.Weapons
         private void Strike(Vec2 origin, Vec2 dir, float angle, float range, bool refund)
         {
             Collect(origin, dir, angle, range);
-            int rings = 1 + (int)MathF.Round(Kit.Value(BuildId.PalmPierce));
-            float thickness = MathF.Max(0.1f, Cfg.RingThickness);
             int marks = 1 + (int)MathF.Round(Kit.Value(BuildId.PalmExtraMark));
             float knock = MathF.Max(0f, Cfg.Knockback * (1f + Kit.Value(BuildId.PalmKnockback)));
-            int ring = 0;
-            float ringStart = -1f;
             int hits = 0;
             for (int i = 0; i < _candidates.Count; i++)
             {
                 MonsterEntity m = _candidates[i];
-                float d = Vec2.Distance(origin, m.Position);
-                if (ringStart < 0f) ringStart = d;
-                else if (d > ringStart + thickness)
-                {
-                    ring++;
-                    if (ring >= rings) break;
-                    ringStart = d;
-                }
                 if (!m.Alive) continue;
                 Kit.Hit(m, Cfg.Damage, DamageSource.Weapon);
                 hits++;

@@ -27,6 +27,8 @@ namespace Turn.Systems
         private float _speedMultiplier = 1f;
         /// <summary>维修机器人命中后待结算的击退（下一次 Tick 开头经遮挡物 / 边界修正后应用）。</summary>
         private Vec2 _pendingKnockback;
+        /// <summary>PlayerSystem 写：本次亚空间进入前黑洞是否确实移动过怪物。</summary>
+        private bool _gravityDisplaced;
         /// <summary>击退分步长度：每步都过一次 ResolveMove，避免一下穿过薄遮挡物。</summary>
         private const float KnockbackStep = 0.25f;
 
@@ -47,6 +49,13 @@ namespace Turn.Systems
             // B 的 MonsterSystem 只发“机器人已命中”的事实；玩家位置只在这里写。
             ctx.Events.Subscribe<RobotKnockbackHitEvent>(OnRobotKnockbackHit);
             ctx.Events.Subscribe<PlayerDamagedEvent>(OnPlayerDamaged);
+            ctx.Events.Subscribe<GravityDisplacedEvent>(evt => { if (evt.Moved > 0) _gravityDisplaced = true; });
+            ctx.Events.Subscribe<SubspaceExitedEvent>(evt =>
+            {
+                if (_gravityDisplaced)
+                    State.HurtInvincibleLeft = MathF.Max(State.HurtInvincibleLeft, MathF.Max(0f, Config.GravityExitProtectionTime));
+                _gravityDisplaced = false;
+            });
         }
 
         private void OnPlayerDamaged(PlayerDamagedEvent evt)
@@ -77,6 +86,7 @@ namespace Turn.Systems
             _envTerrain = State.Terrain;
             _envTimer = 0f;
             _pendingKnockback = Vec2.Zero;
+            _gravityDisplaced = false;
         }
 
         public void SetMoveInput(Vec2 input)

@@ -65,10 +65,11 @@ namespace Turn.Weapons
         }
 
         /// <summary>造成伤害，返回实际扣掉的生命（吸血按它算）。</summary>
-        public float Hit(MonsterEntity m, float damage, DamageSource source, bool critical = false)
+        public float Hit(MonsterEntity m, float damage, DamageSource source, bool critical = false, bool percentageDamage = false)
         {
             if (m == null || !m.Alive || damage <= 0f) return 0f;
             float before = m.Hp;
+            if (!percentageDamage) damage *= MathF.Max(0f, Arsenal.FixedDamageMultiplier);
             Ctx.Combat.DamageMonster(m, damage, source, critical);
             return MathF.Max(0f, before - MathF.Max(0f, m.Hp));
         }
@@ -139,7 +140,7 @@ namespace Turn.Weapons
             {
                 MonsterEntity m = Hits2[i];
                 if (!m.Alive) continue;
-                Hit(m, m.MaxHp * ratio, DamageSource.Burst);
+                Hit(m, m.MaxHp * ratio, DamageSource.Burst, percentageDamage: true);
                 hits++;
             }
             Hits2.Clear();

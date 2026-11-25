@@ -15,7 +15,9 @@ namespace Turn.Core
     public struct AmmoEmptiedEvent { public WeaponKind Weapon; }
 
     /// <summary>陌刀挥出一道扇形剑气（立即结算）。HalfAngle 为弧度。</summary>
-    public struct BladeWaveFiredEvent { public Vec2 Origin; public Vec2 Direction; public float HalfAngle; public float Range; public int Hits; }
+    public struct GravityDisplacedEvent { public int Moved; }
+
+    public struct BladeWaveFiredEvent { public Vec2 Origin; public Vec2 TargetPosition; public Vec2 Direction; public float HalfAngle; public float Range; public int Hits; }
 
     /// <summary>爆发 · 水枪：一滩水渍喷发成喷泉。</summary>
     public struct FountainBurstEvent { public Vec2 Position; public float Radius; public int Hits; }
@@ -87,7 +89,7 @@ namespace Turn.Core
     public struct ChestSpawnedEvent { public int ChestId; public Vec2 Position; public int Rank; }
 
     /// <summary>玩家靠近，宝箱打开（三选一会在 Session 的下一步弹出）。</summary>
-    public struct ChestOpenedEvent { public int ChestId; public Vec2 Position; }
+    public struct ChestOpenedEvent { public int ChestId; public Vec2 Position; public int Rank; }
 
     // ---------------- 11/25 第二批：扑克牌 / 手里剑 / 时间沙漏 / WASD ----------------
 

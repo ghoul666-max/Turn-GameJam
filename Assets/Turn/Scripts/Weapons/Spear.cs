@@ -7,9 +7,9 @@ namespace Turn.Weapons
     /// <summary>
     /// 投矛（策划：武器 2）。
     /// 常态：自动向最近的敌人投矛（伤害 8）。命中后长矛插在敌人身上 = 叠 1 层矛印记；
-    ///       若这一矛直接击杀目标，长矛继续穿刺下一个敌人，并把印记传下去（被击杀者身上原有的矛也一起带走），
-    ///       每穿透 1 个敌人伤害衰减 20%。飞完射程没插中任何敌人的长矛直接消失。
-    /// 爆发：所有敌人身上的长矛同时向玩家方向高速回收，每根矛沿「敌人 → 玩家」的路径穿刺沿途所有敌人（回收伤害 15 / 根），
+    ///       若这一矛直接击杀目标，停止飞行；当前携带的矛与目标原有的矛一起留在死亡位置。
+    ///       飞完射程没插中任何敌人的长矛直接消失。
+    /// 爆发：地面与活怪身上的长矛同时向玩家方向高速回收，每根矛沿回收路径穿刺沿途所有敌人（回收伤害由配置决定），
     ///       结算后矛印记清空（参考男刀大招的回收逻辑）。
     /// </summary>
     public sealed class SpearWeapon : WeaponBehavior
@@ -21,9 +21,24 @@ namespace Turn.Weapons
         }
 
         private readonly List<Host> _hosts = new List<Host>();
+        private readonly List<Host> _ground = new List<Host>();
         private readonly List<MonsterEntity> _targets = new List<MonsterEntity>();
 
-        public SpearWeapon(WeaponKit kit) : base(kit) { }
+        public SpearWeapon(WeaponKit kit) : base(kit)
+        {
+            Kit.Ctx.Events.Subscribe<SubspaceExitedEvent>(_ => _ground.Clear());
+        }
+
+        /// <summary>当前留在地面的矛总数；爆发回收或退出亚空间后清空。</summary>
+        public int GroundSpearCount
+        {
+            get
+            {
+                int count = 0;
+                for (int i = 0; i < _ground.Count; i++) count += _ground[i].Spears;
+                return count;
+            }
+        }
 
         private SpearConfig Cfg { get { return Kit.Arsenal.Spear; } }
 
@@ -60,13 +75,15 @@ namespace Turn.Weapons
             float falloff = MathF.Max(0f, MathF.Min(1f, Cfg.PierceFalloff - Kit.Value(BuildId.SpearFalloff)));
             float damage = p.Damage * MathF.Pow(1f - falloff, p.HitCount);
             p.HitCount++;
+            // 死亡事件可能触发其它武器效果，先保存命中前已经插在目标身上的矛。
+            int existing = Math.Max(0, m.SpearMarks);
             Kit.Hit(m, damage, DamageSource.Weapon);
             if (!m.Alive)
             {
-                // 直接击杀：继续穿刺下一个敌人，被击杀者身上的矛一起传下去
-                p.CarriedMarks += Math.Max(0, m.SpearMarks);
+                _ground.Add(new Host { Position = m.Position, Spears = Math.Max(1, p.CarriedMarks) + existing });
                 m.SpearMarks = 0;
-                return true;
+                p.CarriedMarks = 0;
+                return false;
             }
             m.SpearMarks += Math.Max(1, p.CarriedMarks);
             // 连锁：有概率在相邻 1 名敌人身上也叠 1 层
@@ -83,6 +100,8 @@ namespace Turn.Weapons
         {
             Vec2 player = Kit.PlayerPosition;
             _hosts.Clear();
+            _hosts.AddRange(_ground);
+            _ground.Clear();
             IReadOnlyList<MonsterEntity> all = Kit.Ctx.Monsters.Active;
             for (int i = 0; i < all.Count; i++)
             {
@@ -128,6 +147,18 @@ namespace Turn.Weapons
             // 结算后矛印记清空
             for (int i = 0; i < all.Count; i++) all[i].SpearMarks = 0;
             Kit.Lifesteal(dealt, BuildId.SpearLifesteal);
+        }
+
+        public override void CollectFields(List<WeaponField> results)
+        {
+            float radius = MathF.Max(.05f, Cfg.Radius);
+            for (int i = 0; i < _ground.Count; i++)
+            {
+                Host host = _ground[i];
+                for (int s = 0; s < host.Spears; s++)
+                    results.Add(new WeaponField { Kind = WeaponFieldKind.GroundSpear, Position = host.Position,
+                        End = host.Position + new Vec2(.15f * s + .1f, .65f), Radius = radius, Life = 1f });
+            }
         }
 
         public override void OnHurt()

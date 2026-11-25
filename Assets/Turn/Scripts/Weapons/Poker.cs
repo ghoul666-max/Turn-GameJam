@@ -6,9 +6,9 @@ namespace Turn.Weapons
 {
     /// <summary>
     /// 扑克牌（11/25 第二批策划案）。随机赌狗型。
-    /// 常态：不攻击，每隔 DrawInterval 秒从牌库随机抽 1 张到头顶（弹药 = 手牌上限，抽满停；没有敌人也照样抽）。
+    /// 常态：不攻击，每隔 DrawInterval 秒随机替换头顶唯一一张牌，不因抽满而停止。
     ///       牌库 = 52 张点数牌（1–13 × 四花色）+ 小王 + 大王；「精简牌库」从最小的点数开始移除。
-    /// 爆发：打出全部手牌（大小王先结算，让本次的牌也吃到加成），每张按花色 + 点数独立触发：
+    /// 爆发：只打出头顶当前显示的一张牌；大王仍会按原规则额外抽牌并立即打出，每张按花色 + 点数独立触发：
     ///   ♥ 沿移动方向射出 点数 × 5 发爱心弹（碰到遮挡物 / 地图边缘反弹）；
     ///   ♠ 在怪物最密集处落下炸弹，点数越大伤害与范围越大；
     ///   ♦ 叠方片护盾（层数 = 点数），挡怪物碰撞与弹幕；
@@ -31,7 +31,6 @@ namespace Turn.Weapons
 
         private const float RiftTick = 0.25f;
         private readonly List<PlayingCard> _hand = new List<PlayingCard>();
-        private readonly List<PlayingCard> _play = new List<PlayingCard>();
         private readonly List<Rift> _rifts = new List<Rift>();
         private readonly List<MonsterEntity> _query = new List<MonsterEntity>();
         private int _heartsThisBurst;
@@ -41,7 +40,7 @@ namespace Turn.Weapons
         private PokerConfig Cfg { get { return Kit.Arsenal.Poker; } }
 
         public override WeaponKind Kind { get { return WeaponKind.Poker; } }
-        public override int BaseAmmo { get { return Math.Max(1, Cfg.HandSize); } }
+        public override int BaseAmmo { get { return 1; } }
         public override float BaseInterval { get { return Cfg.DrawInterval; } }
         public override float TargetRange { get { return Cfg.TargetRange; } }
         public override bool NeedsTarget { get { return false; } }
@@ -60,6 +59,7 @@ namespace Turn.Weapons
         public override void Fire(Vec2 origin, MonsterEntity target)
         {
             PlayingCard card = Draw();
+            _hand.Clear();
             _hand.Add(card);
             Kit.Ctx.Events.Publish(new CardDrawnEvent { Card = card, HandCount = _hand.Count });
         }
@@ -77,21 +77,21 @@ namespace Turn.Weapons
             return new PlayingCard { Rank = g / 4 + 1, Suit = (CardSuit)(g % 4 + 1) };
         }
 
-        // ---------------- 爆发：打出全部手牌 ----------------
+        // ---------------- 爆发：打出按键瞬间显示的唯一手牌 ----------------
 
         public override void Burst()
         {
-            _play.Clear();
-            for (int i = 0; i < _hand.Count; i++) if (_hand[i].IsJoker) _play.Add(_hand[i]);
-            for (int i = 0; i < _hand.Count; i++) if (!_hand[i].IsJoker) _play.Add(_hand[i]);
+            if (_hand.Count == 0) return;
+            PlayingCard shown = _hand[0];
             _hand.Clear();
             _heartsThisBurst = 0;
-            for (int i = 0; i < _play.Count; i++) Play(_play[i], 0);
-            _play.Clear();
+            Play(shown, 0);
+            // 不立即补抽，避免隐藏更换刚显示的牌；退出亚空间后的下个常态抽牌步再补。
+            // Play 中的大王「立即再抽并打出」仍是明确保留的额外效果，不占头顶手牌。
         }
 
-        /// <summary>测试 / 调试：直接把一张牌放进手牌。</summary>
-        public void DebugAddCard(PlayingCard card) { _hand.Add(card); }
+        /// <summary>测试 / 调试：替换唯一手牌，与正常抽牌一样不会累积。</summary>
+        public void DebugAddCard(PlayingCard card) { _hand.Clear(); _hand.Add(card); }
 
         private void Play(PlayingCard card, int depth)
         {

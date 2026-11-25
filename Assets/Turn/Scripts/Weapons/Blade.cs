@@ -36,7 +36,9 @@ namespace Turn.Weapons
 
         public override void Fire(Vec2 origin, MonsterEntity target)
         {
-            Vec2 dir = WeaponKit.Direction(origin, target.Position);
+            if (target == null || !target.Alive) return;
+            Vec2 targetPosition = target.Position;
+            Vec2 dir = WeaponKit.Direction(origin, targetPosition);
             float range = Range;
             float halfAngle = Angle * 0.5f * (MathF.PI / 180f);
             float cosHalf = MathF.Cos(halfAngle);
@@ -80,7 +82,8 @@ namespace Turn.Weapons
                 hits++;
             }
             _candidates.Clear();
-            Kit.Ctx.Events.Publish(new BladeWaveFiredEvent { Origin = origin, Direction = dir, HalfAngle = halfAngle, Range = range, Hits = hits });
+            Kit.Ctx.Events.Publish(new BladeWaveFiredEvent { Origin = origin, TargetPosition = targetPosition,
+                Direction = dir, HalfAngle = halfAngle, Range = range, Hits = hits });
         }
 
         public override void Burst()

@@ -276,7 +276,7 @@ namespace Turn.View
             {
                 WeaponFieldKind k = fields[i].Kind;
                 if (k == WeaponFieldKind.Rift) rifts++;
-                else if (k == WeaponFieldKind.SwordTrail) trails++;
+                else if (k == WeaponFieldKind.SwordTrail || k == WeaponFieldKind.GroundSpear) trails++;
                 else stars++;
             }
             SetCount(_stars, stars, "Shuriken", ViewMath.PlayerOrder + 1, Square());
@@ -297,14 +297,15 @@ namespace Turn.View
                     r.transform.localScale = Vector3.one * (f.Radius * 2f * pulse);
                     r.color = new Color(rc.r, rc.g, rc.b, 0.15f + 0.3f * f.Life);
                 }
-                else if (f.Kind == WeaponFieldKind.SwordTrail)
+                else if (f.Kind == WeaponFieldKind.SwordTrail || f.Kind == WeaponFieldKind.GroundSpear)
                 {
                     LineRenderer l = _trails[ti++];
                     l.positionCount = 2;
                     l.SetPosition(0, ViewMath.ToWorld(f.Position));
                     l.SetPosition(1, ViewMath.ToWorld(f.End));
                     l.startWidth = l.endWidth = Mathf.Max(0.05f, f.Radius * 0.6f);
-                    l.startColor = l.endColor = new Color(tc.r, tc.g, tc.b, 0.35f);
+                    Color fieldColor = f.Kind == WeaponFieldKind.GroundSpear ? ViewMath.WeaponColor(WeaponKind.Spear) : tc;
+                    l.startColor = l.endColor = new Color(fieldColor.r, fieldColor.g, fieldColor.b, f.Kind == WeaponFieldKind.GroundSpear ? .9f : .35f);
                 }
                 else
                 {
@@ -328,7 +329,7 @@ namespace Turn.View
                 int n = trail.Count >= 2 ? trail.Count + 1 : 0;
                 _cursorLine.positionCount = n;
                 for (int i = 0; i < trail.Count && n > 0; i++) _cursorLine.SetPosition(i, ViewMath.ToWorld(trail[i]));
-                if (n > 0) _cursorLine.SetPosition(trail.Count, ViewMath.ToWorld(_ctx.Player.State.Position));
+                if (n > 0) _cursorLine.SetPosition(trail.Count, ViewMath.ToWorld(trail[0]));
                 Color cc = ViewMath.SubWeaponColor(SubWeaponKind.Cursor);
                 cc.a = 0.55f + 0.25f * Mathf.Sin(Time.unscaledTime * 6f);
                 _cursorLine.startColor = _cursorLine.endColor = cc;
@@ -413,7 +414,7 @@ namespace Turn.View
             int segments = 16;
             line.positionCount = segments + 1;
             float baseAngle = Mathf.Atan2(evt.Direction.Y, evt.Direction.X);
-            Vector3 origin = ViewMath.ToWorld(evt.Origin);
+            Vector3 origin = ViewMath.ToWorld(evt.TargetPosition);
             for (int i = 0; i <= segments; i++)
             {
                 float a = baseAngle - evt.HalfAngle + 2f * evt.HalfAngle * i / segments;

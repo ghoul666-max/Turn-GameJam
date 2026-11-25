@@ -369,6 +369,7 @@ namespace Turn.View
                 p.maxHp = F("p.hp", "最大生命", p.maxHp, 1f, 500f);
                 p.radius = F("p.radius", "碰撞半径", p.radius, 0.05f, 2f);
                 p.hurtInvincibleTime = F("p.hurtInv", "受伤无敌帧（秒）", p.hurtInvincibleTime, 0f, 2f);
+                p.gravityExitProtectionTime = F("p.gravityExit", "黑洞退出保护（秒）", p.gravityExitProtectionTime, 0f, 2f);
             }
             if (Section("roll", "翻滚 / 亚空间"))
             {
@@ -474,9 +475,8 @@ namespace Turn.View
                 p.Ammo = I("pm2.ammo", "弹药上限", p.Ammo, 1, 200);
                 p.FireInterval = F("pm2.interval", "攻击间隔（秒 / 发）", p.FireInterval, 0.03f, 3f);
                 p.Damage = F("pm2.dmg", "掌击伤害", p.Damage, 0f, 200f);
-                p.Angle = F("pm2.angle", "扇形角度（度）", p.Angle, 5f, 360f);
+                GUILayout.Label("掌击为 360° 圆形，命中范围内全部目标（保留遮挡判定）");
                 p.Range = F("pm2.range", "掌击距离", p.Range, 0.5f, 15f);
-                p.RingThickness = F("pm2.ring", "掌击厚度（命中最近一圈）", p.RingThickness, 0.1f, 10f);
                 p.Knockback = F("pm2.knock", "击退距离", p.Knockback, 0f, 10f);
                 p.SkyRadius = F("pm2.skyR", "天降掌半径", p.SkyRadius, 0.5f, 20f);
                 p.SkyDamage = F("pm2.skyDmg", "天降掌伤害", p.SkyDamage, 0f, 500f);
@@ -532,7 +532,8 @@ namespace Turn.View
             if (Section("poker", "扑克牌"))
             {
                 PokerConfig p = a.Poker;
-                p.HandSize = I("pk.hand", "手牌上限（= 弹药）", p.HandSize, 1, 20);
+                p.HandSize = 1;
+                GUILayout.Label("手牌固定一张：按抽牌间隔持续换牌，空格打出当前牌");
                 p.DrawInterval = F("pk.draw", "抽牌间隔（秒）", p.DrawInterval, 0.05f, 10f);
                 p.HeartsPerPoint = I("pk.hpp", "♥ 每点几发爱心弹", p.HeartsPerPoint, 0, 20);
                 p.HeartDamage = F("pk.hdmg", "♥ 爱心弹伤害", p.HeartDamage, 0f, 100f);
@@ -600,7 +601,7 @@ namespace Turn.View
                 s.Width = F("sw.width", "刺击判定半宽", s.Width, 0.05f, 5f);
                 s.Damage = F("sw.dmg", "刺击伤害", s.Damage, 0f, 300f);
                 s.TargetRange = F("sw.range", "面向多远有敌人才突进", s.TargetRange, 0.5f, 20f);
-                s.TargetAngle = F("sw.angle", "面向扇形角度", s.TargetAngle, 5f, 360f);
+                GUILayout.Label("沿最近移动朝向突进：无怪物也可正常出手");
                 s.ShadowDamage = F("sw.shadow", "影刺伤害", s.ShadowDamage, 0f, 500f);
                 s.TrailBonus = F("sw.trail", "每条剑痕影刺加成", s.TrailBonus, 0f, 1f);
                 s.KillsPerCharge = F("sw.kills", "影刺击杀几名 +1 突进次数", s.KillsPerCharge, 0.2f, 20f);
@@ -609,7 +610,7 @@ namespace Turn.View
             if (Section("hourglass", "副武器 · 时间沙漏"))
             {
                 HourglassConfig hg = a.Hourglass;
-                hg.DecayRate = F("hg.rate", "衰减速率（每秒）", hg.DecayRate, 0f, 5f);
+                hg.SecondsToFloor = F("hg.floorTime", "线性降至下限所需秒数", hg.SecondsToFloor, .1f, 30f);
                 hg.FloorSpeed = F("hg.floor", "最低移速下限", hg.FloorSpeed, 0.05f, 1f);
             }
             if (Section("wasd", "副武器 · WASD"))
@@ -639,12 +640,13 @@ namespace Turn.View
                 CursorConfig c = a.Cursor;
                 c.Damage = F("cs.dmg", "降维打击伤害", c.Damage, 0f, 1000f);
                 c.PinTime = F("cs.pin", "定身时长（秒）", c.PinTime, 0f, 10f);
-                c.MaxLength = F("cs.len", "轨迹最长（选区最大覆盖）", c.MaxLength, 1f, 200f);
+                c.MaxLength = F("cs.len", "矩形对角线最长距离", c.MaxLength, 1f, 200f);
                 c.Thickness = F("cs.thick", "边界厚度", c.Thickness, 0.05f, 5f);
                 c.SampleSpacing = F("cs.spacing", "轨迹采样间距", c.SampleSpacing, 0.05f, 3f);
             }
             if (Section("arsenal", "武器共用"))
             {
+                a.FixedDamageMultiplier = F("ar.fixedDamage", "固定伤害倍率（不含最大生命百分比）", a.FixedDamageMultiplier, 0f, 5f);
                 a.CritMultiplier = F("ar.crit", "暴击倍率", a.CritMultiplier, 1f, 5f);
                 a.BurstRingRadius = F("ar.ring", "爆发一圈的半径（词条没配时）", a.BurstRingRadius, 0.5f, 15f);
                 a.HurtMarkRange = F("ar.hurt", "受伤叠印记的搜索半径", a.HurtMarkRange, 0.5f, 30f);
@@ -653,6 +655,7 @@ namespace Turn.View
             HordeConfig h = d.horde;
             if (Section("horde", "怪物与波次"))
             {
+                h.NormalChaseSpeedMultiplier = F("hd.chaseMult", "普通小怪追击速度倍率", h.NormalChaseSpeedMultiplier, 0f, 2f);
                 h.HpPerWave = F("hd.hp", "每波血量 +", h.HpPerWave, 0f, 1f);
                 h.DamagePerWave = F("hd.dmg", "每波伤害 +", h.DamagePerWave, 0f, 1f);
                 h.SpawnInterval = F("hd.interval", "刷怪间隔（秒）", h.SpawnInterval, 0.1f, 20f);
@@ -701,6 +704,7 @@ namespace Turn.View
                 h.EliteXp = I("el.xp", "精英：经验倍率", h.EliteXp, 1, 50);
                 h.BossEveryWaves = I("bo.every", "Boss：每几波一只（0 = 不刷）", h.BossEveryWaves, 0, 100);
                 h.BossHp = F("bo.hp", "Boss：生命倍率", h.BossHp, 1f, 200f);
+                h.BossHpMultiplier = F("bo.hpExtra", "Boss：额外生命倍率", h.BossHpMultiplier, 0f, 5f);
                 h.BossDamage = F("bo.dmg", "Boss：伤害倍率", h.BossDamage, 1f, 10f);
                 h.BossScale = F("bo.scale", "Boss：体型倍率", h.BossScale, 1f, 5f);
                 h.BossXp = I("bo.xp", "Boss：经验倍率", h.BossXp, 1, 200);

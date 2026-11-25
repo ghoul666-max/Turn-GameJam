@@ -94,7 +94,7 @@ namespace Turn.Systems
                     if (!chest.Alive || Vec2.SqrDistance(chest.Position, player.Position) > open * open) continue;
                     chest.Alive = false;
                     _ctx.Progression.AddChest();
-                    _ctx.Events.Publish(new ChestOpenedEvent { ChestId = chest.Id, Position = chest.Position });
+                    _ctx.Events.Publish(new ChestOpenedEvent { ChestId = chest.Id, Position = chest.Position, Rank = chest.Rank });
                 }
             }
 

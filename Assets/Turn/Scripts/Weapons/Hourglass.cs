@@ -6,7 +6,7 @@ namespace Turn.Weapons
 {
     /// <summary>
     /// 副武器 · 时间沙漏（11/25 第二批策划案）。节奏控场。
-    /// 常态：全场敌人移速随时间渐进衰减：倍率 = 下限 + (1 − 下限) × e^(−衰减速率 × t)，t = 距上次翻滚的常态时间；下限默认 1/2。
+    /// 常态：全场敌人移速从 1 线性降至 FloorSpeed，默认 5 秒到 1/2；之后保持下限。
     /// 翻滚（爆发前）：所有敌人移速立即重置为基础值，回到常态后重新开始衰减。
     /// 「迟滞」：敌人越慢受到的伤害越高（降到一半移速时 +词条数值）；亚空间里按重置前的减速程度算，让本次爆发也吃到加成。
     /// </summary>
@@ -30,9 +30,10 @@ namespace Turn.Weapons
         {
             get
             {
-                float rate = MathF.Max(0f, Cfg.DecayRate * (1f + Kit.Value(BuildId.HourglassDecay)));
-                float floor = Floor;
-                return floor + (1f - floor) * MathF.Exp(-rate * _time);
+                float rateScale = MathF.Max(0f, 1f + Kit.Value(BuildId.HourglassDecay));
+                float duration = MathF.Max(0.01f, Cfg.SecondsToFloor);
+                float progress = MathF.Min(1f, MathF.Max(0f, _time) * rateScale / duration);
+                return 1f - (1f - Floor) * progress;
             }
         }
 
@@ -48,7 +49,7 @@ namespace Turn.Weapons
 
         public override void Tick(float dt)
         {
-            _time += dt;
+            _time += MathF.Max(0f, dt);
             if (_postSlowLeft > 0f) _postSlowLeft = MathF.Max(0f, _postSlowLeft - dt);
         }
 
@@ -69,7 +70,7 @@ namespace Turn.Weapons
                 {
                     MonsterEntity m = _query[i];
                     if (!m.Alive) continue;
-                    Kit.Hit(m, m.MaxHp * ratio, DamageSource.SubWeapon);
+                    Kit.Hit(m, m.MaxHp * ratio, DamageSource.SubWeapon, percentageDamage: true);
                     hits++;
                 }
                 _query.Clear();

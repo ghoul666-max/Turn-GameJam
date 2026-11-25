@@ -116,12 +116,18 @@ internal static class Program
         MonsterEntity weak = Spawn(ctx, new Vec2(2f, 0f));
         MonsterEntity tank = Spawn(ctx, new Vec2(4f, 0f));
         weak.Hp = 1f;
-        weak.SpearMarks = 2; // 被击杀者身上原有的矛一起传下去
+        weak.SpearMarks = 2;
         ctx.Weapons.Tick(1f);
         RunProjectiles(ctx, 1f);
         Check(!weak.Alive, "first target killed");
-        Check(Near(tank.Hp, 1000f - 8f * .8f), "pierced spear deals 80%");
-        Check(tank.SpearMarks == 3, "marks passed on: own spear + 2 from the killed enemy");
+        Check(Near(tank.Hp, 1000f) && tank.SpearMarks == 0, "killing spear stops and does not transfer marks to next target");
+        Check(CountFields(ctx, WeaponFieldKind.GroundSpear) == 3, "current spear and two prior marks remain on the ground");
+        MonsterEntity path = Spawn(ctx, new Vec2(1f, 0f));
+        int recalls = 0;
+        ctx.Events.Subscribe<SpearRecalledEvent>(_ => recalls++);
+        Check(ctx.Roll.TryRoll(), "ground spears recalled by roll burst");
+        Check(recalls == 3 && path.Hp < 1000f, "three ground spears damage the path back to player");
+        Check(CountFields(ctx, WeaponFieldKind.GroundSpear) == 0, "ground spears consumed by recall");
     }
 
     private static void BladeHitsFirstRingAndSlashScales()
@@ -219,19 +225,24 @@ internal static class Program
         Check(ctx.Weapons.Current == WeaponKind.Palm && ctx.Weapons.Supports(WeaponKind.Palm), "palm equipped");
         MonsterEntity front = Spawn(ctx, new Vec2(2f, 0f));
         MonsterEntity back = Spawn(ctx, new Vec2(-2f, 0f));
-        ctx.Weapons.Tick(1f); // 默认面朝右
-        Check(Near(front.Hp, 993f) && front.PalmMarks == 1, "palm strike hits the facing fan for 7 + 1 palm mark");
-        Check(Near(back.Hp, 1000f) && back.PalmMarks == 0, "enemies behind are not hit");
-        Check(front.Position.X - ctx.Player.State.Position.X > 2.9f, "palm knocks back ~1.2");
+        ctx.Weapons.Tick(1f);
+        Check(Near(front.Hp, 993f) && front.PalmMarks == 1, "palm hits front for 7 and applies one mark");
+        Check(Near(back.Hp, 993f) && back.PalmMarks == 1, "full-circle palm hits behind independent of facing");
+        Check(front.Position.X - ctx.Player.State.Position.X > 2.9f && back.Position.X - ctx.Player.State.Position.X < -2.9f,
+            "palm knocks both sides radially outward");
         ctx.Roll.TryRoll();
-        Check(Near(front.Hp, 993f - 20f * 1.15f) && Near(back.Hp, 980f), "sky palm: 20 x (1 + 15% per mark)");
-        Check(front.PalmMarks == 0, "palm marks cleared after the sky palm");
+        Check(Near(front.Hp, 993f - 20f * 1.15f) && Near(back.Hp, 993f - 20f * 1.15f), "sky palm uses marks on both sides");
+        Check(front.PalmMarks == 0 && back.PalmMarks == 0, "palm marks cleared after sky palm");
 
+        var rearOnly = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Palm); });
+        Spawn(rearOnly, new Vec2(-2f, 0f));
+        int before = rearOnly.Weapons.Ammo;
+        rearOnly.Weapons.Tick(1f);
+        Check(rearOnly.Weapons.Ammo == before - 1, "rear target triggers normal palm attack and ammo cost");
         var empty = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Palm); });
-        Spawn(empty, new Vec2(-2f, 0f));
-        int before = empty.Weapons.Ammo;
+        int emptyAmmo = empty.Weapons.Ammo;
         empty.Weapons.Tick(1f);
-        Check(empty.Weapons.Ammo == before, "nothing in the facing fan: no strike, no ammo spent");
+        Check(empty.Weapons.Ammo == emptyAmmo, "empty circle does not waste palm ammo");
     }
 
     private static void CrossbowWallSlamAndIntent()
@@ -408,54 +419,62 @@ internal static class Program
     private static void PokerDrawsAndPlaysSuits()
     {
         var ctx = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
-        Check(ctx.Weapons.Supports(WeaponKind.Poker) && ctx.Weapons.Capacity == 5, "poker: hand size 5");
+        Check(ctx.Weapons.Supports(WeaponKind.Poker) && ctx.Weapons.Capacity == 1, "poker: one rolling displayed card");
+        int draws = 0;
+        ctx.Events.Subscribe<CardDrawnEvent>(_ => draws++);
         ctx.Weapons.Tick(1f);
         ctx.Weapons.Tick(1f);
-        Check(ctx.Weapons.Hand.Count == 2 && ctx.Weapons.Ammo == 3, "poker draws without any enemy");
+        Check(draws == 2 && ctx.Weapons.Hand.Count == 1 && ctx.Weapons.Ammo == 1, "poker keeps replacing one card without any enemy");
         Check(ctx.Weapons.DeckSize == 54, "full deck: 52 + 2 jokers");
 
-        var suits = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
-        MonsterEntity a = Spawn(suits, new Vec2(5f, 0f));
-        MonsterEntity b = Spawn(suits, new Vec2(5.4f, 0f));
-        MonsterEntity lone = Spawn(suits, new Vec2(-6f, 0f));
-        suits.Weapons.DebugAddCard(Card(7, CardSuit.Diamond));
-        suits.Weapons.DebugAddCard(Card(10, CardSuit.Spade));
-        suits.Weapons.DebugAddCard(Card(1, CardSuit.Heart));
-        suits.Weapons.DebugAddCard(Card(PlayingCard.SmallJoker, CardSuit.None));
-        Check(suits.Roll.TryRoll(), "roll plays the hand");
-        Check(suits.Weapons.Hand.Count == 0, "hand cleared after the burst");
-        Check(Near(suits.Weapons.JokerBonus, 0.08f), "small joker: +8% permanent");
-        Check(suits.Weapons.ShieldCharges == 8, "diamond 7 -> round(7 x 1.08) = 8 shield charges (jokers resolve first)");
-        Check(Near(a.Hp, 1000f - 60f * 1.08f, 0.1f) && Near(b.Hp, a.Hp, 0.1f), "spade 10 hits the densest cluster: 6 x 10 x 1.08");
-        Check(Near(lone.Hp, 1000f), "the lone enemy is outside the bomb");
-        Check(CountProjectiles(suits, WeaponKind.Poker) == 5, "heart A: 1 x 5 heart bullets");
+        var joker = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
+        joker.Weapons.DebugAddCard(Card(PlayingCard.SmallJoker, CardSuit.None));
+        Check(joker.Roll.TryRoll(), "roll plays displayed small joker");
+        Check(joker.Weapons.Hand.Count == 0 && Near(joker.Weapons.JokerBonus, .08f), "small joker grants +8 percent and leaves no hidden hand");
 
-        RunSession(suits, 1.05f);
-        int shield = suits.Weapons.ShieldCharges;
-        Check(!suits.Combat.DamagePlayer(5f, DamageSource.Monster) && suits.Weapons.ShieldCharges == shield - 1, "shield blocks a monster hit");
-        Check(suits.Combat.DamagePlayer(5f, DamageSource.Laser), "shield does not block lasers");
+        var diamond = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
+        diamond.Weapons.DebugAddCard(Card(7, CardSuit.Diamond));
+        Check(diamond.Roll.TryRoll(), "roll plays displayed diamond");
+        Check(diamond.Weapons.ShieldCharges == 7 && diamond.Weapons.Hand.Count == 0, "diamond 7 grants seven shield charges");
+        RunSession(diamond, 1.05f);
+        int shield = diamond.Weapons.ShieldCharges;
+        Check(!diamond.Combat.DamagePlayer(5f, DamageSource.Monster) && diamond.Weapons.ShieldCharges == shield - 1, "shield blocks a monster hit");
+        Check(diamond.Combat.DamagePlayer(5f, DamageSource.Laser), "shield does not block lasers");
+
+        var spade = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
+        MonsterEntity a = Spawn(spade, new Vec2(5f, 0f));
+        MonsterEntity b = Spawn(spade, new Vec2(5.4f, 0f));
+        MonsterEntity lone = Spawn(spade, new Vec2(-6f, 0f));
+        spade.Weapons.DebugAddCard(Card(10, CardSuit.Spade));
+        Check(spade.Roll.TryRoll(), "roll plays displayed spade");
+        Check(Near(a.Hp, 940f, .1f) && Near(b.Hp, a.Hp, .1f), "spade 10 hits densest cluster for 6 x 10");
+        Check(Near(lone.Hp, 1000f), "lone enemy is outside bomb");
+
+        var heart = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
+        heart.Weapons.DebugAddCard(Card(1, CardSuit.Heart));
+        Check(heart.Roll.TryRoll(), "roll plays displayed heart");
+        Check(CountProjectiles(heart, WeaponKind.Poker) == 5, "heart A: 1 x 5 heart bullets");
 
         var club = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
         MonsterEntity m = Spawn(club, new Vec2(4f, 2f));
         club.Weapons.DebugAddCard(Card(5, CardSuit.Club));
         club.Roll.TryRoll();
-        Check(CountFields(club, WeaponFieldKind.Rift) == 1, "club opens a rift at the nearest enemy");
+        Check(CountFields(club, WeaponFieldKind.Rift) == 1, "club opens a rift at nearest enemy");
         Vec2 riftAt = club.Weapons.Fields[0].Position;
         MonsterEntity side = Spawn(club, riftAt - club.Player.State.Position + new Vec2(1.5f, 0f));
-        RunSession(club, 1.05f + 0.6f);
+        RunSession(club, 1.05f + .6f);
         Check(m.Hp < 1000f && side.Hp < 1000f, "rift deals damage over time");
         Check(Vec2.Distance(side.Position, riftAt) < 1.4f, "rift pulls enemies in");
 
-        var trim = World(c => { c.Loadout = Single(WeaponKind.Poker); });
+        var trim = World(c => c.Loadout = Single(WeaponKind.Poker));
         trim.Progression.DebugSetLevel(BuildId.PokerTrimDeck, 99);
-        Check(trim.Weapons.DeckSize == 6 && !trim.Progression.IsCarried(BuildId.WaterAmmo), "trim deck max level -> 6 cards left (4 K + 2 jokers)");
+        Check(trim.Weapons.DeckSize == 6 && !trim.Progression.IsCarried(BuildId.WaterAmmo), "trim deck max level leaves four K and two jokers");
         for (int i = 0; i < 200; i++)
         {
             trim.Weapons.Tick(1f);
-            if (trim.Weapons.Hand.Count == 0) continue;
-            PlayingCard drawn = trim.Weapons.Hand[trim.Weapons.Hand.Count - 1];
-            if (!drawn.IsJoker && drawn.Rank != 13) { Check(false, "trimmed deck only draws K or jokers"); break; }
-            if (trim.Weapons.Ammo == 0) break;
+            Check(trim.Weapons.Hand.Count == 1, "trimmed deck still continuously rolls one card");
+            PlayingCard drawn = trim.Weapons.Hand[0];
+            Check(drawn.IsJoker || drawn.Rank == 13, "trimmed deck only draws K or jokers");
         }
     }
 
@@ -527,7 +546,7 @@ internal static class Program
         Check(ctx.Player.State.WeaponInvincible && ctx.Player.State.Invincible, "invincible while dashing");
         for (int i = 0; i < 5; i++) ctx.Weapons.Tick(0.05f);
         Check(!ctx.Player.State.WeaponInvincible, "dash over: vulnerable again");
-        Check(ctx.Player.State.Position.X - start.X > 2.8f, "dashed ~3 toward facing");
+        Check(Near(ctx.Player.State.Position.X - start.X, ctx.Config.Arsenal.Sword.DashDistance, .05f), "sword dash travels configured distance toward recent facing");
         Check(Near(m.Hp, 986f), "dash stab: 14");
         Check(CountFields(ctx, WeaponFieldKind.SwordTrail) == 1, "dash leaves a sword trail");
         MonsterEntity weak = Spawn(ctx, start - ctx.Player.State.Position + new Vec2(1f, 0f));
@@ -537,16 +556,30 @@ internal static class Program
         Check(Near(m.Hp, 986f - 22f * 1.05f, 0.05f), "shadow strike along the trail: 22 x (1 + 5% per trail)");
         Check(!weak.Alive && ctx.Weapons.SwordBonusCharges == 1 && ctx.Weapons.CapacityOf(WeaponKind.Sword) == cap + 1, "shadow kill: +1 dash charge");
         Check(CountFields(ctx, WeaponFieldKind.SwordTrail) == 0, "trails cleared after the burst");
+
+        var empty = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Sword); });
+        Vec2 emptyStart = empty.Player.State.Position;
+        empty.Player.State.Facing = new Vec2(0f, 1f);
+        int ammo = empty.Weapons.Ammo;
+        empty.Weapons.Tick(0f);
+        Check(empty.Weapons.Ammo == ammo - 1 && empty.Player.State.WeaponInvincible,
+            "sword starts targetless dash and spends normal ammo");
+        empty.Weapons.Tick(empty.Config.Arsenal.Sword.DashTime);
+        Check(Near(empty.Player.State.Position.X, emptyStart.X) &&
+            Near(empty.Player.State.Position.Y - emptyStart.Y, empty.Config.Arsenal.Sword.DashDistance, .05f),
+            "targetless dash follows recent facing with unchanged configured time");
     }
 
     private static void HourglassSlowsAndResets()
     {
         var ctx = World(c => c.Loadout = Single(WeaponKind.Poker, SubWeaponKind.Hourglass));
         Check(Near(ctx.SubWeapons.MonsterSpeedMultiplier, 1f), "hourglass starts at full speed");
-        RunSession(ctx, 10f);
-        Check(Near(ctx.SubWeapons.MonsterSpeedMultiplier, 0.5f + 0.5f * MathF.Exp(-1.5f), 0.02f), "speed decays toward 1/2");
+        RunSession(ctx, 2.5f);
+        Check(Near(ctx.SubWeapons.MonsterSpeedMultiplier, .75f, .02f), "hourglass linear midpoint at 2.5 seconds");
+        RunSession(ctx, 2.5f);
+        Check(Near(ctx.SubWeapons.MonsterSpeedMultiplier, .5f, .02f), "hourglass reaches half speed at five seconds");
         RunSession(ctx, 60f);
-        Check(ctx.SubWeapons.MonsterSpeedMultiplier >= 0.5f - 0.001f, "never below the floor");
+        Check(Near(ctx.SubWeapons.MonsterSpeedMultiplier, .5f, .001f), "stays exactly at floor");
         ctx.Roll.TryRoll();
         Check(Near(ctx.SubWeapons.MonsterSpeedMultiplier, 1f), "roll resets enemy speed");
     }
@@ -589,21 +622,19 @@ internal static class Program
         var ctx = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Crossbow, SubWeaponKind.Cursor); });
         Vec2 a = ctx.Player.State.Position;
         ctx.Roll.TryRoll();
-        Check(ctx.SubWeapons.Trail.Count == 1, "first roll starts drawing");
+        Check(ctx.SubWeapons.Trail.Count == 4, "first roll starts four-corner rectangle");
         RunSession(ctx, 2.5f);
-        a = ctx.Player.State.Position;
-        Vec2[] corners = { new Vec2(4f, 0f), new Vec2(4f, 4f), new Vec2(0f, 4f) };
-        for (int i = 0; i < corners.Length; i++)
-        {
-            ctx.Player.Teleport(a + corners[i]);
-            ctx.SubWeapons.Tick(0.01f);
-        }
-        MonsterEntity inside = Spawn(ctx, new Vec2(2f, -2f));
-        MonsterEntity outside = Spawn(ctx, new Vec2(6f, 3f));
-        Check(ctx.Roll.TryRoll(), "second roll: strike");
-        Check(Near(inside.Hp, 965f) && inside.PinnedLeft > 0f && inside.StunLeft > 0f, "inside the selection: 35 + pinned");
-        Check(Near(outside.Hp, 1000f), "outside the selection: untouched");
-        Check(ctx.SubWeapons.Trail.Count == 1, "drawing restarts right away");
+        // The route detour is irrelevant: the final position and first-roll anchor define the box.
+        ctx.Player.Teleport(a + new Vec2(-4f, 0f));
+        ctx.SubWeapons.Tick(.01f);
+        ctx.Player.Teleport(a + new Vec2(4f, 4f));
+        ctx.SubWeapons.Tick(.01f);
+        MonsterEntity inside = Spawn(ctx, new Vec2(-2f, -2f));
+        MonsterEntity outside = Spawn(ctx, new Vec2(-7f, -2f));
+        Check(ctx.Roll.TryRoll(), "second roll: rectangle strike");
+        Check(Near(inside.Hp, 965f) && inside.PinnedLeft > 0f && inside.StunLeft > 0f, "inside rectangle: 35 + pinned");
+        Check(Near(outside.Hp, 1000f), "old detour outside final rectangle: untouched");
+        Check(ctx.SubWeapons.Trail.Count == 4, "next rectangle starts right away");
     }
 
     private static int TotalLevels(ITurnContext ctx, WeaponKind w)
@@ -620,6 +651,7 @@ internal static class Program
     private static ITurnContext World(Action<TurnConfig> configure = null)
     {
         var config = new TurnConfig();
+        config.Arsenal.FixedDamageMultiplier = 1f;
         config.Horde.BaseCount = 0f;
         config.Horde.CountPerWave = 0f;
         config.Horde.EliteFromWave = 0;

@@ -81,7 +81,7 @@ namespace Turn.Systems
             else if (rank >= 2)
             {
                 rank = 2;
-                hp *= MathF.Max(1f, _horde.BossHp);
+                hp *= MathF.Max(1f, _horde.BossHp) * MathF.Max(0f, _horde.BossHpMultiplier);
                 damage *= MathF.Max(1f, _horde.BossDamage);
                 radius *= MathF.Max(1f, _horde.BossScale);
                 xp *= Math.Max(1, _horde.BossXp);
@@ -207,6 +207,7 @@ namespace Turn.Systems
                 float dist = to.Magnitude;
                 Vec2 toward = dist > 0.05f ? to / dist : Vec2.Zero;
                 float speed = MathF.Max(0f, k.Speed) * m.SlowFactor * speedCurse;
+                if (m.Rank == 0) speed *= MathF.Max(0f, _horde.NormalChaseSpeedMultiplier);
                 Vec2 velocity = toward * speed;
 
                 if (m.StunLeft > 0f) velocity = Vec2.Zero;

@@ -23,6 +23,7 @@ namespace Turn.Systems
         private readonly int[] _curses = new int[ChestCurses.Count];
         private readonly List<UpgradeOption> _options = new List<UpgradeOption>();
         private readonly List<BuildId> _candidates = new List<BuildId>();
+        private readonly Queue<int> _chestRanks = new Queue<int>();
 
         public int Level { get; private set; }
         public int Xp { get; private set; }
@@ -50,6 +51,7 @@ namespace Turn.Systems
             _builds.Builds = _defs;
             _xp = xp ?? new ExperienceConfig();
             Level = 1;
+            ctx.Events.Subscribe<ChestOpenedEvent>(evt => _chestRanks.Enqueue(evt.Rank));
         }
 
         public int GetLevel(BuildId id)
@@ -113,6 +115,7 @@ namespace Turn.Systems
             for (int i = 0; i < BuildIds.Count; i++)
             {
                 var id = (BuildId)i;
+                if (id == BuildId.PalmAngle || id == BuildId.PalmPierce) continue;
                 if (_levels[i] >= MaxLevel(id)) continue;
                 if (IsCarried(id)) _candidates.Add(id);
             }
@@ -170,6 +173,13 @@ namespace Turn.Systems
             OptionsFromChest = true;
             WeaponKind weapon = _ctx.Loadout.Equipped;
             CollectCandidates();
+            bool bossChest = _chestRanks.Count > 0 && _chestRanks.Peek() >= 2;
+            if (bossChest)
+            {
+                int take = Math.Min(3, _candidates.Count);
+                for (int i = 0; i < take; i++) _options.Add(Describe(TakeRandomCandidate(), Math.Max(1, _builds.ChestLevels), "Boss宝箱·定向"));
+                return; // 品质表和全满补偿尚待用户/A提供，不臆造稀有度。
+            }
             int total = Math.Max(1, _builds.OptionCount);
             int normal = Math.Min(Math.Max(0, total - 1), _candidates.Count);
             for (int i = 0; i < normal; i++) _options.Add(Describe(TakeRandomCandidate(), Math.Max(1, _builds.ChestLevels), "宝箱"));
@@ -195,7 +205,11 @@ namespace Turn.Systems
                 _levels[i] = Math.Min(MaxLevel(o.Build), _levels[i] + Math.Max(1, o.ToLevel - o.FromLevel));
             }
 
-            if (OptionsFromChest) PendingChests--;
+            if (OptionsFromChest)
+            {
+                PendingChests--;
+                if (_chestRanks.Count > 0) _chestRanks.Dequeue();
+            }
             else PendingLevelUps--;
             _options.Clear();
             _ctx.Events.Publish(new UpgradeAppliedEvent { Build = o.Build, Level = GetLevel(o.Build), Curse = o.Curse });
@@ -205,7 +219,11 @@ namespace Turn.Systems
         public void SkipPending()
         {
             if (PendingLevelUps > 0) PendingLevelUps--;
-            else if (PendingChests > 0) PendingChests--;
+            else if (PendingChests > 0)
+            {
+                PendingChests--;
+                if (_chestRanks.Count > 0) _chestRanks.Dequeue();
+            }
             _options.Clear();
         }
 
