@@ -74,6 +74,13 @@ namespace Turn.View
             {
                 c.Upgrades = upgrade.Upgrades.ToConfig();
                 c.Experience = upgrade.Experience.ToConfig();
+
+                // 程序A 的临时开关：B10（地形增伤）暂不进池 —— 岩浆喷发即消失，普通帧 IsHazard 基本为 false，
+                // 等策划定下危险地形规则后删掉这三行即可（B 的默认层数是 2，测试与 Inspector 都按 2 走）。
+                if (c.Upgrades.BuildMaxLevels != null && c.Upgrades.BuildMaxLevels.Length > 9)
+                {
+                    c.Upgrades.BuildMaxLevels[9] = 0;
+                }
             }
             else Debug.LogError("[Turn] GameManager 没有引用 UpgradeManager。");
 

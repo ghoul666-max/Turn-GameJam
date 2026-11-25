@@ -13,7 +13,7 @@ namespace Turn.Systems
     /// 注意：怪物在浅水区没有任何回血逻辑（这是规则，不是遗漏）。
     /// 位置 / 存活 / 计时 / 灼烧字段只有这里能写；生命由 CombatSystem 写。
     /// </summary>
-    public sealed class MonsterSystem : IMonsterSystem
+    public sealed partial class MonsterSystem : IMonsterSystem
     {
         /// <summary>互相挤开的力度（每步最多推开的距离）。</summary>
         public const float SeparationStrength = 0.5f;
@@ -89,23 +89,6 @@ namespace Turn.Systems
             if (monster == null || !monster.Alive || duration <= 0f) return;
             monster.SlowFactor = MathF.Min(monster.SlowFactor, MathF.Max(0f, MathF.Min(1f, factor)));
             monster.SlowLeft = MathF.Max(monster.SlowLeft, duration);
-        }
-
-        /// <summary>
-        /// 程序A 的 B15 翻滚冲击调用：沿 direction 推开 distance。分小步经过遮挡物修正（避免穿过薄墙），最后 Clamp 进边界。
-        /// （程序A 代写，接口见 IMonsterSystem.Knockback；程序B 可自行调整手感，如加短暂硬直。）
-        /// </summary>
-        public void Knockback(MonsterEntity monster, Vec2 direction, float distance)
-        {
-            if (monster == null || !monster.Alive || distance <= 0f || direction.SqrMagnitude < 0.0001f) return;
-            Vec2 dir = direction.Normalized;
-            int steps = Math.Max(1, (int)MathF.Ceiling(distance / 0.25f));
-            float step = distance / steps;
-            Vec2 p = monster.Position;
-            for (int i = 0; i < steps; i++)
-                p = _ctx.Obstacles.ResolveMove(p, p + dir * step, _config.Radius, ObstacleMask.Units);
-            monster.Position = _ctx.Bounds.Clamp(p, _config.Radius);
-            monster.Terrain = _ctx.Terrain.Sample(monster.Position);
         }
 
         // ---------------- 每步更新 ----------------

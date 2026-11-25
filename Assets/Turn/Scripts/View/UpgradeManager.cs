@@ -10,8 +10,7 @@ namespace Turn.View
         [Tooltip("每次升级提供的候选数（互不相同）")]
         [Min(1)] public int optionCount = 3;
         [Header("B01-B19 最大层数")]
-        // B10 地形增伤暂设 0（不进池），等策划定危险地形规则后再开（原值 2）。
-        public int[] buildMaxLevels = { 5, 4, 2, 3, 3, 2, 3, 2, 3, 0, 2, 3, 3, 2, 2, 1, 2, 1, 2 };
+        public int[] buildMaxLevels = { 5, 4, 2, 3, 3, 2, 3, 2, 3, 2, 2, 3, 3, 2, 2, 1, 2, 1, 2 };
         [Header("普通 / 稀有 / 史诗权重")]
         [Min(0)] public int commonWeight = 70, rareWeight = 25, epicWeight = 5;
         [Header("通用武器词条数值")]
