@@ -172,7 +172,8 @@ namespace Turn.Systems
             if (s.IsRolling)
             {
                 s.MoveDir = s.RollDirection;
-                to = from + s.RollDirection * (s.RollSpeed * dt);
+                float rollDt = MathF.Min(MathF.Max(0f, dt), MathF.Max(0f, s.RollTimer));
+                to = from + s.RollDirection * (s.RollSpeed * rollDt);
             }
             else
             {

@@ -52,7 +52,7 @@ namespace Turn.Weapons
                 Kit.AddPuddle(m.Position);
             }
             // 回流：常态击杀有概率补 1 颗子弹
-            if (!m.Alive && Kit.Chance(Kit.Value(BuildId.WaterKillRefund))) Kit.PendingRefund++;
+            if (!m.Alive && Kit.Chance(Kit.Value(BuildId.WaterKillRefund))) Kit.AddRefund(WeaponKind.WaterGun, 1);
             return Kit.Has(BuildId.WaterPierce); // 贯穿水弹：继续飞，但不再留水渍
         }
 

@@ -408,6 +408,8 @@ namespace Turn.View
                 r.subspaceTimeScale = F("r.subScale", "亚空间时间倍率", r.subspaceTimeScale, 0f, 1f);
                 r.duration = F("r.dur", "翻滚位移时长（游戏秒）", r.duration, 0.05f, 1.5f);
                 r.distance = F("r.dist", "翻滚距离", r.distance, 0f, 10f);
+                r.pokerDurationMultiplier = F("r.pkDur", "扑克牌位移耗时倍率", r.pokerDurationMultiplier, 0.1f, 2f);
+                r.crossbowDurationMultiplier = F("r.bwDur", "弩位移耗时倍率", r.crossbowDurationMultiplier, 0.1f, 2f);
             }
             DrawCombat(d);
             if (Section("shark", "鲨鱼（海洋地图，位面机制开关打开时才有）"))
@@ -476,6 +478,8 @@ namespace Turn.View
                 s.RecallDamage = F("sp2.recall", "回收伤害 / 根", s.RecallDamage, 0f, 300f);
                 s.RecallWidth = F("sp2.width", "回收路径半宽", s.RecallWidth, 0.05f, 3f);
                 s.StackBonus = F("sp2.stack", "每多一层矛的回收加成", s.StackBonus, 0f, 2f);
+                s.RecallKillSpearCount = I("sp2.seedCount", "回收击杀衍生矛数量", s.RecallKillSpearCount, 0, 20);
+                s.RecallKillTargetRange = F("sp2.seedRange", "衍生矛索敌范围", s.RecallKillTargetRange, 0f, 40f);
             }
             if (Section("blade", "陌刀"))
             {
@@ -511,11 +515,15 @@ namespace Turn.View
                 c.Speed = F("bw.speed", "弩箭速度", c.Speed, 0.5f, 60f);
                 c.Damage = F("bw.dmg", "弩箭伤害", c.Damage, 0f, 500f);
                 c.Range = F("bw.range", "索敌 / 射程", c.Range, 1f, 40f);
-                c.Pierce = I("bw.pierce", "可命中敌人数（穿透）", c.Pierce, 1, 20);
+                GUILayout.Label("弩箭贯穿敌人，同一颗箭对同一目标仅伤害一次；飞行距离由剑气射程倍率决定");
                 c.PierceFalloff = F("bw.falloff", "每次穿透伤害衰减", c.PierceFalloff, 0f, 1f);
                 c.Knockback = F("bw.knock", "击退距离", c.Knockback, 0f, 15f);
                 c.WallStun = F("bw.stun", "撞墙眩晕（秒）", c.WallStun, 0f, 10f);
-                c.IntentBonus = F("bw.intent", "每层杀气增伤", c.IntentBonus, 0f, 1f);
+                c.Radius = F("bw.radius", "基础弩箭碰撞半径", c.Radius, .05f, 5f);
+                c.KillsPerSizeStep = I("bw.kills", "每次尺寸成长所需击杀", c.KillsPerSizeStep, 1, 100);
+                c.SizePerKillStep = F("bw.growth", "每段增加基础尺寸比例", c.SizePerKillStep, 0f, 1f);
+                c.MaxSizeMultiplier = F("bw.sizeCap", "最终尺寸倍率上限", c.MaxSizeMultiplier, 1f, 10f);
+                c.SwordWaveRangeMultiplier = F("bw.waveRange", "射程/剑气射程倍率", c.SwordWaveRangeMultiplier, .1f, 10f);
                 c.SplashRadius = F("bw.splash", "杀气溢出溅射半径", c.SplashRadius, 0.1f, 10f);
             }
             if (Section("drones", "副武器 · 浮游炮"))
@@ -538,8 +546,12 @@ namespace Turn.View
             {
                 GravityWellConfig g = a.Gravity;
                 g.Radius = F("gw.radius", "引力场半径", g.Radius, 0.5f, 20f);
-                g.PullDistance = F("gw.pull", "最多拉近距离", g.PullDistance, 0f, 20f);
+                g.PullDistance = F("gw.pull", "每秒牵引距离", g.PullDistance, 0f, 20f);
                 g.MinGap = F("gw.gap", "拉到离中心多近停", g.MinGap, 0f, 5f);
+                g.DamagePerSecond = F("gw.dps", "黑洞每秒伤害", g.DamagePerSecond, 0f, 200f);
+                g.MergeSpeed = F("gw.mergeSpeed", "相向移动速度", g.MergeSpeed, .1f, 40f);
+                g.PickupRadius = F("gw.pickupRadius", "经验球吸取范围", g.PickupRadius, 0f, 30f);
+                g.PickupSpeed = F("gw.pickupSpeed", "经验球吸取速度", g.PickupSpeed, 0f, 40f);
                 g.SecondaryRadius = F("gw.secR", "次级引力点半径", g.SecondaryRadius, 0.5f, 10f);
                 g.SecondaryPull = F("gw.secPull", "次级引力点拉近距离", g.SecondaryPull, 0f, 10f);
                 g.SecondaryOffset = F("gw.secOff", "次级引力点离中心距离", g.SecondaryOffset, 0f, 10f);
@@ -570,6 +582,14 @@ namespace Turn.View
                 p.SpadeDamagePerPoint = F("pk.sdmg", "♠ 每点伤害", p.SpadeDamagePerPoint, 0f, 100f);
                 p.SpadeRadius = F("pk.srad", "♠ 基础半径", p.SpadeRadius, 0.1f, 10f);
                 p.SpadeRadiusPerPoint = F("pk.sradp", "♠ 每点半径", p.SpadeRadiusPerPoint, 0f, 2f);
+                p.SpadeChildCount = I("pk.children", "♠ 二段小炸弹数量", p.SpadeChildCount, 0, 20);
+                p.SpadeChildDamageRatio = F("pk.childDamage", "♠ 单颗小炸弹伤害倍率", p.SpadeChildDamageRatio, 0f, 3f);
+                p.SpadeChildRadiusRatio = F("pk.childRadius", "♠ 小炸弹半径倍率", p.SpadeChildRadiusRatio, .05f, 2f);
+                p.SpadeChildOffsetRatio = F("pk.childOffset", "♠ 小炸弹散布距离倍率", p.SpadeChildOffsetRatio, 0f, 2f);
+                p.SpadeChildDelay = F("pk.childDelay", "♠ 二段爆炸延迟秒", p.SpadeChildDelay, 0f, 2f);
+                p.ShieldMultiplier = F("pk.shieldMultiplier", "♦ 护盾量倍率", p.ShieldMultiplier, 0f, 3f);
+                p.JokerChanceMultiplier = F("pk.jokerChance", "大小王概率倍率", p.JokerChanceMultiplier, 0f, 2f);
+                p.ClubAspectRatio = F("pk.eyeAspect", "♣ 眼状裂隙短长轴比", p.ClubAspectRatio, .05f, 1f);
                 p.ShieldMax = I("pk.shield", "♦ 护盾最多几层", p.ShieldMax, 1, 200);
                 p.ClubRadius = F("pk.crad", "♣ 裂隙半径", p.ClubRadius, 0.2f, 10f);
                 p.ClubDps = F("pk.cdps", "♣ 裂隙每秒伤害", p.ClubDps, 0f, 200f);
@@ -649,7 +669,7 @@ namespace Turn.View
                 w.BurstDistance = F("wd.bdist", "四向齐发距离", w.BurstDistance, 0f, 10f);
                 w.BurstRadius = F("wd.bradius", "四向齐发半径", w.BurstRadius, 0.1f, 10f);
             }
-            if (Section("magnet", "副武器 · 强磁铁"))
+            if (Section("magnet", "黑洞 · 合并爆炸（旧磁铁配置）"))
             {
                 MagnetConfig m = a.Magnet;
                 m.PathDamage = F("mg.path", "路径伤害", m.PathDamage, 0f, 500f);

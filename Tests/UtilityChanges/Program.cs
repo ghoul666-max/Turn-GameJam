@@ -45,7 +45,7 @@ internal static class Program
         poker.Burst();
         Check(played.Count == 1 && played[0].Rank == 7 && played[0].Suit == CardSuit.Diamond,
             "burst plays exact shown card, not random replacement");
-        Check(poker.Hand.Count == 0 && poker.Shield == 7, "played hand empties and suit effect applies");
+        Check(poker.Hand.Count == 0 && poker.Shield == 4, "played hand empties and seven shield points halve to four after rounding");
         poker.Burst();
         Check(played.Count == 1, "empty burst does not secretly draw");
         poker.Fire(ctx.Player.State.Position, null);

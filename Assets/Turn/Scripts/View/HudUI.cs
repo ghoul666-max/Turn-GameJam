@@ -206,7 +206,8 @@ namespace Turn.View
                 if (sub.Kind == SubWeaponKind.Drones) sb.Append("   浮游炮 ×").Append(sub.UnitCount);
                 else if (sub.Kind == SubWeaponKind.SpaceAnchor) sb.Append("   锚点 ").Append(sub.Anchors.Count);
                 else if (sub.Kind == SubWeaponKind.Hourglass) sb.Append("   敌人移速 ").Append(Mathf.RoundToInt(sub.MonsterSpeedMultiplier * 100f)).Append('%');
-                else if (sub.Kind == SubWeaponKind.Magnet) sb.Append(sub.Anchors.Count > 0 ? "   磁极：正极已放下（下次翻滚对撞）" : "   磁极：下次翻滚放正极");
+                else if (sub.Kind == SubWeaponKind.Magnet || sub.Kind == SubWeaponKind.GravityWell)
+                    sb.Append("   黑洞 ").Append(sub.Anchors.Count).Append(sub.Anchors.Count == 2 ? "（合并中）" : "");
                 else if (sub.Kind == SubWeaponKind.Cursor) sb.Append(sub.Trail.Count > 0 ? "   光标绘制中（下次翻滚打击）" : "   光标：下次翻滚开始绘制");
                 ammoText.text = sb.ToString();
                 ammoText.color = ViewMath.WeaponColor(w.Current);

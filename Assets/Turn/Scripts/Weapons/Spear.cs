@@ -10,7 +10,7 @@ namespace Turn.Weapons
     ///       若这一矛直接击杀目标，停止飞行；当前携带的矛与目标原有的矛一起留在死亡位置。
     ///       飞完射程没插中任何敌人的长矛直接消失。
     /// 爆发：地面与活怪身上的长矛同时向玩家方向高速回收，每根矛沿回收路径穿刺沿途所有敌人（回收伤害由配置决定），
-    ///       结算后矛印记清空（参考男刀大招的回收逻辑）。
+    ///       消耗回收开始前的印记；回收击杀播种普通矛，新印记留给下次回收。
     /// </summary>
     public sealed class SpearWeapon : WeaponBehavior
     {
@@ -23,13 +23,17 @@ namespace Turn.Weapons
         private readonly List<Host> _hosts = new List<Host>();
         private readonly List<Host> _ground = new List<Host>();
         private readonly List<MonsterEntity> _targets = new List<MonsterEntity>();
+        private readonly List<Vec2> _recallKills = new List<Vec2>();
 
         public SpearWeapon(WeaponKit kit) : base(kit)
         {
-            Kit.Ctx.Events.Subscribe<SubspaceExitedEvent>(_ => _ground.Clear());
+            Kit.Ctx.Events.Subscribe<PlaneSwitchedEvent>(_ => _ground.Clear());
+            Kit.Ctx.Events.Subscribe<RunStartedEvent>(_ => _ground.Clear());
+            Kit.Ctx.Events.Subscribe<LevelClearedEvent>(_ => _ground.Clear());
+            Kit.Ctx.Events.Subscribe<PlayerDiedEvent>(_ => _ground.Clear());
         }
 
-        /// <summary>当前留在地面的矛总数；爆发回收或退出亚空间后清空。</summary>
+        /// <summary>当前留在地面的矛总数；回收消费，切位面或本局结束时清空。</summary>
         public int GroundSpearCount
         {
             get
@@ -103,10 +107,13 @@ namespace Turn.Weapons
             _hosts.AddRange(_ground);
             _ground.Clear();
             IReadOnlyList<MonsterEntity> all = Kit.Ctx.Monsters.Active;
+            _recallKills.Clear();
             for (int i = 0; i < all.Count; i++)
             {
                 MonsterEntity m = all[i];
                 if (m.Alive && m.SpearMarks > 0) _hosts.Add(new Host { Position = m.Position, Spears = m.SpearMarks });
+                // 只消耗本次回收开始前的印记；之后新飞矛叠出的印记留给下次回收。
+                m.SpearMarks = 0;
             }
             if (_hosts.Count == 0) return;
 
@@ -134,7 +141,10 @@ namespace Turn.Weapons
                         bool crit;
                         float mult = Kit.Crit(BuildId.SpearCrit, out crit);
                         // 串刺：同一根矛路径上每多命中 1 名敌人，伤害递增
-                        dealt += Kit.Hit(m, perSpear * (1f + ramp * hits) * mult, DamageSource.Burst, crit);
+                        Vec2 deathPosition = m.Position;
+                        float hitDamage = Kit.Hit(m, perSpear * (1f + ramp * hits) * mult, DamageSource.Burst, crit);
+                        dealt += hitDamage;
+                        if (hitDamage > 0f && !m.Alive) _recallKills.Add(deathPosition);
                         if (stun > 0f && m.Alive) Kit.Ctx.Monsters.ApplyStun(m, stun);
                         hits++;
                     }
@@ -144,9 +154,28 @@ namespace Turn.Weapons
             Kit.Hits.Clear();
             _hosts.Clear();
 
-            // 结算后矛印记清空
-            for (int i = 0; i < all.Count; i++) all[i].SpearMarks = 0;
+            // 回收全部结算后再播种，避免后续回收路径清掉新印记或把新矛也纳入本次回收。
+            for (int i = 0; i < _recallKills.Count; i++) SpawnRecallKillSpears(_recallKills[i]);
+            _recallKills.Clear();
             Kit.Lifesteal(dealt, BuildId.SpearLifesteal);
+        }
+
+        private void SpawnRecallKillSpears(Vec2 origin)
+        {
+            int count = Math.Max(0, Cfg.RecallKillSpearCount);
+            if (count == 0) return;
+            Kit.Nearest(origin, MathF.Max(0f, Cfg.RecallKillTargetRange), count, _targets);
+            for (int i = 0; i < count; i++)
+            {
+                Vec2 dir = i < _targets.Count
+                    ? WeaponKit.Direction(origin, _targets[i].Position)
+                    : WeaponKit.Rotate(Vec2.Right, (float)Kit.Ctx.Random.NextDouble() * 360f);
+                // 与普通投矛共用弹体和 OnHit；普通击杀不会进入本回收击杀分支。
+                ProjectileEntity p = Kit.Ctx.Projectiles.SpawnPlayer(WeaponKind.Spear, origin,
+                    dir * MathF.Max(0.5f, Cfg.Speed), Cfg.Radius, Cfg.Damage, Cfg.Range);
+                if (p != null) p.CarriedMarks = 1;
+            }
+            _targets.Clear();
         }
 
         public override void CollectFields(List<WeaponField> results)

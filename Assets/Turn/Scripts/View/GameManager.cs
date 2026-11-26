@@ -328,10 +328,10 @@ namespace Turn.View
                 }
                 default:
                 {
-                    var cards = new FlowUI.SelectCard[SubWeaponKinds.Count];
-                    for (int i = 0; i < SubWeaponKinds.Count; i++)
+                    var cards = new FlowUI.SelectCard[SubWeaponKinds.Count - 1];
+                    for (int i = 0; i < cards.Length; i++)
                     {
-                        var k = (SubWeaponKind)i;
+                        var k = (SubWeaponKind)(i >= (int)SubWeaponKind.Magnet ? i + 1 : i);
                         cards[i] = new FlowUI.SelectCard
                         {
                             Title = KeyLabel(i) + "  " + (k == SubWeaponKind.None ? "不带副武器" : SubWeaponKinds.DisplayName(k)),
@@ -340,7 +340,9 @@ namespace Turn.View
                             Enabled = _ctx.SubWeapons.Supports(k),
                         };
                     }
-                    _flow.ShowSelectPage(prefix + "第 3 / 3 步 · 选择副武器", SelectHint, cards, (int)_subWeapon);
+                    int selectedSub = _subWeapon == SubWeaponKind.Magnet ? (int)SubWeaponKind.GravityWell : (int)_subWeapon;
+                    if (selectedSub > (int)SubWeaponKind.Magnet) selectedSub--;
+                    _flow.ShowSelectPage(prefix + "第 3 / 3 步 · 选择副武器", SelectHint, cards, selectedSub);
                     break;
                 }
             }
@@ -365,7 +367,7 @@ namespace Turn.View
                     _secondWeapon = (WeaponKind)index;
                     break;
                 default:
-                    _subWeapon = (SubWeaponKind)index;
+                    _subWeapon = (SubWeaponKind)(index >= (int)SubWeaponKind.Magnet ? index + 1 : index);
                     break;
             }
             // 选完：从头开一局新的（标题页来的会接着翻开封面；结算界面来的直接开始）
@@ -440,10 +442,11 @@ namespace Turn.View
                            "\n\n<b>爆发</b>  影子沿所有剑痕复刻刺击（" + Num(a.Sword.ShadowDamage) + "，每条剑痕 +" + Mathf.RoundToInt(a.Sword.TrailBonus * 100f) +
                            "%）；影刺每击杀 1 名敌人永久 +1 突进次数（切换主武器清零）";
                 default:
-                    return "弹药 " + a.Crossbow.Ammo + " · 伤害 " + Num(a.Crossbow.Damage) + " · 穿透 " + a.Crossbow.Pierce + roll +
-                           "\n\n<b>常态</b>  重型弩箭强制击退；敌人撞墙眩晕，你获得 1 层杀气（每层弩伤害 +" + Mathf.RoundToInt(a.Crossbow.IntentBonus * 100f) +
-                           "%，无限叠加，切换主武器时清零）" +
-                           "\n\n<b>翻滚</b>  没有爆发，冷却特别短：高频翻滚补弹、驱动副武器 / 切换主武器";
+                    return "弹药 " + a.Crossbow.Ammo + " · 伤害 " + Num(a.Crossbow.Damage) + " · 穿透弩箭" + roll +
+                           "\n\n<b>常态</b>  巨型高速弩箭贯穿并击退沿途敌人；同一颗箭对同一敌人只伤害一次。" +
+                           "\n\n<b>杀气</b>  玩家每击杀 " + a.Crossbow.KillsPerSizeStep + " 名敌人，尺寸增加基础尺寸的 " + Num(a.Crossbow.SizePerKillStep * 100f) +
+                           "%，上限 " + Num(a.Crossbow.MaxSizeMultiplier * 100f) + "%，本局保留，不增加伤害。" +
+                           "\n\n<b>翻滚</b>  无原生伤害爆发，快速翻滚补弹。";
             }
         }
 
@@ -459,18 +462,15 @@ namespace Turn.View
                            "\n\n<b>翻滚</b>  盲盒：" + Mathf.RoundToInt(a.Drones.SplitChance * 100f) + "% 分裂（+" + a.Drones.SplitAdd + " 台），否则合体（−" +
                            a.Drones.MergeRemove + " 台，最少 " + Mathf.Max(1, a.Drones.MinCount) + " 台）";
                 case SubWeaponKind.GravityWell:
-                    return "没有基础伤害。" +
-                           "\n\n<b>翻滚</b>  在翻滚前的站位生成半径 " + Num(a.Gravity.Radius) + " 的瞬时引力场，把周围怪物拉向中心——正好吃到主武器的爆发";
+                case SubWeaponKind.Magnet:
+                    return "持久黑洞：持续牵引，造成每秒 " + Num(a.Gravity.DamagePerSecond) + " 伤害，并吸取附近经验球。" +
+                           "\n\n<b>翻滚</b>  起点留下黑洞；新旧黑洞相向移动，在中点爆炸（" + Num(a.Magnet.BlastDamage) + "）并留下一个黑洞。合并不叠加基础伤害或体积。";
                 case SubWeaponKind.Hourglass:
                     return "全场敌人移速随时间渐进衰减，最低降到 " + Mathf.RoundToInt(a.Hourglass.FloorSpeed * 100f) + "%。" +
                            "\n\n<b>翻滚</b>  敌人移速立即重置回基础值，回到常态后重新开始减速——用翻滚时机把控节奏";
                 case SubWeaponKind.Wasd:
                     return "按住移动键时，对应方向生成按键判定区（" + Num(a.Wasd.Damage) + "，每只敌人 " + Num(a.Wasd.HitCooldown) + " 秒最多 1 次），最多同时 2 个方向。" +
                            "\n\n<b>翻滚</b>  W / A / S / D 四向齐发（" + Num(a.Wasd.BurstDamage) + "）";
-                case SubWeaponKind.Magnet:
-                    return "没有常态效果。" +
-                           "\n\n<b>翻滚</b>  奇数次留下正极，偶数次留下负极，两极对撞：路径穿刺（" + Num(a.Magnet.PathDamage) + "）+ 中点爆炸（" +
-                           Num(a.Magnet.BlastDamage) + "，眩晕）。在主武器爆发之前结算";
                 case SubWeaponKind.Cursor:
                     return "没有常态效果。" +
                            "\n\n<b>翻滚</b>  第一次翻滚开始绘制，你走过的路线就是选区边界；之后每次翻滚：选区内敌人受到降维打击（" +

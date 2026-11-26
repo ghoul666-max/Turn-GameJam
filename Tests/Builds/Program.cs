@@ -20,7 +20,7 @@ internal static class Program
         ChestHasCurseOption();
         PalmStrikesFacingAndSkyPalm();
         CrossbowWallSlamAndIntent();
-        CrossbowIntentClearsOnSwitch();
+        CrossbowGrowthPersistsOnSwitch();
         GravityWellPullsBeforeBurst();
         SpaceAnchorRecallAndSlash();
         DronesSplitAndMerge();
@@ -257,11 +257,11 @@ internal static class Program
         ctx.Weapons.Tick(1f);
         RunProjectiles(ctx, 1f);
         Check(Near(m.Hp, 970f), "bolt hits for 30");
-        Check(slams == 1 && ctx.Weapons.KillingIntent == 1 && m.StunLeft > 0f, "knocked into the map edge: stun + 1 killing intent");
+        Check(slams == 1 && ctx.Weapons.KillingIntent == 0 && m.StunLeft > 0f, "wall slam still stuns but grants no kill-size growth");
         ctx.Weapons.Tick(1f);
         RunProjectiles(ctx, 1f);
-        Check(Near(m.Hp, 970f - 30f * 1.05f), "killing intent: +5% bow damage per stack");
-        Check(ctx.Weapons.KillingIntent == 2, "intent stacks without limit");
+        Check(Near(m.Hp, 940f), "wall slam does not add old killing-intent damage multiplier");
+        Check(slams == 2 && ctx.Weapons.KillingIntent == 0, "repeated wall slams remain effective without counting as kills");
 
         var free = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Crossbow); });
         MonsterEntity open = Spawn(free, new Vec2(3f, 0f));
@@ -271,7 +271,7 @@ internal static class Program
         Check(free.Weapons.Ammo == 0, "base crossbow ammo is 1");
     }
 
-    private static void CrossbowIntentClearsOnSwitch()
+    private static void CrossbowGrowthPersistsOnSwitch()
     {
         var ctx = World(c =>
         {
@@ -282,11 +282,16 @@ internal static class Program
         Spawn(ctx, new Vec2(7.2f, 0f));
         ctx.Weapons.Tick(1f);
         RunProjectiles(ctx, 1f);
-        Check(ctx.Weapons.KillingIntent == 1, "intent gained");
+        for (int i = 0; i < ctx.Config.Arsenal.Crossbow.KillsPerSizeStep; i++)
+        {
+            var victim = Spawn(ctx, new Vec2(-5f, i));
+            ctx.Combat.DamageMonster(victim, victim.Hp + 1f, DamageSource.Weapon);
+        }
+        Check(ctx.Weapons.KillingIntent == 1, "configured player kills grant one size-growth step");
         int bursts = 0;
         ctx.Events.Subscribe<FountainBurstEvent>(e => bursts++);
         Check(ctx.Roll.TryRoll(), "roll");
-        Check(ctx.Loadout.Equipped == WeaponKind.WaterGun && ctx.Weapons.KillingIntent == 0, "switching away from the crossbow clears killing intent");
+        Check(ctx.Loadout.Equipped == WeaponKind.WaterGun && ctx.Weapons.KillingIntent == 1, "switching away preserves this-run crossbow size growth");
         Check(bursts == 0, "crossbow has no burst of its own");
     }
 
@@ -300,9 +305,13 @@ internal static class Program
         Vec2 origin = ctx.Player.State.Position;
         float hpBefore = m.Hp;
         ctx.Roll.TryRoll();
-        Check(Vec2.Distance(m.Position, origin) < 1.1f, "pulled toward the roll origin (4 -> 1)");
-        Check(Near(Vec2.Distance(charging.Position, origin), 4f), "charging enemies are immune by default");
-        Check(Near(hpBefore - m.Hp, 25f), "pulled into the blade slash row: 25 (no base gravity damage)");
+        Check(Near(Vec2.Distance(m.Position, origin), 4f), "black hole spawn does not perform removed instantaneous pull");
+        Check(Near(hpBefore - m.Hp, 0f), "enemy outside blade row is not retroactively pulled into burst");
+        ctx.SubWeapons.Tick(1f);
+        Check(Vec2.Distance(m.Position, origin) < 1.1f, "persistent hole pulls continuously over one second (4 -> 1)");
+        Check(Near(Vec2.Distance(charging.Position, origin), 4f), "charging enemies remain immune to continuous pull");
+        Check(Near(hpBefore - m.Hp, ctx.Config.Arsenal.Gravity.DamagePerSecond), "hole applies configured damage per second");
+        Check(ctx.SubWeapons.Anchors.Count == 1, "persistent hole remains after affecting enemies");
     }
 
     private static void SpaceAnchorRecallAndSlash()
@@ -423,8 +432,8 @@ internal static class Program
         Check(ctx.Weapons.Supports(WeaponKind.Poker) && ctx.Weapons.Capacity == 1, "poker: one rolling displayed card");
         int draws = 0;
         ctx.Events.Subscribe<CardDrawnEvent>(_ => draws++);
-        ctx.Weapons.Tick(1f);
-        ctx.Weapons.Tick(1f);
+        ctx.Weapons.Tick(ctx.Config.Arsenal.Poker.DrawInterval);
+        ctx.Weapons.Tick(ctx.Config.Arsenal.Poker.DrawInterval);
         Check(draws == 2 && ctx.Weapons.Hand.Count == 1 && ctx.Weapons.Ammo == 1, "poker keeps replacing one card without any enemy");
         Check(ctx.Weapons.DeckSize == 54, "full deck: 52 + 2 jokers");
 
@@ -436,7 +445,7 @@ internal static class Program
         var diamond = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
         diamond.Weapons.DebugAddCard(Card(7, CardSuit.Diamond));
         Check(diamond.Roll.TryRoll(), "roll plays displayed diamond");
-        Check(diamond.Weapons.ShieldCharges == 7 && diamond.Weapons.Hand.Count == 0, "diamond 7 grants seven shield charges");
+        Check(diamond.Weapons.ShieldCharges == (int)MathF.Round(7f * diamond.Config.Arsenal.Poker.ShieldMultiplier) && diamond.Weapons.Hand.Count == 0, "diamond 7 grants configured halved shield charges");
         RunSession(diamond, 1.05f);
         int shield = diamond.Weapons.ShieldCharges;
         Check(!diamond.Combat.DamagePlayer(5f, DamageSource.Monster) && diamond.Weapons.ShieldCharges == shield - 1, "shield blocks a monster hit");
@@ -454,7 +463,7 @@ internal static class Program
         var heart = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
         heart.Weapons.DebugAddCard(Card(1, CardSuit.Heart));
         Check(heart.Roll.TryRoll(), "roll plays displayed heart");
-        Check(CountProjectiles(heart, WeaponKind.Poker) == 5, "heart A: 1 x 5 heart bullets");
+        Check(CountProjectiles(heart, WeaponKind.Poker) == heart.Config.Arsenal.Poker.HeartsPerPoint, "heart A emits configured doubled heart bullets");
 
         var club = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Poker); });
         MonsterEntity m = Spawn(club, new Vec2(4f, 2f));
@@ -645,7 +654,7 @@ internal static class Program
 
     private static void MagnetPolesCollide()
     {
-        var ctx = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Crossbow, SubWeaponKind.Magnet); });
+        var ctx = World(c => { Tough(c); c.Loadout = Single(WeaponKind.Crossbow, SubWeaponKind.Magnet); c.Arsenal.Gravity.DamagePerSecond = 0f; c.Arsenal.Gravity.PullDistance = 0f; });
         Vec2 a = ctx.Player.State.Position;
         ctx.Roll.TryRoll();
         Check(ctx.SubWeapons.Anchors.Count == 1, "odd roll: positive pole");
@@ -654,9 +663,15 @@ internal static class Program
         MonsterEntity mid = Spawn(ctx, new Vec2(-3f, 0f));
         MonsterEntity far = Spawn(ctx, new Vec2(-3f, 5f));
         Check(ctx.Roll.TryRoll(), "even roll");
-        Check(Near(mid.Hp, 1000f - 20f - 60f), "path 20 + center blast 60");
+        Check(ctx.SubWeapons.Anchors.Count == 2 && Near(mid.Hp, 1000f), "second roll creates two moving holes without immediate collision damage");
+        float travel = 3f / ctx.Config.Arsenal.Gravity.MergeSpeed;
+        ctx.SubWeapons.Tick(travel * .5f);
+        Check(ctx.SubWeapons.Anchors.Count == 2 && Near(mid.Hp, 1000f), "holes remain separate before reaching midpoint");
+        ctx.SubWeapons.Tick(travel * .5f + .001f);
+        Check(Near(mid.Hp, 1000f - ctx.Config.Arsenal.Magnet.PathDamage - ctx.Config.Arsenal.Magnet.BlastDamage), "collision applies configured path and midpoint explosion damage");
         Check(mid.StunLeft > 0f && Near(far.Hp, 1000f), "blast stuns; enemies off the line are safe");
-        Check(ctx.SubWeapons.Anchors.Count == 0, "both poles vanish after colliding");
+        Check(ctx.SubWeapons.Anchors.Count == 1 && Vec2.Distance(ctx.SubWeapons.Anchors[0], a + new Vec2(3f, 0f)) < .01f,
+            "collision leaves one permanent hole at the original pair midpoint");
     }
 
     private static void CursorSelectsAndPins()

@@ -23,7 +23,9 @@
             "subspaceDuration": 1.0,
             "subspaceTimeScale": 0.30000001192092896,
             "duration": 0.20000000298023224,
-            "distance": 0.800000011920929
+            "distance": 0.800000011920929,
+            "pokerDurationMultiplier": 0.65,
+            "crossbowDurationMultiplier": 0.65
         },
         "weapon": {
             "magazineSize": 6,
@@ -455,7 +457,9 @@
                 "RecallDamage": 15.0,
                 "RecallWidth": 0.5,
                 "StackBonus": 0.0,
-                "SpreadDegrees": 14.0
+                "SpreadDegrees": 14.0,
+                "RecallKillSpearCount": 2,
+                "RecallKillTargetRange": 9.0
             },
             "Blade": {
                 "Ammo": 25,
@@ -483,16 +487,20 @@
             "Crossbow": {
                 "Ammo": 1,
                 "FireInterval": 0.30000001192092896,
-                "Speed": 16.0,
+                "Speed": 24.0,
                 "Damage": 30.0,
-                "Radius": 0.2199999988079071,
-                "Range": 10.0,
+                "Radius": 0.6599999964237213,
+                "Range": 22.5,
                 "Pierce": 3,
                 "PierceFalloff": 0.25,
                 "Knockback": 2.5,
                 "WallStun": 1.0,
                 "IntentBonus": 0.05000000074505806,
-                "SplashRadius": 1.2000000476837158
+                "SplashRadius": 1.2000000476837158,
+                "KillsPerSizeStep": 5,
+                "SizePerKillStep": 0.01,
+                "MaxSizeMultiplier": 5,
+                "SwordWaveRangeMultiplier": 3
             },
             "Drones": {
                 "StartCount": 1,
@@ -516,7 +524,11 @@
                 "MinGap": 0.6000000238418579,
                 "SecondaryRadius": 2.5,
                 "SecondaryPull": 1.2000000476837158,
-                "SecondaryOffset": 3.0
+                "SecondaryOffset": 3.0,
+                "DamagePerSecond": 6,
+                "MergeSpeed": 8,
+                "PickupRadius": 5,
+                "PickupSpeed": 8
             },
             "Anchor": {
                 "SlashDamage": 30.0,
@@ -524,8 +536,8 @@
             },
             "Poker": {
                 "HandSize": 1,
-                "DrawInterval": 1.0,
-                "HeartsPerPoint": 5,
+                "DrawInterval": 1.5,
+                "HeartsPerPoint": 10,
                 "HeartDamage": 3.0,
                 "HeartSpeed": 10.0,
                 "HeartRadius": 0.15000000596046448,
@@ -536,19 +548,27 @@
                 "HeartHomingRange": 6.0,
                 "HeartBlastRadius": 0.8999999761581421,
                 "HeartBlastRatio": 0.6000000238418579,
-                "MaxHearts": 300,
+                "MaxHearts": 600,
                 "SpadeDamagePerPoint": 6.0,
                 "SpadeRadius": 1.2000000476837158,
                 "SpadeRadiusPerPoint": 0.11999999731779099,
                 "ShieldMax": 40,
-                "ClubRadius": 2.5,
-                "ClubDps": 6.0,
+                "ClubRadius": 1.875,
+                "ClubDps": 9.0,
                 "ClubPullSpeed": 2.5,
                 "ClubDuration": 1.0,
                 "ClubDurationPerPoint": 0.4000000059604645,
                 "SmallJokerBonus": 0.07999999821186066,
                 "BigJokerBonus": 0.15000000596046448,
-                "TargetRange": 12.0
+                "TargetRange": 12.0,
+                "JokerChanceMultiplier": 0.5,
+                "ShieldMultiplier": 0.5,
+                "SpadeChildCount": 4,
+                "SpadeChildDamageRatio": 0.375,
+                "SpadeChildRadiusRatio": 0.5,
+                "SpadeChildOffsetRatio": 0.5,
+                "SpadeChildDelay": 0.15,
+                "ClubAspectRatio": 0.35
             },
             "Shuriken": {
                 "Ammo": 12,
@@ -1062,7 +1082,7 @@
                 },
                 {
                     "MaxLevel": 3,
-                    "Value": 1.0,
+                    "Value": 0.15,
                     "Value2": 0.0
                 },
                 {
@@ -1718,7 +1738,9 @@
             "subspaceDuration": 1.0,
             "subspaceTimeScale": 0.30000001192092896,
             "duration": 0.20000000298023224,
-            "distance": 0.800000011920929
+            "distance": 0.800000011920929,
+            "pokerDurationMultiplier": 0.65,
+            "crossbowDurationMultiplier": 0.65
         },
         "weapon": {
             "magazineSize": 6,
@@ -2150,7 +2172,9 @@
                 "RecallDamage": 15.0,
                 "RecallWidth": 0.5,
                 "StackBonus": 0.0,
-                "SpreadDegrees": 14.0
+                "SpreadDegrees": 14.0,
+                "RecallKillSpearCount": 2,
+                "RecallKillTargetRange": 9.0
             },
             "Blade": {
                 "Ammo": 25,
@@ -2178,16 +2202,20 @@
             "Crossbow": {
                 "Ammo": 1,
                 "FireInterval": 0.30000001192092896,
-                "Speed": 16.0,
+                "Speed": 24.0,
                 "Damage": 30.0,
-                "Radius": 0.2199999988079071,
-                "Range": 10.0,
+                "Radius": 0.6599999964237213,
+                "Range": 22.5,
                 "Pierce": 3,
                 "PierceFalloff": 0.25,
                 "Knockback": 2.5,
                 "WallStun": 1.0,
                 "IntentBonus": 0.05000000074505806,
-                "SplashRadius": 1.2000000476837158
+                "SplashRadius": 1.2000000476837158,
+                "KillsPerSizeStep": 5,
+                "SizePerKillStep": 0.01,
+                "MaxSizeMultiplier": 5,
+                "SwordWaveRangeMultiplier": 3
             },
             "Drones": {
                 "StartCount": 1,
@@ -2211,7 +2239,11 @@
                 "MinGap": 0.6000000238418579,
                 "SecondaryRadius": 2.5,
                 "SecondaryPull": 1.2000000476837158,
-                "SecondaryOffset": 3.0
+                "SecondaryOffset": 3.0,
+                "DamagePerSecond": 6,
+                "MergeSpeed": 8,
+                "PickupRadius": 5,
+                "PickupSpeed": 8
             },
             "Anchor": {
                 "SlashDamage": 30.0,
@@ -2219,8 +2251,8 @@
             },
             "Poker": {
                 "HandSize": 1,
-                "DrawInterval": 1.0,
-                "HeartsPerPoint": 5,
+                "DrawInterval": 1.5,
+                "HeartsPerPoint": 10,
                 "HeartDamage": 3.0,
                 "HeartSpeed": 10.0,
                 "HeartRadius": 0.15000000596046448,
@@ -2231,19 +2263,27 @@
                 "HeartHomingRange": 6.0,
                 "HeartBlastRadius": 0.8999999761581421,
                 "HeartBlastRatio": 0.6000000238418579,
-                "MaxHearts": 300,
+                "MaxHearts": 600,
                 "SpadeDamagePerPoint": 6.0,
                 "SpadeRadius": 1.2000000476837158,
                 "SpadeRadiusPerPoint": 0.11999999731779099,
                 "ShieldMax": 40,
-                "ClubRadius": 2.5,
-                "ClubDps": 6.0,
+                "ClubRadius": 1.875,
+                "ClubDps": 9.0,
                 "ClubPullSpeed": 2.5,
                 "ClubDuration": 1.0,
                 "ClubDurationPerPoint": 0.4000000059604645,
                 "SmallJokerBonus": 0.07999999821186066,
                 "BigJokerBonus": 0.15000000596046448,
-                "TargetRange": 12.0
+                "TargetRange": 12.0,
+                "JokerChanceMultiplier": 0.5,
+                "ShieldMultiplier": 0.5,
+                "SpadeChildCount": 4,
+                "SpadeChildDamageRatio": 0.375,
+                "SpadeChildRadiusRatio": 0.5,
+                "SpadeChildOffsetRatio": 0.5,
+                "SpadeChildDelay": 0.15,
+                "ClubAspectRatio": 0.35
             },
             "Shuriken": {
                 "Ammo": 12,

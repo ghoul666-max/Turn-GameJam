@@ -113,7 +113,7 @@ namespace Turn.Weapons
                 _dashHits.Add(m.Id);
                 // 突进路径上每多命中 1 名敌人，伤害递增
                 Kit.Hit(m, Cfg.Damage * (1f + ramp * (_dashHits.Count - 1)), DamageSource.Weapon);
-                if (!m.Alive && Kit.Chance(refund)) Kit.PendingRefund += 1;
+                if (!m.Alive && Kit.Chance(refund)) Kit.AddRefund(WeaponKind.Sword, 1);
             }
             _query.Clear();
         }

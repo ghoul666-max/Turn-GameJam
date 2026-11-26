@@ -67,7 +67,7 @@ namespace Turn.Weapons
                 hits++;
                 if (!m.Alive)
                 {
-                    if (refund && Kit.Chance(Kit.Value(BuildId.PalmKillRefund))) Kit.PendingRefund++;
+                    if (refund && Kit.Chance(Kit.Value(BuildId.PalmKillRefund))) Kit.AddRefund(WeaponKind.Palm, 1);
                     continue;
                 }
                 m.PalmMarks += marks;

@@ -165,11 +165,13 @@ namespace Turn.Systems
             WeaponBehavior weapon = Behavior(kind);
             if (weapon == null) return;
 
-            if (_kit.PendingRefund > 0)
+            // 旧武器的在途子弹也可能击杀：返弹始终进入来源武器，而不是当前手持武器。
+            for (int i = 0; i < _weapons.Length; i++)
             {
-                _ammo[index] = Math.Min(CapacityOf(kind), _ammo[index] + _kit.PendingRefund);
-                _kit.PendingRefund = 0;
-                _emptyAnnounced[index] = false;
+                int refund = _kit.TakeRefund((WeaponKind)i);
+                if (refund <= 0 || _weapons[i] == null) continue;
+                _ammo[i] = (int)Math.Min(CapacityOf((WeaponKind)i), (long)_ammo[i] + refund);
+                _emptyAnnounced[i] = false;
             }
             if (_hasteLeft > 0f)
             {
@@ -233,8 +235,7 @@ namespace Turn.Systems
         {
             WeaponBehavior weapon = Behavior(evt.Weapon);
             if (weapon == null) return;
-            weapon.Burst();
-            _kit.BurstRing(weapon.BurstRingBuild);
+            weapon.Burst(); // 仅武器固有爆发；已移除 Build 追加的免费范围伤害。
         }
 
         private void OnSubspaceExited(SubspaceExitedEvent evt)
@@ -244,7 +245,7 @@ namespace Turn.Systems
             IReadOnlyList<MonsterEntity> all = _ctx.Monsters.Active;
             for (int i = 0; i < all.Count; i++)
             {
-                all[i].SpearMarks = 0;
+                // 矛的旧印记由 Burst 消耗；回收击杀衍生矛的新印记必须保留到下次回收。
                 all[i].BladeMarks = 0;
                 all[i].PalmMarks = 0;
             }

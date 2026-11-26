@@ -61,6 +61,9 @@ namespace Turn.Core
         public float StackBonus = 0f;
         /// <summary>双矛词条：两根长矛之间的夹角（度）。</summary>
         public float SpreadDegrees = 14f;
+        /// <summary>回收击杀时产生的普通矛数量与索敌范围。</summary>
+        public int RecallKillSpearCount = 2;
+        public float RecallKillTargetRange = 9f;
     }
 
     /// <summary>陌刀。常态：前方扇形剑气，命中的敌人各叠 1 层剑气印记；爆发：横贯屏幕的巨型斩击，按全场印记总层数增伤。</summary>
@@ -119,10 +122,15 @@ namespace Turn.Core
     {
         public int Ammo = 1;
         public float FireInterval = 0.3f;
-        public float Speed = 16f;
+        public float Speed = 24f;
         public float Damage = 30f;
-        public float Radius = 0.22f;
-        public float Range = 10f;
+        public float Radius = 0.66f;
+        public float Range = 22.5f;
+        /// <summary>玩家击杀累计成长：每段击杀增加基础尺寸比例，最终尺寸倍率封顶；本局保留。</summary>
+        public int KillsPerSizeStep = 5;
+        public float SizePerKillStep = 0.01f;
+        public float MaxSizeMultiplier = 5f;
+        public float SwordWaveRangeMultiplier = 3f;
         /// <summary>基础可穿透（可命中）的敌人数。</summary>
         public int Pierce = 3;
         /// <summary>每穿透一个敌人伤害衰减比例。</summary>
@@ -170,7 +178,12 @@ namespace Turn.Core
     public sealed class GravityWellConfig
     {
         public float Radius = 5f;
-        /// <summary>每只怪最多被拉近的距离（单位）。</summary>
+        /// <summary>持久黑洞每秒伤害（旧实现无基础伤害，首版暂定6）。</summary>
+        public float DamagePerSecond = 6f;
+        public float MergeSpeed = 8f;
+        public float PickupRadius = 5f;
+        public float PickupSpeed = 8f;
+        /// <summary>持续牵引速度（单位/秒）。</summary>
         public float PullDistance = 3f;
         /// <summary>拉到离中心这么近就停（单位）。</summary>
         public float MinGap = 0.6f;
@@ -198,9 +211,18 @@ namespace Turn.Core
     {
         /// <summary>手牌上限（= 弹药）。</summary>
         public int HandSize = 5;
-        public float DrawInterval = 1f;
+        public float DrawInterval = 1.5f;
+        public float JokerChanceMultiplier = 0.5f;
+        public float ShieldMultiplier = 0.5f;
+        public int SpadeChildCount = 4;
+        public float SpadeChildDamageRatio = 0.375f;
+        public float SpadeChildRadiusRatio = 0.5f;
+        public float SpadeChildOffsetRatio = 0.5f;
+        public float SpadeChildDelay = 0.15f;
+        /// <summary>眼状裂隙短轴/长轴比例。</summary>
+        public float ClubAspectRatio = 0.35f;
         /// <summary>红桃：每点几发爱心弹（策划 5）；单发伤害、速度、半径、射程、可反弹次数、扇形张角、一次爆发最多几发（性能）。</summary>
-        public int HeartsPerPoint = 5;
+        public int HeartsPerPoint = 10;
         public float HeartDamage = 3f;
         public float HeartSpeed = 10f;
         public float HeartRadius = 0.15f;
@@ -213,7 +235,7 @@ namespace Turn.Core
         /// <summary>♥ 命中时的小范围爆炸：半径、伤害 = 爱心弹伤害 × 倍率（打到范围内所有敌人，含被直接命中的那只）。</summary>
         public float HeartBlastRadius = 0.9f;
         public float HeartBlastRatio = 0.6f;
-        public int MaxHearts = 300;
+        public int MaxHearts = 600;
         /// <summary>黑桃：伤害 = 每点伤害 × 点数；半径 = 基础 + 每点 × 点数。</summary>
         public float SpadeDamagePerPoint = 6f;
         public float SpadeRadius = 1.2f;
@@ -221,8 +243,8 @@ namespace Turn.Core
         /// <summary>方片：护盾层数 = 点数（× 加成）；最多叠几层。</summary>
         public int ShieldMax = 40;
         /// <summary>梅花：裂隙半径、每秒伤害、吸附速度（单位/秒）、持续 = 基础 + 每点 × 点数（秒）。</summary>
-        public float ClubRadius = 2.5f;
-        public float ClubDps = 6f;
+        public float ClubRadius = 1.875f;
+        public float ClubDps = 9f;
         public float ClubPullSpeed = 2.5f;
         public float ClubDuration = 1f;
         public float ClubDurationPerPoint = 0.4f;

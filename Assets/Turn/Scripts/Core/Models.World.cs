@@ -37,6 +37,9 @@ namespace Turn.Core
         public float SubspaceTimeScale = 0.3f;
         /// <summary>翻滚位移时长（游戏秒；亚空间里按慢放推进）。</summary>
         public float Duration = 0.2f;
+        /// <summary>翻滚动作耗时倍率，只影响位移，不影响距离、亚空间或无敌时长。</summary>
+        public float PokerDurationMultiplier = 0.65f;
+        public float CrossbowDurationMultiplier = 0.65f;
         /// <summary>翻滚位移距离（世界单位）。</summary>
         public float Distance = 0.8f;
     }

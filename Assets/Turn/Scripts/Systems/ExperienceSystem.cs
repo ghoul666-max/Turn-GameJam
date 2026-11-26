@@ -18,6 +18,7 @@ namespace Turn.Systems
         private readonly ExperienceConfig _config;
         private readonly List<OrbEntity> _active = new List<OrbEntity>();
         private readonly List<ChestEntity> _chests = new List<ChestEntity>();
+        private readonly HashSet<int> _blackHoleOrbs = new HashSet<int>();
         private int _nextId = 1;
         private int _nextChestId = 1;
 
@@ -72,10 +73,23 @@ namespace Turn.Systems
                     Vec2 to = player.Position - orb.Position;
                     float sq = to.SqrMagnitude;
                     if (!orb.Magnetized && sq <= magnetSq) orb.Magnetized = true;
+                    SubWeaponKind sub = _ctx.SubWeapons.Kind;
+                    if (!orb.Magnetized && (sub == SubWeaponKind.GravityWell || sub == SubWeaponKind.Magnet))
+                    {
+                        float radius = MathF.Max(0f, _ctx.Config.Arsenal.Gravity.PickupRadius);
+                        IReadOnlyList<Vec2> holes = _ctx.SubWeapons.Anchors;
+                        for (int h = 0; h < holes.Count; h++)
+                            if (Vec2.SqrDistance(holes[h], orb.Position) <= radius * radius)
+                            {
+                                orb.Magnetized = true;
+                                _blackHoleOrbs.Add(orb.Id);
+                                break;
+                            }
+                    }
                     if (orb.Magnetized)
                     {
                         float dist = to.Magnitude;
-                        float move = speed * dt;
+                        float move = (_blackHoleOrbs.Contains(orb.Id) ? MathF.Max(0f, _ctx.Config.Arsenal.Gravity.PickupSpeed) : speed) * MathF.Max(0f, dt);
                         orb.Position = dist <= move ? player.Position : orb.Position + to / dist * move;
                         sq = Vec2.SqrDistance(player.Position, orb.Position);
                     }
@@ -101,6 +115,7 @@ namespace Turn.Systems
             for (int i = _active.Count - 1; i >= 0; i--)
             {
                 if (_active[i].Alive) continue;
+                _blackHoleOrbs.Remove(_active[i].Id);
                 int last = _active.Count - 1;
                 _active[i] = _active[last];
                 _active.RemoveAt(last);

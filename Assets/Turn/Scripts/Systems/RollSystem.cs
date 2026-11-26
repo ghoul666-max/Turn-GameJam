@@ -88,7 +88,9 @@ namespace Turn.Systems
             // 2) 翻滚位移（PlayerSystem 在之后的 Tick 里按 RollDirection × RollSpeed 推进）
             Vec2 dir = s.MoveDir.SqrMagnitude > 0.01f ? s.MoveDir.Normalized : s.Facing.Normalized;
             if (dir.SqrMagnitude < 0.5f) dir = Vec2.Right;
-            float dashTime = MathF.Max(0.05f, _config.Duration);
+            float dashMultiplier = weapon == WeaponKind.Poker ? _config.PokerDurationMultiplier
+                : weapon == WeaponKind.Crossbow ? _config.CrossbowDurationMultiplier : 1f;
+            float dashTime = MathF.Max(0.05f, _config.Duration * MathF.Max(0.01f, dashMultiplier));
             s.IsRolling = true;
             s.RollTimer = dashTime;
             s.RollDirection = dir;

@@ -14,7 +14,7 @@ internal static class Program
         PalmRespectsLineOfSight();
         SpearKillDropsAllSpearsAndStops();
         SpearRecallsGroundAndLivingMarks();
-        SpearGroundClearsOnSubspaceExit();
+        SpearGroundSurvivesSubspaceExitAndClearsOnPlaneChange();
         BladeSnapshotsLiveTarget();
         Console.WriteLine($"Melee changes passed ({checks} assertions).");
     }
@@ -126,7 +126,7 @@ internal static class Program
         Check(spear.GroundSpearCount == 0 && host.SpearMarks == 0, "recall clears ground and living marks");
     }
 
-    private static void SpearGroundClearsOnSubspaceExit()
+    private static void SpearGroundSurvivesSubspaceExitAndClearsOnPlaneChange()
     {
         var ctx = World(WeaponKind.Spear);
         var spear = new SpearWeapon(new WeaponKit(ctx, ctx.Config.Arsenal));
@@ -134,7 +134,9 @@ internal static class Program
         monster.Hp = 1f;
         spear.OnHit(new ProjectileEntity { Damage = 100f, CarriedMarks = 1 }, monster);
         ctx.Events.Publish(new SubspaceExitedEvent());
-        Check(spear.GroundSpearCount == 0, "subspace exit clears stale ground spears");
+        Check(spear.GroundSpearCount == 1, "subspace exit preserves newly seeded ground spear");
+        ctx.Events.Publish(new PlaneSwitchedEvent());
+        Check(spear.GroundSpearCount == 0, "actual plane change clears ground spears");
     }
 
     private static void BladeSnapshotsLiveTarget()

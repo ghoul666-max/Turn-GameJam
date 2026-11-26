@@ -52,6 +52,10 @@ namespace Turn.View
         [Header("翻滚位移")]
         [Tooltip("翻滚位移时长（游戏秒；亚空间里按慢放推进）")]
         public float duration = 0.2f;
+        [Tooltip("扑克牌翻滚动作耗时倍率；不影响无敌或亚空间时长")]
+        [Min(0.01f)] public float pokerDurationMultiplier = 0.65f;
+        [Tooltip("弩翻滚动作耗时倍率；不影响无敌或亚空间时长")]
+        [Min(0.01f)] public float crossbowDurationMultiplier = 0.65f;
         [Tooltip("翻滚移动距离（世界单位）")]
         public float distance = 0.8f;
 
@@ -68,6 +72,8 @@ namespace Turn.View
                 SubspaceDuration = subspaceDuration,
                 SubspaceTimeScale = subspaceTimeScale,
                 Duration = duration,
+                PokerDurationMultiplier = pokerDurationMultiplier,
+                CrossbowDurationMultiplier = crossbowDurationMultiplier,
                 Distance = distance,
             };
         }
@@ -109,6 +115,7 @@ namespace Turn.View
         private ITurnContext _ctx;
         private float _hurtTimer;
         private float _rollAngle;
+        private float _rollDuration;
 
         public PlayerSettings Settings { get { return settings; } }
         public RollSettings RollSettings { get { return rollSettings; } }
@@ -119,6 +126,8 @@ namespace Turn.View
             Unbind();
             _ctx = ctx;
             ctx.Events.Subscribe<PlayerDamagedEvent>(OnDamaged);
+            ctx.Events.Subscribe<RollPerformedEvent>(OnRolled);
+            _rollDuration = 0f;
             _hurtTimer = 0f;
             _rollAngle = 0f;
             if (body != null)
@@ -135,6 +144,7 @@ namespace Turn.View
         {
             if (_ctx == null) return;
             _ctx.Events.Unsubscribe<PlayerDamagedEvent>(OnDamaged);
+            _ctx.Events.Unsubscribe<RollPerformedEvent>(OnRolled);
             _ctx = null;
         }
 
@@ -146,6 +156,11 @@ namespace Turn.View
         private void OnDamaged(PlayerDamagedEvent evt)
         {
             _hurtTimer = HurtDisplayTime;
+        }
+
+        private void OnRolled(RollPerformedEvent evt)
+        {
+            _rollDuration = _ctx != null ? Mathf.Max(0.001f, _ctx.Player.State.RollTimer) : 0.001f;
         }
 
         private void LateUpdate()
@@ -160,14 +175,19 @@ namespace Turn.View
             if (_hurtTimer > 0f) _hurtTimer -= Time.deltaTime;
 
             state = ResolveState(s);
-            if (animator != null && animator.runtimeAnimatorController != null) animator.SetInteger(StateParam, (int)state);
+            if (animator != null && animator.runtimeAnimatorController != null)
+            {
+                animator.SetInteger(StateParam, (int)state);
+                animator.speed = state == PlayerAnimState.Roll
+                    ? Mathf.Max(0.05f, _ctx.Config.Roll.Duration) / Mathf.Max(0.001f, _rollDuration) : 1f;
+            }
             ApplyPlaceholder(s);
         }
 
         private PlayerAnimState ResolveState(PlayerState s)
         {
             if (!s.Alive) return PlayerAnimState.Death;
-            if (s.IsRolling || s.InSubspace) return PlayerAnimState.Roll;
+            if (s.IsRolling) return PlayerAnimState.Roll;
             if (_hurtTimer > 0f) return PlayerAnimState.Hurt;
             if (s.MoveDir.SqrMagnitude > 0.01f) return PlayerAnimState.Move;
             return PlayerAnimState.Idle;
@@ -201,9 +221,9 @@ namespace Turn.View
                     bodyRenderer.color = new Color(0.45f, 0.45f, 0.5f, 1f);
                     return;
                 case PlayerAnimState.Roll:
-                    // 一次翻滚转一整圈（整个亚空间期间，按现实时间），方向跟随翻滚的水平方向
-                    float total = Mathf.Max(0.05f, _ctx.Config.Roll.SubspaceDuration);
-                    float t = s.InSubspace ? 1f - Mathf.Clamp01(s.SubspaceLeft / total) : 1f;
+                    // 一次位移转一圈，动作结束不再因亚空间无敌继续翻滚。
+                    float total = Mathf.Max(0.001f, _rollDuration);
+                    float t = 1f - Mathf.Clamp01(s.RollTimer / total);
                     _rollAngle = (s.RollDirection.X >= 0f ? -360f : 360f) * t;
                     body.localRotation = Quaternion.Euler(0f, 0f, _rollAngle);
                     body.localScale = new Vector3(0.85f, 0.85f, 1f);

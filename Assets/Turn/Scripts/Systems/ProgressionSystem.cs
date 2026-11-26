@@ -124,9 +124,11 @@ namespace Turn.Systems
         public bool IsCarried(BuildId id)
         {
             ILoadoutSystem loadout = _ctx.Loadout;
-            return BuildIds.IsSub(id)
-                ? loadout.Sub != SubWeaponKind.None && BuildIds.SubOf(id) == loadout.Sub
-                : loadout.Carries(BuildIds.WeaponOf(id));
+            if (!BuildIds.IsSub(id)) return loadout.Carries(BuildIds.WeaponOf(id));
+            SubWeaponKind owner = BuildIds.SubOf(id);
+            bool merged = loadout.Sub == SubWeaponKind.GravityWell || loadout.Sub == SubWeaponKind.Magnet;
+            return loadout.Sub != SubWeaponKind.None && (owner == loadout.Sub ||
+                (merged && (owner == SubWeaponKind.GravityWell || owner == SubWeaponKind.Magnet)));
         }
 
         public void DebugSetLevel(BuildId id, int level)

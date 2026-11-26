@@ -79,7 +79,7 @@ namespace Turn.Weapons
             d[63] = B(2, 0.3f, 0f); // 回气
             d[64] = B(5, 0.15f, 0f); // 重矢
             d[65] = B(5, 0.15f, 0f); // 破甲
-            d[66] = B(3, 1f, 0f); // 贯穿
+            d[66] = B(3, 0.15f, 0f); // 贯穿：穿透已为固有能力，改为击退距离强化
             d[67] = B(4, 0.05f, 0f); // 锐镞
             d[68] = B(3, 0.3f, 0f); // 钉墙
             d[69] = B(2, 1f, 0f); // 嗜杀
@@ -203,7 +203,16 @@ namespace Turn.Weapons
             d[186] = B(3, 0.03f, 0f); // 饮血
             d[187] = B(1, 1f, 0f); // 回身
             d[188] = B(1, 0.05f, 0f); // 补剑
+            // 保留旧 ID / 数组索引兼容存档，但这些追加免费伤害词条不再进入升级池。
+            DisableRollDamageBuilds(d);
             return d;
+        }
+
+        private static void DisableRollDamageBuilds(BuildDef[] builds)
+        {
+            BuildId[] removed = { BuildId.WaterBurstRing, BuildId.SpearBurstRing, BuildId.BladeBurstRing,
+                BuildId.PalmBurstRing, BuildId.ShurikenBurstRing, BuildId.StaplerBurstRing, BuildId.SwordBurstRing };
+            for (int i = 0; i < removed.Length; i++) builds[(int)removed[i]] = B(0, 0f, 0f);
         }
 
         private static BuildDef B(int maxLevel, float value, float value2)
@@ -224,6 +233,7 @@ namespace Turn.Weapons
                     ? new BuildDef { MaxLevel = c.MaxLevel, Value = c.Value, Value2 = c.Value2 }
                     : defaults[i];
             }
+            DisableRollDamageBuilds(result);
             return result;
         }
 
@@ -495,13 +505,13 @@ namespace Turn.Weapons
                 case BuildId.PalmKillRefund: return "常态掌击击杀敌人有 {p} 概率补充 1 颗弹药";
                 case BuildId.BowDamage: return "弩箭基础伤害 +{p}";
                 case BuildId.BowKnockback: return "弩箭击退力度 +{p}";
-                case BuildId.BowPierce: return "弩箭可穿透敌人数量 +{n}";
+                case BuildId.BowPierce: return "弩箭击退距离 +{p}";
                 case BuildId.BowFalloff: return "弩箭穿透后的伤害衰减比例 −{p}";
                 case BuildId.BowStunTime: return "敌人撞墙的眩晕时长 +{n} 秒";
-                case BuildId.BowExtraIntent: return "每次击退敌人撞墙，额外叠加 {n} 层杀气";
-                case BuildId.BowIntentBonus: return "每层杀气提供的弩伤害加成 +{p}";
+                case BuildId.BowExtraIntent: return "每次击退敌人撞墙，额外增加 {n} 点撞墙计数（用于杀气溢出）";
+                case BuildId.BowIntentBonus: return "击杀尺寸成长速率 +{p}（尺寸上限不变）";
                 case BuildId.BowCrit: return "弩箭伤害有 {p} 概率暴击";
-                case BuildId.BowSplash: return "杀气 ≥ {v2} 层时，弩箭命中额外造成 {p} 伤害的小范围溅射";
+                case BuildId.BowSplash: return "撞墙计数 ≥ {v2} 时，弩箭命中额外造成 {p} 伤害的小范围溅射（切枪清空计数）";
                 case BuildId.BowWallHeal: return "击退敌人撞墙时回复 {n} 点生命";
                 case BuildId.BowHurtShot: return "受到伤害时，自动向身前发射一发弩箭并击退敌人";
                 case BuildId.BowKillReload: return "弩箭常态击杀敌人有 {p} 概率直接补满弹药";

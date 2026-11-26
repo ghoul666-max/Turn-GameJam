@@ -29,8 +29,18 @@ namespace Turn.Weapons
             public float Timer;
         }
 
+        private sealed class ChildBomb
+        {
+            public Vec2 Position;
+            public float Radius;
+            public float Damage;
+            public float Stun;
+            public float Left;
+        }
+
         private const float RiftTick = 0.25f;
         private readonly List<PlayingCard> _hand = new List<PlayingCard>();
+        private readonly List<ChildBomb> _childBombs = new List<ChildBomb>();
         private readonly List<Rift> _rifts = new List<Rift>();
         private readonly List<MonsterEntity> _query = new List<MonsterEntity>();
         private int _heartsThisBurst;
@@ -68,7 +78,8 @@ namespace Turn.Weapons
         public PlayingCard Draw()
         {
             int numbers = NumberCards;
-            float jokerChance = MathF.Min(0.9f, 2f / (numbers + 2f) + Kit.Value(BuildId.PokerJokerChance));
+            float jokerChance = MathF.Max(0f, MathF.Min(0.9f,
+                (2f / (numbers + 2f) + Kit.Value(BuildId.PokerJokerChance)) * Cfg.JokerChanceMultiplier));
             Random rng = Kit.Ctx.Random;
             if (rng.NextDouble() < jokerChance)
                 return new PlayingCard { Rank = rng.Next(2) == 0 ? PlayingCard.SmallJoker : PlayingCard.BigJoker, Suit = CardSuit.None };
@@ -114,7 +125,8 @@ namespace Turn.Weapons
                 case CardSuit.Heart: Hearts(points, mult); break;
                 case CardSuit.Spade: at = Spade(points, mult); break;
                 case CardSuit.Diamond:
-                    Shield = Math.Min(Math.Max(1, Cfg.ShieldMax), Shield + Math.Max(1, (int)MathF.Round(points * mult)));
+                    Shield = Math.Min(Math.Max(1, Cfg.ShieldMax), Shield + Math.Max(0,
+                        (int)MathF.Round(points * mult * MathF.Max(0f, Cfg.ShieldMultiplier))));
                     break;
                 default: at = Club(points, mult); break;
             }
@@ -154,6 +166,27 @@ namespace Turn.Weapons
             Vec2 center;
             if (!Densest(radius, out center)) return Kit.PlayerPosition;
             float stun = Kit.Value(BuildId.PokerSpadeStun);
+            ExplodeSpade(center, radius, damage, stun);
+            int childCount = Math.Max(0, Cfg.SpadeChildCount);
+            for (int i = 0; i < childCount; i++)
+            {
+                Vec2 offset = WeaponKit.Rotate(Vec2.Right, 360f * i / childCount)
+                    * (radius * MathF.Max(0f, Cfg.SpadeChildOffsetRatio));
+                _childBombs.Add(new ChildBomb
+                {
+                    Position = Kit.Ctx.Bounds.Clamp(center + offset, 0f),
+                    Radius = radius * MathF.Max(0f, Cfg.SpadeChildRadiusRatio),
+                    Damage = damage * MathF.Max(0f, Cfg.SpadeChildDamageRatio),
+                    Stun = stun,
+                    Left = MathF.Max(0f, Cfg.SpadeChildDelay),
+                });
+            }
+            return center;
+        }
+
+        // 单次爆炸不再生成子弹；不同小炸弹独立查询，因此允许重叠命中同一目标。
+        private void ExplodeSpade(Vec2 center, float radius, float damage, float stun)
+        {
             Kit.Ctx.Monsters.QueryCircle(center, radius, _query);
             int hits = 0;
             float dealt = 0f;
@@ -168,7 +201,6 @@ namespace Turn.Weapons
             _query.Clear();
             Kit.Lifesteal(dealt, BuildId.PokerLifesteal);
             Kit.Ctx.Events.Publish(new SpadeBombEvent { Center = center, Radius = radius, Hits = hits });
-            return center;
         }
 
         /// <summary>怪物最密集处：以每只怪为候选中心，数 radius 内的怪，取最多的。</summary>
@@ -219,11 +251,21 @@ namespace Turn.Weapons
 
         public override void TickAlways(float dt)
         {
+            for (int b = _childBombs.Count - 1; b >= 0; b--)
+            {
+                ChildBomb bomb = _childBombs[b];
+                bomb.Left -= dt;
+                if (bomb.Left > 0f) continue;
+                _childBombs.RemoveAt(b);
+                ExplodeSpade(bomb.Position, bomb.Radius, bomb.Damage, bomb.Stun);
+            }
             for (int r = _rifts.Count - 1; r >= 0; r--)
             {
                 Rift rift = _rifts[r];
                 rift.Left -= dt;
-                Kit.Ctx.Monsters.QueryCircle(rift.Position, rift.Radius, _query);
+                float radiusX = MathF.Max(0f, rift.Radius);
+                float radiusY = radiusX * MathF.Max(0f, Cfg.ClubAspectRatio);
+                Kit.Ctx.Monsters.QueryCircle(rift.Position, MathF.Max(radiusX, radiusY), _query);
                 bool damageTick = false;
                 rift.Timer -= dt;
                 if (rift.Timer <= 0f)
@@ -236,6 +278,9 @@ namespace Turn.Weapons
                 {
                     MonsterEntity m = _query[i];
                     if (!m.Alive) continue;
+                    Vec2 delta = m.Position - rift.Position;
+                    if (radiusX <= 0f || radiusY <= 0f
+                        || delta.X * delta.X / (radiusX * radiusX) + delta.Y * delta.Y / (radiusY * radiusY) > 1f) continue;
                     float dist = Vec2.Distance(m.Position, rift.Position);
                     float move = MathF.Min(rift.Pull * dt, dist - 0.3f);
                     if (move > 0.001f && WeaponKit.CanDisplace(m))

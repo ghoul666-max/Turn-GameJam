@@ -25,7 +25,33 @@ internal static class Program
         UpgradePoolFollowsLoadout();
         LevelUpWaitsForNormalSpace();
         RobotKnockbackMovesPlayer();
+        AcceleratedRollKeepsDistanceAndInvulnerability();
         Console.WriteLine($"Roll checks passed ({_checks} assertions).");
+    }
+
+    private static void AcceleratedRollKeepsDistanceAndInvulnerability()
+    {
+        foreach (WeaponKind kind in new[] { WeaponKind.Poker, WeaponKind.Crossbow, WeaponKind.WaterGun })
+        {
+            var ctx = World(c =>
+            {
+                c.Loadout.Main = kind;
+                c.Loadout.SecondMain = kind == WeaponKind.WaterGun ? WeaponKind.Poker : WeaponKind.WaterGun;
+                c.Loadout.Scheme = LoadoutScheme.DualMain;
+                c.Roll.Distance = 0.8f;
+            });
+            Vec2 origin = ctx.Player.State.Position;
+            Check(ctx.Roll.TryRoll(), "accelerated roll succeeds");
+            float expected = kind == WeaponKind.WaterGun ? .2f : .13f;
+            Check(Near(ctx.Player.State.RollTimer, expected), "duration uses held weapon before dual swap");
+            Check(Near(ctx.Player.State.SubspaceLeft, 1f), "acceleration does not shorten subspace");
+            ctx.Player.Tick(.09f);
+            ctx.Roll.Tick(.09f);
+            ctx.Player.Tick(.2f); // deliberately overshoots remaining movement time
+            ctx.Roll.Tick(.2f);
+            Check(Near(Vec2.Distance(origin, ctx.Player.State.Position), .8f), "uneven frame times preserve exact distance");
+            Check(!ctx.Player.State.IsRolling && ctx.Player.State.Invincible, "dash ends while original invulnerability remains");
+        }
     }
 
     private static ITurnContext World(Action<TurnConfig> configure = null)

@@ -37,6 +37,8 @@ namespace Turn.View
         private Material _material;
         private Sprite _circle;
         private Sprite _square;
+        private Sprite _eye;
+        private Texture2D _eyeTex;
         private Texture2D _circleTex;
         private Texture2D _squareTex;
         private Transform _root;
@@ -160,6 +162,7 @@ namespace Turn.View
             Unbind();
             if (_circleTex != null) Destroy(_circleTex);
             if (_squareTex != null) Destroy(_squareTex);
+            if (_eyeTex != null) Destroy(_eyeTex);
         }
 
         // ---------------- 每帧同步 ----------------
@@ -257,18 +260,22 @@ namespace Turn.View
             }
 
             IReadOnlyList<Vec2> anchors = _ctx.SubWeapons.Anchors;
-            SetCount(_anchors, anchors.Count, "Anchor", ViewMath.ShadowOrder - 1, Square());
+            bool blackHole = _ctx.SubWeapons.Kind == SubWeaponKind.GravityWell || _ctx.SubWeapons.Kind == SubWeaponKind.Magnet;
+            SetCount(_anchors, anchors.Count, "Anchor", ViewMath.ShadowOrder - 1, blackHole ? Circle() : Square());
             // 空间锚的锚点 / 强磁铁的正极（颜色跟着当前副武器）
             Color ac = ViewMath.SubWeaponColor(_ctx.SubWeapons.Kind == SubWeaponKind.Magnet ? SubWeaponKind.Magnet : SubWeaponKind.SpaceAnchor);
             for (int i = 0; i < anchors.Count; i++)
             {
                 SpriteRenderer r = _anchors[i];
                 r.transform.position = ViewMath.ToWorld(anchors[i]);
+                r.sprite = blackHole ? Circle() : Square();
                 r.transform.rotation = Quaternion.Euler(0f, 0f, 45f + Time.time * 40f);
-                r.transform.localScale = Vector3.one * 0.45f;
+                r.transform.localScale = blackHole
+                    ? new Vector3(_ctx.Config.Arsenal.Gravity.Radius * 2f, _ctx.Config.Arsenal.Gravity.Radius * 2f, 1f)
+                    : Vector3.one * 0.45f;
                 Color c = ac;
                 c.a = i == anchors.Count - 1 ? 0.9f : 0.45f;
-                r.color = c;
+                r.color = blackHole ? new Color(0.035f, 0.015f, 0.075f, 0.85f) : c;
             }
         }
 
@@ -285,7 +292,7 @@ namespace Turn.View
                 else stars++;
             }
             SetCount(_stars, stars, "Shuriken", ViewMath.PlayerOrder + 1, Square());
-            SetCount(_rifts, rifts, "Rift", ViewMath.ShadowOrder - 2);
+            SetCount(_rifts, rifts, "Rift", ViewMath.ShadowOrder - 2, Eye());
             SetLineCount(_trails, trails);
             int si = 0, ri = 0, ti = 0;
             Color sc = ViewMath.WeaponColor(WeaponKind.Shuriken);
@@ -298,9 +305,9 @@ namespace Turn.View
                 {
                     SpriteRenderer r = _rifts[ri++];
                     r.transform.position = ViewMath.ToWorld(f.Position);
-                    float pulse = 1f + 0.06f * Mathf.Sin(Time.time * 8f + i);
-                    r.transform.localScale = Vector3.one * (f.Radius * 2f * pulse);
-                    r.color = new Color(rc.r, rc.g, rc.b, 0.15f + 0.3f * f.Life);
+                    float aspect = Mathf.Max(0.01f, _ctx.Config.Arsenal.Poker.ClubAspectRatio);
+                    r.transform.localScale = new Vector3(f.Radius * 2f, f.Radius * 2f * aspect, 1f);
+                    r.color = new Color(1f, 1f, 1f, 0.75f + 0.25f * f.Life);
                 }
                 else if (f.Kind == WeaponFieldKind.SwordTrail || f.Kind == WeaponFieldKind.GroundSpear)
                 {
@@ -827,6 +834,36 @@ namespace Turn.View
             _circleTex.Apply();
             _circle = Sprite.Create(_circleTex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), size);
             return _circle;
+        }
+
+        /// <summary>运行时眼状宇宙裂隙贴图：不生成或覆盖任何项目美术文件。</summary>
+        private Sprite Eye()
+        {
+            if (_eye != null) return _eye;
+            const int size = 128;
+            _eyeTex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            _eyeTex.hideFlags = HideFlags.DontSave;
+            _eyeTex.wrapMode = TextureWrapMode.Clamp;
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float nx = (x + 0.5f) * 2f / size - 1f;
+                float ny = (y + 0.5f) * 2f / size - 1f;
+                float halfHeight = Mathf.Sqrt(Mathf.Max(0f, 1f - nx * nx));
+                float edge = halfHeight - Mathf.Abs(ny);
+                if (edge <= 0f) continue;
+                float nebula = Mathf.Pow(Mathf.Max(0f, Mathf.Sin(nx * 13f + ny * 9f) * Mathf.Cos(ny * 17f - nx * 4f)), 3f);
+                bool star = ((x * 73856093 ^ y * 19349663) & 1023) < 7;
+                Color color = new Color(0.015f + nebula * 0.11f, 0.01f + nebula * 0.035f, 0.045f + nebula * 0.2f, 1f);
+                if (edge < 0.055f) color = new Color(0.4f, 0.18f, 0.85f, Mathf.Clamp01(edge / 0.018f));
+                else if (star) color = new Color(0.8f, 0.78f, 1f, 1f);
+                pixels[y * size + x] = color;
+            }
+            _eyeTex.SetPixels32(pixels);
+            _eyeTex.Apply();
+            _eye = Sprite.Create(_eyeTex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), size);
+            return _eye;
         }
 
         private Sprite Square()

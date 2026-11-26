@@ -18,8 +18,24 @@ namespace Turn.Weapons
         public readonly List<MonsterEntity> Hits = new List<MonsterEntity>();
         public readonly List<MonsterEntity> Hits2 = new List<MonsterEntity>();
 
-        /// <summary>待返还的子弹（击杀回流词条），WeaponSystem 下一步加到当前弹匣。</summary>
-        public int PendingRefund;
+        /// <summary>待返还子弹按来源武器记录，避免切枪后旧弹的击杀给当前武器补弹。</summary>
+        private readonly int[] _pendingRefunds = new int[WeaponKinds.Count];
+
+        public void AddRefund(WeaponKind weapon, int amount)
+        {
+            if (!WeaponKinds.IsValid(weapon) || amount <= 0) return;
+            int index = (int)weapon;
+            _pendingRefunds[index] = (int)Math.Min(int.MaxValue, (long)_pendingRefunds[index] + amount);
+        }
+
+        public int TakeRefund(WeaponKind weapon)
+        {
+            if (!WeaponKinds.IsValid(weapon)) return 0;
+            int index = (int)weapon;
+            int amount = _pendingRefunds[index];
+            _pendingRefunds[index] = 0;
+            return amount;
+        }
 
         public WeaponKit(ITurnContext ctx, ArsenalConfig arsenal)
         {
