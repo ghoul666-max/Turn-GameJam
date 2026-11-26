@@ -30,6 +30,12 @@ namespace Turn.EditorTools
             { "dreamMusic", BgmDir + "/dream__Ossuary 6 - Air.mp3" },
             { "primalMusic", BgmDir + "/primal__Killers.mp3" },
             { "futureMusic", BgmDir + "/future__Digital Lemonade.mp3" },
+            // 单地图亚空间版（2026-11-26）：魔王魂，免费商用，署名可选（「音楽：魔王魂」）。
+            // 战斗曲有两首候选：fantasy15「駆け抜ける戦場の嵐」（默认）/ fantasy12「戦術的構想」（battle_alt__，想换就在 Inspector 里拖）
+            { "battleMusic", BgmDir + "/battle__maou_bgm_fantasy15.ogg" },
+            { "bossMusic", BgmDir + "/boss__maou_game_boss08.ogg" },
+            // 回到常态的渐强音（AudioClip 字段，不是 SoundCue）
+            { "subspaceExitSwell", SfxDir + "/20-subspace/subspaceExitSwell__slow-motion-end1.wav" },
         };
 
         // 一次性音效：SoundCue 字段名 → 文件（文件夹编号 = 槽位顺序）
@@ -53,6 +59,55 @@ namespace Turn.EditorTools
             { "phoneLand", SfxDir + "/15-phoneLand/impactGlass_heavy_000.ogg" },
             { "pageTurn", SfxDir + "/16-pageTurn/bookFlip1.ogg" },
             { "victory", SfxDir + "/17-victory/jingles_PIZZI08.ogg" },
+
+            // ---- 单地图亚空间版（2026-11-26）。20~27 号文件夹来自効果音ラボ（免费商用、无需署名、禁止单独再分发），
+            //      已去掉首尾静音并把峰值统一到 −1 dB；其余备选文件（*_alt__、23-weaponExtra 里没接的）留着可以在 Inspector 里换 ----
+            { "subspaceEnter", SfxDir + "/20-subspace/subspaceEnter__text-impact2.wav" },
+            { "spearShot", SfxDir + "/21-weaponShot/spear__knife-throw1.wav" },
+            { "bladeShot", SfxDir + "/21-weaponShot/blade__katana-gesture2.wav" },
+            { "palmShot", SfxDir + "/21-weaponShot/palm__punch-middle2.wav" },
+            { "crossbowShot", SfxDir + "/21-weaponShot/crossbow__arrow-release1.wav" },
+            { "pokerShot", SfxDir + "/21-weaponShot/poker__card-turn-over1.wav" },
+            { "shurikenShot", SfxDir + "/21-weaponShot/shuriken__dart1.wav" },
+            { "staplerShot", SfxDir + "/21-weaponShot/stapler_placeholder__keyboard1.wav" }, // 占位：没找到订书机音
+            { "swordShot", SfxDir + "/21-weaponShot/sword__highspeed-movement1.wav" },
+            { "waterBurst", SfxDir + "/22-weaponBurst/water__sprinkle-water2.wav" },
+            { "spearBurst", SfxDir + "/22-weaponBurst/spear__wepon-swing1.wav" },
+            { "bladeBurst", SfxDir + "/22-weaponBurst/blade__iainuki1.wav" },
+            { "palmBurst", SfxDir + "/22-weaponBurst/palm__super-arts-hit1.wav" },
+            { "pokerBurst", SfxDir + "/22-weaponBurst/poker__card-shuffle2.wav" },
+            { "shurikenBurst", SfxDir + "/22-weaponBurst/shuriken__boomerang1.wav" },
+            { "swordBurst", SfxDir + "/22-weaponBurst/sword__sword-slash5.wav" },
+            { "crossbowWallSlam", SfxDir + "/23-weaponExtra/crossbowWallSlam__blow4.wav" },
+            { "spadeBomb", SfxDir + "/23-weaponExtra/spadeBomb__bomb2.wav" },
+            // 怪物受击：沿用 Kenney 的短促打击（有声 0.09 s、起音 1 ms），比候选更适合最高频的音效
+            { "monsterHit", SfxDir + "/13-shockwave/impactGeneric_light_000.ogg" },
+            { "sniperWarn", SfxDir + "/24-monster/sniperWarn__beam-gun-charge1.wav" },
+            { "sniperFire", SfxDir + "/24-monster/sniperFire__beamgun-shot1.wav" },
+            { "rotterPoison", SfxDir + "/24-monster/rotterPoison__magic-poison1.wav" },
+            { "eliteAppear", SfxDir + "/24-monster/eliteAppear__enemy-advent1.wav" },
+            { "bossAppear", SfxDir + "/24-monster/bossAppear__dragon-cry2.wav" },
+            { "gravityWell", SfxDir + "/25-subWeapon/gravityWell__magic-gravity1.wav" },
+            { "anchorSlash", SfxDir + "/25-subWeapon/anchorSlash__magic-worp1.wav" },
+            { "hourglassReset", SfxDir + "/25-subWeapon/hourglassReset__remember-the-past1.wav" },
+            { "wasdKey", SfxDir + "/25-subWeapon/wasdKey__keyboard1.wav" },
+            { "wasdBurst", SfxDir + "/25-subWeapon/wasdBurst__keyboard2.wav" },
+            { "cursorStrike", SfxDir + "/25-subWeapon/cursorStrike__click1.wav" },
+            { "magnetCollide", SfxDir + "/23-weaponExtra/spadeBomb__bomb2.wav" },
+            { "upgradeConfirm", SfxDir + "/26-flow/upgradeConfirm__decision14.wav" },
+            { "chestOpen", SfxDir + "/26-flow/chestOpen__treasure-chest1.wav" },
+            { "waveStart", SfxDir + "/26-flow/waveStart__encount1.wav" },
+            { "defeat", SfxDir + "/26-flow/defeat__curse-melody1.wav" },
+        };
+
+        // 音量 / 音高随机（SoundCue 字段.属性 → 值）
+        private static readonly string[] CueVolumes =
+        {
+            "fireballShot.volume=0.8",      // 火球每 0.7 秒一发，音量略收
+            "monsterHit.volume=0.35", "monsterHit.pitchJitter=0.12",
+            "pokerShot.volume=0.7", "staplerShot.volume=0.6", "wasdKey.volume=0.5",
+            "spearShot.volume=0.8", "bladeShot.volume=0.8", "palmShot.volume=0.8", "shurikenShot.volume=0.8",
+            "waveStart.volume=0.6", "upgradeConfirm.volume=0.7", "sniperWarn.volume=0.9",
         };
 
         [MenuItem("Turn/音频：把素材填进 GameManager 的 TurnAudio 槽位", false, 30)]
@@ -95,7 +150,7 @@ namespace Turn.EditorTools
             EditorSceneManager.SaveScene(scene);
             Selection.activeGameObject = gm.gameObject;
             Debug.Log("[Turn] TurnAudio 已填好 " + filled + " 个槽位" + (missing > 0 ? "，" + missing + " 个文件没找到（见上面的警告）" : "") +
-                      "，场景已保存。工位困意循环 drowsyLoop 暂无素材，保持空。");
+                      "，场景已保存。工位困意循环 drowsyLoop 暂无素材，保持空；订书机爆发、爱心弹命中、回到常态的一次性音效暂无素材，保持空。");
         }
 
         /// <summary>给 GameManager 物体加上（或复用）TurnAudio，并按映射表填 clip。返回填好的槽位数。</summary>
@@ -119,9 +174,14 @@ namespace Turn.EditorTools
             }
             // 鲨鱼出现：原来的 spaceEngineLow_000 是 5 秒的引擎低鸣，进海洋时像一段意义不明的杂音，现在留空（不播）
             ClearClip(so, "sharkAppear.clip");
-            // 火球每 0.7 秒一发，音量略收
-            SerializedProperty fireballVolume = so.FindProperty("fireballShot.volume");
-            if (fireballVolume != null) fireballVolume.floatValue = 0.8f;
+            // 翻滚：亚空间版每次翻滚都会进入亚空间，由 subspaceEnter 负责，翻滚本身不再单独响（避免两个音叠在一起）
+            ClearClip(so, "roll.clip");
+            for (int i = 0; i < CueVolumes.Length; i++)
+            {
+                string[] kv = CueVolumes[i].Split('=');
+                SerializedProperty prop = so.FindProperty(kv[0]);
+                if (prop != null) prop.floatValue = float.Parse(kv[1], System.Globalization.CultureInfo.InvariantCulture);
+            }
 
             so.ApplyModifiedProperties();
             EditorUtility.SetDirty(audio);

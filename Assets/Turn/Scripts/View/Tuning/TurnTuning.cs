@@ -88,6 +88,8 @@ namespace Turn.View
         public ArsenalConfig arsenal = new ArsenalConfig();
         public HordeConfig horde = new HordeConfig();
         public BuildConfig builds = new BuildConfig();
+        /// <summary>相机 / 2.5D 视角（只影响画面）。旧存档没有这一组时 version = 0，面板 / 开局会换成默认值（= 原来的正俯视）。</summary>
+        public CameraRigSettings camera = new CameraRigSettings();
 
         /// <summary>当前战斗分组的数据版本（2 = 新策划案）。</summary>
         public const int CombatVersion = 2;
@@ -99,9 +101,10 @@ namespace Turn.View
 
         /// <summary>从场景组件 / Prefab 上的 Inspector 参数拷贝一份（深拷贝，之后改面板不会改到组件）。</summary>
         public static TurnTuningData Capture(PlayerController player, WeaponController weapon, SpawnManager spawn, MapManager map,
-            UpgradeManager upgrade = null)
+            UpgradeManager upgrade = null, CameraFollow camera = null)
         {
             var d = new TurnTuningData();
+            if (camera != null && camera.Settings != null) d.camera = camera.Settings.Clone();
             if (player != null)
             {
                 d.player = Copy(player.Settings);

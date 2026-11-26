@@ -532,6 +532,10 @@
                 "HeartRange": 14.0,
                 "HeartBounces": 3,
                 "HeartSpread": 50.0,
+                "HeartHomingTurn": 360.0,
+                "HeartHomingRange": 6.0,
+                "HeartBlastRadius": 0.8999999761581421,
+                "HeartBlastRatio": 0.6000000238418579,
                 "MaxHearts": 300,
                 "SpadeDamagePerPoint": 6.0,
                 "SpadeRadius": 1.2000000476837158,
@@ -563,8 +567,8 @@
                 "TargetRange": 8.0
             },
             "Hourglass": {
-                "SecondsToFloor": 5.0,
                 "DecayRate": 0.15000000596046448,
+                "SecondsToFloor": 5.0,
                 "FloorSpeed": 0.5
             },
             "Wasd": {
@@ -631,8 +635,6 @@
             "HurtMarkRange": 8.0
         },
         "horde": {
-            "NormalChaseSpeedMultiplier": 0.85,
-            "BossHpMultiplier": 2.0,
             "Kinds": [
                 {
                     "MaxHp": 30.0,
@@ -721,6 +723,8 @@
             "BossHp": 25.0,
             "BossDamage": 2.0,
             "BossScale": 2.200000047683716,
+            "BossHpMultiplier": 2.0,
+            "NormalChaseSpeedMultiplier": 0.8500000238418579,
             "BossXp": 20
         },
         "builds": {
@@ -955,6 +959,721 @@
                     "MaxLevel": 2,
                     "Value": 1.0,
                     "Value2": 3.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 4,
+                    "Value": 0.019999999552965164,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.4000000059604645,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 0.5,
+                    "Value2": 0.30000001192092896
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.07999999821186066,
+                    "Value2": 3.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.25,
+                    "Value2": 2.5
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.029999999329447746,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.30000001192092896,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 4,
+                    "Value": 0.05000000074505806,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.30000001192092896,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 4,
+                    "Value": 0.019999999552965164,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.30000001192092896,
+                    "Value2": 10.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.20000000298023224,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.5,
+                    "Value2": 2.5
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 0.20000000298023224,
+                    "Value2": 8.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 15.0,
+                    "Value2": 3.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.20000000298023224,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.05000000074505806,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 20.0,
+                    "Value2": 2.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.30000001192092896,
+                    "Value2": 2.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.4000000059604645,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.05000000074505806,
+                    "Value2": 1.0
+                },
+                {
+                    "MaxLevel": 6,
+                    "Value": 8.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.5,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 15.0,
+                    "Value2": 2.5
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.25,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.029999999329447746,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.07999999821186066,
+                    "Value2": 3.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.5,
+                    "Value2": 2.5
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.25,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.029999999329447746,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.03999999910593033,
+                    "Value2": 3.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 0.30000001192092896,
+                    "Value2": 3.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.5,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.30000001192092896,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.07999999821186066,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.5,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.5,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.5,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.029999999329447746,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.15000000596046448,
+                    "Value2": 3.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.07999999821186066,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 2.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.05000000074505806,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.4000000059604645,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.07999999821186066,
+                    "Value2": 3.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.5,
+                    "Value2": 2.5
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.029999999329447746,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.029999999329447746,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.4000000059604645,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.20000000298023224,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.07999999821186066,
+                    "Value2": 3.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.5,
+                    "Value2": 2.5
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.029999999329447746,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 1,
+                    "Value": 0.05000000074505806,
+                    "Value2": 0.0
                 }
             ],
             "ChestLevels": 1,
@@ -962,6 +1681,19 @@
             "FrailMaxHp": 15.0,
             "FuryDamage": 0.15000000596046448,
             "HasteSpeed": 0.10000000149011612
+        },
+        "camera": {
+            "version": 1,
+            "pitch": 35.0,
+            "perspective": false,
+            "orthographicSize": 7.0,
+            "fieldOfView": 40.0,
+            "distance": 20.0,
+            "lookAhead": 0.0,
+            "standUp": true,
+            "standLift": 0.20000000298023224,
+            "depthSort": true,
+            "sharpness": 8.0
         }
     },
     "defaults": {
@@ -1495,6 +2227,10 @@
                 "HeartRange": 14.0,
                 "HeartBounces": 3,
                 "HeartSpread": 50.0,
+                "HeartHomingTurn": 360.0,
+                "HeartHomingRange": 6.0,
+                "HeartBlastRadius": 0.8999999761581421,
+                "HeartBlastRatio": 0.6000000238418579,
                 "MaxHearts": 300,
                 "SpadeDamagePerPoint": 6.0,
                 "SpadeRadius": 1.2000000476837158,
@@ -1526,8 +2262,8 @@
                 "TargetRange": 8.0
             },
             "Hourglass": {
-                "SecondsToFloor": 5.0,
                 "DecayRate": 0.15000000596046448,
+                "SecondsToFloor": 5.0,
                 "FloorSpeed": 0.5
             },
             "Wasd": {
@@ -1594,8 +2330,6 @@
             "HurtMarkRange": 8.0
         },
         "horde": {
-            "NormalChaseSpeedMultiplier": 0.85,
-            "BossHpMultiplier": 2.0,
             "Kinds": [
                 {
                     "MaxHp": 30.0,
@@ -1684,6 +2418,8 @@
             "BossHp": 25.0,
             "BossDamage": 2.0,
             "BossScale": 2.200000047683716,
+            "BossHpMultiplier": 2.0,
+            "NormalChaseSpeedMultiplier": 0.8500000238418579,
             "BossXp": 20
         },
         "builds": {
@@ -1925,6 +2661,19 @@
             "FrailMaxHp": 15.0,
             "FuryDamage": 0.15000000596046448,
             "HasteSpeed": 0.10000000149011612
+        },
+        "camera": {
+            "version": 1,
+            "pitch": 0.0,
+            "perspective": false,
+            "orthographicSize": 7.0,
+            "fieldOfView": 40.0,
+            "distance": 20.0,
+            "lookAhead": 0.0,
+            "standUp": true,
+            "standLift": 0.0,
+            "depthSort": true,
+            "sharpness": 8.0
         }
     }
 }

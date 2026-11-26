@@ -235,6 +235,7 @@ namespace Turn.View
             if (volcanoRenderer != null) _volcanoColor = volcanoRenderer.color;
             if (oceanRenderer != null) _oceanColor = oceanRenderer.color;
             SetSkin(map);
+            UprightView.Ensure(gameObject); // 2.5D：倾斜相机时贴图 / 血条 / 印记立起来面向镜头（脚下阴影留在地面）
         }
 
         /// <summary>只改外观：火山显示 VolcanoSkin，海洋显示 OceanSkin。</summary>

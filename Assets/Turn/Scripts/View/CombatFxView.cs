@@ -55,6 +55,8 @@ namespace Turn.View
         private readonly List<int> _stale = new List<int>();
         private readonly List<Fx> _fx = new List<Fx>();
         private int _sparks;
+        private int _blasts;
+        private const int MaxBlasts = 60;
 
         public void Bind(ITurnContext ctx, Material material)
         {
@@ -87,6 +89,7 @@ namespace Turn.View
             ctx.Events.Subscribe<DronesChangedEvent>(OnDronesChanged);
             ctx.Events.Subscribe<CardPlayedEvent>(OnCardPlayed);
             ctx.Events.Subscribe<SpadeBombEvent>(OnSpadeBomb);
+            ctx.Events.Subscribe<HeartBlastEvent>(OnHeartBlast);
             ctx.Events.Subscribe<ShieldBlockedEvent>(OnShieldBlocked);
             ctx.Events.Subscribe<ShurikenRecalledEvent>(OnShurikenRecalled);
             ctx.Events.Subscribe<HourglassResetEvent>(OnHourglassReset);
@@ -120,6 +123,7 @@ namespace Turn.View
                 _ctx.Events.Unsubscribe<DronesChangedEvent>(OnDronesChanged);
                 _ctx.Events.Unsubscribe<CardPlayedEvent>(OnCardPlayed);
                 _ctx.Events.Unsubscribe<SpadeBombEvent>(OnSpadeBomb);
+                _ctx.Events.Unsubscribe<HeartBlastEvent>(OnHeartBlast);
                 _ctx.Events.Unsubscribe<ShieldBlockedEvent>(OnShieldBlocked);
                 _ctx.Events.Unsubscribe<ShurikenRecalledEvent>(OnShurikenRecalled);
                 _ctx.Events.Unsubscribe<HourglassResetEvent>(OnHourglassReset);
@@ -136,6 +140,7 @@ namespace Turn.View
             for (int i = 0; i < _fx.Count; i++) if (_fx[i].Go != null) Destroy(_fx[i].Go);
             _fx.Clear();
             _sparks = 0;
+            _blasts = 0;
             foreach (KeyValuePair<int, SpriteRenderer> pair in _chests) if (pair.Value != null) Destroy(pair.Value.gameObject);
             _chests.Clear();
             SetCount(_puddles, 0, null, 0);
@@ -370,7 +375,8 @@ namespace Turn.View
                 _handText = text;
                 _handLabel.text = text;
             }
-            _handLabel.transform.position = ViewMath.ToWorld(_ctx.Player.State.Position) + new Vector3(0f, 1.1f, 0f);
+            _handLabel.transform.position = CameraRig.Above(ViewMath.ToWorld(_ctx.Player.State.Position), 1.1f);
+            _handLabel.transform.rotation = CameraRig.Upright; // 倾斜相机时面向镜头
         }
 
         private void SetLineCount(List<LineRenderer> list, int count)
@@ -409,18 +415,24 @@ namespace Turn.View
 
         private void OnBladeWave(BladeWaveFiredEvent evt)
         {
+            // 和伤害判定完全同一个形状：以玩家为圆心、半径 Inner–Outer 的弧形带（线宽 = 带厚，画在带的中线上）
             Color c = ViewMath.WeaponColor(WeaponKind.Blade);
-            LineRenderer line = NewLine("BladeWave", 0.08f, c, false);
-            int segments = 16;
+            c.a = 0.75f;
+            float inner = evt.Inner;
+            float outer = Mathf.Max(evt.Outer, inner + 0.05f);
+            LineRenderer line = NewLine("BladeWave", outer - inner, c, false);
+            line.numCapVertices = 0; // 圆头会让弧比判定范围长出一截
+            int segments = Mathf.Clamp(Mathf.CeilToInt(evt.HalfAngle * 2f * Mathf.Rad2Deg / 4f), 6, 90);
             line.positionCount = segments + 1;
             float baseAngle = Mathf.Atan2(evt.Direction.Y, evt.Direction.X);
-            Vector3 origin = ViewMath.ToWorld(evt.TargetPosition);
+            Vector3 origin = ViewMath.ToWorld(evt.Origin);
+            float mid = (inner + outer) * 0.5f;
             for (int i = 0; i <= segments; i++)
             {
                 float a = baseAngle - evt.HalfAngle + 2f * evt.HalfAngle * i / segments;
-                line.SetPosition(i, origin + new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * evt.Range * 0.85f);
+                line.SetPosition(i, origin + new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * mid);
             }
-            AddFx(line.gameObject, null, line, 0.18f, false, c, 1f, 1f);
+            AddFx(line.gameObject, null, line, 0.2f, false, c, 1f, 1f);
         }
 
         private void OnFountain(FountainBurstEvent evt)
@@ -606,6 +618,15 @@ namespace Turn.View
             Ring("Card", evt.Position, c, 0.4f, 0.3f, evt.Card.IsJoker ? 3f : 1.2f, true);
         }
 
+        /// <summary>爱心弹命中的小爆炸（同时存在最多 MaxBlasts 个，爆发时一次几十发也不会刷爆）。</summary>
+        private void OnHeartBlast(HeartBlastEvent evt)
+        {
+            if (_blasts >= MaxBlasts) return;
+            SpriteRenderer r = Ring("HeartBlast", evt.Position, new Color(1f, 0.45f, 0.6f, 0.75f), 0.25f, evt.Radius * 0.6f, evt.Radius * 2f, false);
+            r.gameObject.name = "HeartBlast";
+            _blasts++;
+        }
+
         private void OnSpadeBomb(SpadeBombEvent evt)
         {
             Ring("SpadeBomb", evt.Center, new Color(0.7f, 0.7f, 0.85f, 0.85f), 0.5f, 0.3f, evt.Radius * 2f, true);
@@ -747,6 +768,7 @@ namespace Turn.View
                 if (t >= 1f)
                 {
                     if (fx.Go.name == "HitSpark") _sparks = Mathf.Max(0, _sparks - 1);
+                    else if (fx.Go.name == "HeartBlast") _blasts = Mathf.Max(0, _blasts - 1);
                     Destroy(fx.Go);
                     _fx.RemoveAt(i);
                 }

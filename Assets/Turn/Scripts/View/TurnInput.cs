@@ -139,6 +139,39 @@ namespace Turn.View
             }
         }
 
+        /// <summary>V：打开音量设置（标题页 / 暂停菜单里）。</summary>
+        public static bool VolumePressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                return kb != null && kb.vKey.wasPressedThisFrame;
+#else
+                return Input.GetKeyDown(KeyCode.V);
+#endif
+            }
+        }
+
+        /// <summary>↑ / W = -1（上一行），↓ / S = +1（下一行），否则 0。菜单里用。</summary>
+        public static int VerticalStepPressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb == null) return 0;
+                if (kb.upArrowKey.wasPressedThisFrame || kb.wKey.wasPressedThisFrame) return -1;
+                if (kb.downArrowKey.wasPressedThisFrame || kb.sKey.wasPressedThisFrame) return 1;
+                return 0;
+#else
+                if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W)) return -1;
+                if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S)) return 1;
+                return 0;
+#endif
+            }
+        }
+
         /// <summary>T：回到标题（暂停菜单 / 结算界面里）。</summary>
         public static bool TitlePressed
         {

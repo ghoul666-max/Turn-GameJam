@@ -128,6 +128,7 @@ namespace Turn.View
             }
             if (bodyRenderer != null) bodyRenderer.color = bodyColor;
             transform.position = ViewMath.ToWorld(ctx.Player.State.Position);
+            UprightView.Ensure(gameObject); // 2.5D：倾斜相机时身体立起来面向镜头（阴影 / 箭头 / 护盾圈留在地面）
         }
 
         public void Unbind()

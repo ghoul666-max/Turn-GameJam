@@ -207,6 +207,12 @@ namespace Turn.Core
         public float HeartRange = 14f;
         public int HeartBounces = 3;
         public float HeartSpread = 50f;
+        /// <summary>♥ 追踪：转向速度（度 / 秒，0 = 不追踪）、索敌半径（以爱心弹自己为圆心）。</summary>
+        public float HeartHomingTurn = 360f;
+        public float HeartHomingRange = 6f;
+        /// <summary>♥ 命中时的小范围爆炸：半径、伤害 = 爱心弹伤害 × 倍率（打到范围内所有敌人，含被直接命中的那只）。</summary>
+        public float HeartBlastRadius = 0.9f;
+        public float HeartBlastRatio = 0.6f;
         public int MaxHearts = 300;
         /// <summary>黑桃：伤害 = 每点伤害 × 点数；半径 = 基础 + 每点 × 点数。</summary>
         public float SpadeDamagePerPoint = 6f;
@@ -473,6 +479,7 @@ namespace Turn.Core
         public float Radius = 0.4f;
 
         // 弹幕孢
+        /// <summary>已停用（11/26 起弹幕孢只朝玩家发一枚）；字段保留，旧的调参存档才能正常读取。</summary>
         public int SporeBullets = 8;
         public float SporeBulletSpeed = 3.75f;
         public float SporeBulletRadius = 0.2f;
@@ -900,6 +907,12 @@ namespace Turn.Core
         public bool MarkLeft;
         /// <summary>WeaponSystem 写（生成时）、ProjectileSystem 递减：碰到遮挡物 / 地图边缘还能反弹几次（扑克牌爱心弹）。</summary>
         public int BouncesLeft;
+        /// <summary>WeaponSystem 写（生成时）：追踪转向速度（弧度 / 秒，0 = 不追踪）与索敌半径（扑克牌爱心弹）。</summary>
+        public float HomingTurnRate;
+        public float HomingRange;
+        /// <summary>ProjectileSystem 写：当前追踪的目标与重新索敌倒计时。</summary>
+        public MonsterEntity HomingTarget;
+        public float HomingRetarget;
     }
 
     /// <summary>扑克牌的花色。大小王没有花色（None）。</summary>

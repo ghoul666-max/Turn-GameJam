@@ -27,6 +27,7 @@ internal static class Program
         DebugSetLevelForPicker();
         PokerDrawsAndPlaysSuits();
         PokerJokerClearsOnSwitch();
+        PokerHeartsHomeAndExplode();
         ShurikenSpinsRecallsAndOrbits();
         StaplerGroupsAndScatters();
         SwordDashTrailAndShadow();
@@ -476,6 +477,47 @@ internal static class Program
             PlayingCard drawn = trim.Weapons.Hand[0];
             Check(drawn.IsJoker || drawn.Rank == 13, "trimmed deck only draws K or jokers");
         }
+    }
+
+    private static void PokerHeartsHomeAndExplode()
+    {
+        // 扇形外（右上 37°）的敌人：不追踪的爱心弹（朝右 ±28° 内、不反弹）打不到，追踪的会拐过去
+        foreach (bool homing in new[] { false, true })
+        {
+            var ctx = World(c =>
+            {
+                Tough(c);
+                c.Loadout = Single(WeaponKind.Poker);
+                c.Arsenal.Poker.HeartBounces = 0;
+                c.Arsenal.Poker.HeartHomingTurn = homing ? 360f : 0f;
+            });
+            MonsterEntity above = Spawn(ctx, new Vec2(4f, 3f));
+            ctx.Weapons.DebugAddCard(Card(1, CardSuit.Heart));
+            ctx.Roll.TryRoll();
+            above.Position = ctx.Player.State.Position + new Vec2(4f, 3f);
+            RunProjectiles(ctx, 2f);
+            Check(homing ? above.Hp < 1000f : Near(above.Hp, 1000f), homing ? "homing hearts curve into the enemy" : "without homing the hearts fly straight past");
+        }
+
+        // 命中爆炸：直接命中的那只 = 伤害 + 爆炸，旁边的只吃爆炸
+        var blast = World(c =>
+        {
+            Tough(c);
+            c.Loadout = Single(WeaponKind.Poker);
+            c.Arsenal.Poker.HeartHomingTurn = 0f;
+            c.Arsenal.Poker.HeartSpread = 0f;
+            c.Arsenal.Poker.HeartsPerPoint = 1;
+        });
+        blast.Weapons.DebugAddCard(Card(1, CardSuit.Heart));
+        blast.Roll.TryRoll();
+        Vec2 p = blast.Player.State.Position;
+        MonsterEntity hit = Spawn(blast, new Vec2(3f, 0f));
+        MonsterEntity near = Spawn(blast, new Vec2(3.6f, 0.3f));
+        hit.Position = p + new Vec2(3f, 0f);
+        near.Position = p + new Vec2(3.6f, 0.3f);
+        RunProjectiles(blast, 1f);
+        Check(Near(hit.Hp, 1000f - 3f - 3f * 0.6f), "direct hit: 3 + blast 1.8");
+        Check(Near(near.Hp, 1000f - 3f * 0.6f), "neighbour inside the blast: 1.8");
     }
 
     private static void PokerJokerClearsOnSwitch()

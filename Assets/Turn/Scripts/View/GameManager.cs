@@ -151,12 +151,13 @@ namespace Turn.View
             // 音效：没有手动挂就自动挂一个（自动挂的没有音频，要配音效请在编辑器里给 GameManager 加上 TurnAudio 组件）
             _audio = GetComponent<TurnAudio>();
             if (_audio == null) _audio = gameObject.AddComponent<TurnAudio>();
+            if (_flow != null) _flow.SetVolumePreview(_audio.PlayPreview);
         }
 
         /// <summary>从场景组件 / Prefab 的 Inspector 读出当前数值（数值面板“从 Inspector 读取”用）。</summary>
         private TurnTuningData CaptureTuning()
         {
-            return TurnTuningData.Capture(player, weapon, spawnManager, mapManager, upgradeManager);
+            return TurnTuningData.Capture(player, weapon, spawnManager, mapManager, upgradeManager, cameraFollow);
         }
 
         private void OnDestroy()
@@ -423,7 +424,7 @@ namespace Turn.View
                 case WeaponKind.Poker:
                     return "手牌上限 " + a.Poker.HandSize + " · " + Num(a.Poker.DrawInterval) + " 秒抽 1 张" + roll +
                            "\n\n<b>常态</b>  不攻击，自动抽牌到头顶（1–K、大小王）" +
-                           "\n\n<b>爆发</b>  打出全部手牌：♥爱心弹（点数×" + a.Poker.HeartsPerPoint + " 发，会反弹）♠最密集处炸弹 ♦护盾（层数 = 点数）♣吸附裂隙；" +
+                           "\n\n<b>爆发</b>  打出全部手牌：♥追踪爱心弹（点数×" + a.Poker.HeartsPerPoint + " 发，命中小范围爆炸，会反弹）♠最密集处炸弹 ♦护盾（层数 = 点数）♣吸附裂隙；" +
                            "小王 / 大王永久 +" + Mathf.RoundToInt(a.Poker.SmallJokerBonus * 100f) + "% / +" + Mathf.RoundToInt(a.Poker.BigJokerBonus * 100f) + "%（切换主武器清零）";
                 case WeaponKind.Shuriken:
                     return "弹药 " + a.Shuriken.Ammo + " · " + Num(a.Shuriken.FireInterval) + " 秒/发 · 旋转 " + Num(a.Shuriken.SpinDamage) + "/" + Num(a.Shuriken.SpinInterval) + " 秒" + roll +
@@ -491,6 +492,98 @@ namespace Turn.View
             ILoadoutSystem l = _ctx.Loadout;
             if (l.Scheme == LoadoutScheme.DualMain) return WeaponKinds.DisplayName(l.Equipped) + " / " + WeaponKinds.DisplayName(l.Standby);
             return l.Sub != SubWeaponKind.None ? WeaponKinds.DisplayName(l.Equipped) + " + " + SubWeaponKinds.DisplayName(l.Sub) : WeaponKinds.DisplayName(l.Equipped);
+        }
+
+        /// <summary>暂停界面左侧的「已选强化」：按 当前主武器 → 另一把主武器 / 副武器 → 其他（F7 调试加的）分组，最后是宝箱代价。</summary>
+        private void RefreshPauseBuilds()
+        {
+            if (_flow == null || _ctx == null) return;
+            IProgressionSystem prog = _ctx.Progression;
+            BuildDef[] defs = _ctx.Config.Builds.Builds;
+            ILoadoutSystem loadout = _ctx.Loadout;
+            var entries = new System.Collections.Generic.List<FlowUI.BuildEntry>();
+            int cards = 0, levels = 0;
+
+            // 分组顺序：key = 主武器 0..8，副武器 100 + kind
+            var order = new System.Collections.Generic.List<int>();
+            order.Add((int)loadout.Equipped);
+            if (loadout.Scheme == LoadoutScheme.DualMain && loadout.Standby != loadout.Equipped) order.Add((int)loadout.Standby);
+            if (loadout.Sub != SubWeaponKind.None) order.Add(100 + (int)loadout.Sub);
+            for (int w = 0; w < WeaponKinds.Count; w++) if (!order.Contains(w)) order.Add(w);
+            for (int s = 1; s < SubWeaponKinds.Count; s++) if (!order.Contains(100 + s)) order.Add(100 + s);
+
+            for (int g = 0; g < order.Count; g++)
+            {
+                int key = order[g];
+                bool isSub = key >= 100;
+                var weapon = isSub ? WeaponKind.WaterGun : (WeaponKind)key;
+                var sub = isSub ? (SubWeaponKind)(key - 100) : SubWeaponKind.None;
+                bool headerAdded = false;
+                for (int i = 0; i < BuildIds.Count; i++)
+                {
+                    var id = (BuildId)i;
+                    int level = prog.GetLevel(id);
+                    if (level <= 0) continue;
+                    if (isSub ? BuildIds.SubOf(id) != sub : (BuildIds.IsSub(id) || BuildIds.WeaponOf(id) != weapon)) continue;
+                    Color color = isSub ? ViewMath.SubWeaponColor(sub) : ViewMath.WeaponColor(weapon);
+                    if (!headerAdded)
+                    {
+                        headerAdded = true;
+                        string role = isSub ? "副武器" : (weapon == loadout.Equipped ? "当前主武器" : (loadout.Carries(weapon) ? "主武器" : "未携带"));
+                        entries.Add(new FlowUI.BuildEntry
+                        {
+                            Header = true, Color = color,
+                            Text = (isSub ? SubWeaponKinds.DisplayName(sub) : WeaponKinds.DisplayName(weapon)) + "  <size=18>" + role + "</size>",
+                        });
+                    }
+                    BuildDef def = defs != null && i < defs.Length ? defs[i] : null;
+                    int max = prog.MaxLevel(id);
+                    entries.Add(new FlowUI.BuildEntry
+                    {
+                        Color = color,
+                        Text = "<b>" + Turn.Weapons.BuildCatalog.Name(id) + "</b>  <color=#8A7560>Lv " + level + " / " + max + (level >= max ? "  已满级" : "") +
+                               "</color>\n<size=18>" + Turn.Weapons.BuildCatalog.Describe(id, def, level) + "</size>",
+                    });
+                    cards++;
+                    levels += level;
+                }
+            }
+
+            // 宝箱代价
+            BuildConfig bc = _ctx.Config.Builds;
+            Color curseColor = new Color(0.75f, 0.22f, 0.2f, 1f);
+            bool curseHeader = false;
+            for (int c = 1; c < ChestCurses.Count; c++)
+            {
+                var curse = (ChestCurse)c;
+                int stacks = prog.CurseStacks(curse);
+                if (stacks <= 0) continue;
+                if (!curseHeader)
+                {
+                    curseHeader = true;
+                    entries.Add(new FlowUI.BuildEntry { Header = true, Color = curseColor, Text = "宝箱代价" });
+                }
+                string name, cost;
+                switch (curse)
+                {
+                    case ChestCurse.Frail: name = "血契"; cost = "最大生命 −" + Mathf.RoundToInt(bc.FrailMaxHp * stacks); break;
+                    case ChestCurse.Fury: name = "狂怒"; cost = "怪物伤害 +" + Mathf.RoundToInt(bc.FuryDamage * 100f * stacks) + "%"; break;
+                    default: name = "疾行"; cost = "怪物移速 +" + Mathf.RoundToInt(bc.HasteSpeed * 100f * stacks) + "%"; break;
+                }
+                entries.Add(new FlowUI.BuildEntry
+                {
+                    Color = curseColor,
+                    Text = "<b>" + name + "</b>  <color=#8A7560>×" + stacks + "</color>\n<size=18>" + cost + "（本局永久）</size>",
+                });
+            }
+
+            if (cards == 0 && !curseHeader)
+                entries.Add(new FlowUI.BuildEntry
+                {
+                    Color = new Color(0.6f, 0.55f, 0.5f, 1f),
+                    Text = "还没有选择任何强化\n<size=18>升级三选一、开宝箱拿到的强化都会记在这里</size>",
+                });
+            _flow.SetBuildList("已选强化  <size=22>" + cards + " 张 · 共 " + levels + " 层</size>", entries);
         }
 
         private void ResumeFromPause()
@@ -600,6 +693,12 @@ namespace Turn.View
             TurnConfig config = TurnConfigReader.Read(player, weapon, mapManager, worldBounds, spawnManager, upgradeManager);
             // 数值面板：有存档且启用时覆盖 Inspector 数值；第一次运行时把 Inspector 数值记成存档
             TurnTuningStore.ApplyOrCapture(config, player, weapon, spawnManager, mapManager, upgradeManager);
+            if (cameraFollow != null)
+            {
+                // 相机 / 2.5D 视角：面板启用且存档里有这一组时用存档，否则用 CameraFollow 的 Inspector 参数
+                TurnTuningFile tuningFile = TurnTuningStore.Load();
+                cameraFollow.ApplySettings(tuningFile != null && tuningFile.useTuning && tuningFile.values != null ? tuningFile.values.camera : null);
+            }
             // 出战配置 = 选择页的选择（局内不再按波次解锁）
             config.Loadout = new LoadoutConfig { Scheme = _scheme, Main = _mainWeapon, SecondMain = _secondWeapon, Sub = _subWeapon };
             // 关卡：开局位面换成本关这一组的第一面（如果 Inspector 的开局位面就在这一组里，保留它，方便测试第二面）
@@ -677,6 +776,20 @@ namespace Turn.View
             if (TurnInput.ObstacleDebugPressed) Obstacle.ShowDebug = !Obstacle.ShowDebug;
             if (debugShortcuts) HandleDebugKeys();
 
+            // 音量设置：盖在标题页 / 暂停菜单上；打开时只处理 ↑↓←→ / Esc，模拟不推进
+            if (_flow != null && _flow.IsVolumeOpen)
+            {
+                _ctx.Player.SetMoveInput(Vec2.Zero);
+                _accumulator = 0f;
+                if (PanelOpen) return;
+                int row = TurnInput.VerticalStepPressed;
+                int volumeStep = TurnInput.SelectStepPressed;
+                if (row != 0) _flow.VolumeMoveRow(row);
+                if (volumeStep != 0) _flow.VolumeAdjust(volumeStep);
+                if (TurnInput.PausePressed || TurnInput.VolumePressed) _flow.HideVolume();
+                return;
+            }
+
             // 武器选择页：1 / 2 / 3 直接选，← → 切换 + Space / Enter 确认，也可以点卡片
             if (_flow != null && _flow.IsSelectOpen)
             {
@@ -697,7 +810,8 @@ namespace Turn.View
             {
                 _ctx.Player.SetMoveInput(Vec2.Zero);
                 _accumulator = 0f;
-                if (!PanelOpen && (TurnInput.RollPressed || TurnInput.RestartPressed)) _flow.StartFromTitle();
+                if (!PanelOpen && TurnInput.VolumePressed) _flow.ShowVolume();
+                else if (!PanelOpen && (TurnInput.RollPressed || TurnInput.RestartPressed)) _flow.StartFromTitle();
                 return;
             }
 
@@ -743,12 +857,18 @@ namespace Turn.View
             if (TurnInput.PausePressed && session.Phase == RunPhase.Playing)
             {
                 _paused = !_paused;
+                if (_paused) RefreshPauseBuilds();
                 if (_flow != null) _flow.SetPause(_paused);
                 if (hud != null) hud.SetPaused(_paused);
             }
             if (_paused)
             {
-                // 暂停菜单快捷键：R 重打本关，T 回到标题（Esc / P 继续）
+                // 暂停菜单快捷键：V 音量设置，R 重打本关，T 回到标题（Esc / P 继续）
+                if (TurnInput.VolumePressed && _flow != null)
+                {
+                    _flow.ShowVolume();
+                    return;
+                }
                 if (TurnInput.TitlePressed)
                 {
                     ReturnToTitle();

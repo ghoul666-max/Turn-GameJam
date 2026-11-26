@@ -83,6 +83,7 @@ namespace Turn.View
         private void SetOpen(bool open)
         {
             _open = open;
+            if (!open) CameraFollow.Preview = null; // 关闭面板：相机回到本局开局时的参数
             GUIUtility.keyboardControl = 0;
             if (open) Reload();
         }
@@ -179,6 +180,8 @@ namespace Turn.View
                 return;
             }
             if (_file == null) Reload();
+            // 相机 / 2.5D 视角：面板打开时实时预览正在编辑的参数（不保存也能看效果）
+            if (!standalone && _file.values != null) CameraFollow.Preview = _file.useTuning ? _file.values.camera : null;
 
             float pw = Mathf.Min(680f, w - 20f);
             Rect r = new Rect((w - pw) * 0.5f, 10f, pw, h - 20f);
@@ -353,6 +356,24 @@ namespace Turn.View
 
         private void DrawFields(TurnTuningData d)
         {
+            if (Section("camera", "相机 / 2.5D 视角（只影响画面；面板打开时实时预览，保存后下一局沿用）"))
+            {
+                // 旧存档没有这一组（version = 0）：换成默认值 = 原来的正俯视
+                if (d.camera == null || d.camera.version <= 0) d.camera = new CameraRigSettings();
+                CameraRigSettings c = d.camera;
+                c.pitch = F("cam.pitch", "倾斜角（度，0 = 原来的正俯视）", c.pitch, 0f, 70f);
+                c.perspective = Toggle("透视投影（近大远小；关 = 正交）", c.perspective);
+                // 三行一直显示（IMGUI 同一帧里控件数量不能变）
+                c.orthographicSize = F("cam.size", "正交：画面半高（原来 7）", c.orthographicSize, 2f, 30f);
+                c.fieldOfView = F("cam.fov", "透视：竖直视角（度）", c.fieldOfView, 10f, 90f);
+                c.distance = F("cam.dist", "透视：相机距离（越大越远）", c.distance, 3f, 80f);
+                c.lookAhead = F("cam.ahead", "注视点往前（地图上方）偏移", c.lookAhead, -5f, 5f);
+                c.standUp = Toggle("倾斜时玩家 / 怪物立起来面向镜头", c.standUp);
+                c.standLift = F("cam.lift", "立起物体离地高度", c.standLift, -1f, 2f);
+                c.depthSort = Toggle("倾斜时按前后遮挡（画面靠下的挡住靠上的）", c.depthSort);
+                c.sharpness = F("cam.sharp", "跟随灵敏度", c.sharpness, 0.5f, 30f);
+                GUILayout.Label("提示：玩法判定不变（伤害范围、拾取、碰撞都还是地面上的圆）。透视时相机距离要配合视角调，视角 40° / 距离 20 ≈ 正交 7。", _wrap);
+            }
             if (Section("level", "关卡 / 波次"))
             {
                 // 旧存档没有这一组（version = 0）：换成默认值，保存后生效；version 1（亚空间之前）补上新字段
@@ -541,6 +562,10 @@ namespace Turn.View
                 p.HeartRange = F("pk.hrange", "♥ 爱心弹射程", p.HeartRange, 1f, 60f);
                 p.HeartBounces = I("pk.hbounce", "♥ 可反弹次数", p.HeartBounces, 0, 20);
                 p.HeartSpread = F("pk.hspread", "♥ 扇形张角（度）", p.HeartSpread, 0f, 360f);
+                p.HeartHomingTurn = F("pk.hhoming", "♥ 追踪转向速度（度 / 秒，0 = 不追踪）", p.HeartHomingTurn, 0f, 1440f);
+                p.HeartHomingRange = F("pk.hhrange", "♥ 追踪索敌半径", p.HeartHomingRange, 0f, 30f);
+                p.HeartBlastRadius = F("pk.hblastR", "♥ 命中爆炸半径（0 = 不爆炸）", p.HeartBlastRadius, 0f, 5f);
+                p.HeartBlastRatio = F("pk.hblast", "♥ 爆炸伤害 = 爱心弹伤害 ×", p.HeartBlastRatio, 0f, 5f);
                 p.MaxHearts = I("pk.hmax", "♥ 一次爆发最多几发（性能）", p.MaxHearts, 1, 2000);
                 p.SpadeDamagePerPoint = F("pk.sdmg", "♠ 每点伤害", p.SpadeDamagePerPoint, 0f, 100f);
                 p.SpadeRadius = F("pk.srad", "♠ 基础半径", p.SpadeRadius, 0.1f, 10f);
@@ -664,7 +689,6 @@ namespace Turn.View
                 h.MaxAlive = I("hd.max", "存活上限", h.MaxAlive, 1, 500);
                 h.MinPlayerDistance = F("hd.minDist", "刷新点离玩家最小距离", h.MinPlayerDistance, 0f, 30f);
                 h.Radius = F("hd.radius", "怪物碰撞半径", h.Radius, 0.05f, 2f);
-                h.SporeBullets = I("hd.sporeN", "弹幕孢：每圈弹幕数", h.SporeBullets, 1, 32);
                 h.SporeBulletSpeed = F("hd.sporeV", "弹幕孢：弹幕速度", h.SporeBulletSpeed, 0.1f, 20f);
                 h.ChargeSpeed = F("hd.chargeV", "疾冲兽：冲锋速度", h.ChargeSpeed, 0.5f, 30f);
                 h.ChargeMaxDistance = F("hd.chargeD", "疾冲兽：冲锋最远距离", h.ChargeMaxDistance, 0.5f, 40f);

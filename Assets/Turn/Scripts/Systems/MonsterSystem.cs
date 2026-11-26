@@ -8,7 +8,7 @@ namespace Turn.Systems
     /// <summary>
     /// 怪物（新策划案 11/24：五种基础怪物，数值见 HordeConfig / MonsterCatalog.CreateHordeDefaults）。
     ///   · 游荡尸：直线追玩家，接触造成碰撞伤害；
-    ///   · 弹幕孢：缓慢追玩家，每 3 秒向四周发射一圈 8 发环形弹幕；
+    ///   · 弹幕孢：缓慢追玩家，每 3 秒朝玩家当前位置发射一枚弹幕（11/26 改：原来是向四周一圈 8 发）；
     ///   · 疾冲兽：远处正常移动，进入冲锋范围后原地蓄力（锁定方向），随后高速直线冲锋，路径上撞到玩家造成高额伤害；
     ///   · 毒腐体：近战追玩家；死亡时原地留下毒潭（站在里面持续掉血）；
     ///   · 狙击械：保持中远距离，锁定玩家方向蓄力，蓄力结束发射一道横穿全屏的穿透激光（不被遮挡物挡住）。
@@ -274,22 +274,21 @@ namespace Turn.Systems
             if (m.StunLeft > 0f) m.StunLeft = MathF.Max(0f, m.StunLeft - dt);
         }
 
-        /// <summary>弹幕孢：每 AttackInterval 秒向四周发射一圈 SporeBullets 发环形弹幕。</summary>
+        /// <summary>
+        /// 弹幕孢：每 AttackInterval 秒朝玩家当前位置发射一枚弹幕（直线飞行，不追踪）。
+        /// 精英 / Boss 也只发一枚（伤害 / 体型按倍率）。玩家和它完全重合时随机一个方向。
+        /// </summary>
         private void TickSpore(MonsterEntity m, HordeKindConfig k, float damageCurse, float dt)
         {
             m.AiTimer -= dt;
             if (m.AiTimer > 0f) return;
             m.AiTimer = MathF.Max(0.1f, k.AttackInterval);
-            int bullets = Math.Max(1, _horde.SporeBullets * (m.Rank >= 2 ? 2 : 1));
-            float offset = (float)_ctx.Random.NextDouble() * MathF.PI * 2f;
+            Vec2 to = _ctx.Player.State.Position - m.Position;
+            Vec2 dir = to.SqrMagnitude > 0.0001f ? to.Normalized : Vec2.FromAngle((float)_ctx.Random.NextDouble() * MathF.PI * 2f);
             float speed = MathF.Max(0.1f, _horde.SporeBulletSpeed);
             float life = MathF.Max(0.1f, _horde.SporeBulletLifetime);
-            for (int b = 0; b < bullets; b++)
-            {
-                Vec2 dir = Vec2.FromAngle(offset + b * MathF.PI * 2f / bullets);
-                _ctx.Projectiles.SpawnEnemy(m.Position + dir * m.Radius, dir * speed, _horde.SporeBulletRadius,
-                    k.Damage * m.DamageScale * damageCurse, life, speed * life, EnemyProjectileKind.Bubble);
-            }
+            _ctx.Projectiles.SpawnEnemy(m.Position + dir * m.Radius, dir * speed, _horde.SporeBulletRadius,
+                k.Damage * m.DamageScale * damageCurse, life, speed * life, EnemyProjectileKind.Bubble);
         }
 
         /// <summary>疾冲兽：0 追击（冷却）→ 1 蓄力（锁定方向，不动）→ 2 冲锋（一次冲锋最多撞一次）。</summary>

@@ -77,6 +77,7 @@ namespace Turn.Systems
                 ProjectileEntity p = _active[i];
                 if (!p.Alive) continue;
 
+                if (!p.Enemy && p.HomingTurnRate > 0f) Steer(p, dt);
                 Vec2 from = p.Position;
                 Vec2 step = p.Velocity * dt;
                 float length = step.Magnitude;
@@ -135,6 +136,51 @@ namespace Turn.Systems
                 _active[i] = _active[last];
                 _active.RemoveAt(last);
             }
+        }
+
+        /// <summary>
+        /// 追踪弹（扑克牌爱心弹）：每 0.2 秒在 HomingRange 内找一次最近的、这颗弹还没打过的敌人，
+        /// 每步把速度方向朝它转最多 HomingTurnRate × dt（速度大小不变）。
+        /// </summary>
+        private void Steer(ProjectileEntity p, float dt)
+        {
+            p.HomingRetarget -= dt;
+            MonsterEntity t = p.HomingTarget;
+            if (t == null || !t.Alive || p.HitIds.Contains(t.Id) || p.HomingRetarget <= 0f)
+            {
+                p.HomingRetarget = 0.2f;
+                p.HomingTarget = t = NearestUnhit(p);
+            }
+            if (t == null) return;
+            float speed = p.Velocity.Magnitude;
+            if (speed < 0.0001f) return;
+            float current = MathF.Atan2(p.Velocity.Y, p.Velocity.X);
+            Vec2 to = t.Position - p.Position;
+            if (to.SqrMagnitude < 0.0001f) return;
+            float desired = MathF.Atan2(to.Y, to.X);
+            float diff = desired - current;
+            while (diff > MathF.PI) diff -= 2f * MathF.PI;
+            while (diff < -MathF.PI) diff += 2f * MathF.PI;
+            float maxTurn = p.HomingTurnRate * dt;
+            float angle = current + MathF.Max(-maxTurn, MathF.Min(maxTurn, diff));
+            p.Velocity = new Vec2(MathF.Cos(angle), MathF.Sin(angle)) * speed;
+        }
+
+        private MonsterEntity NearestUnhit(ProjectileEntity p)
+        {
+            MonsterEntity best = null;
+            float bestSq = p.HomingRange * p.HomingRange;
+            IReadOnlyList<MonsterEntity> all = _ctx.Monsters.Active;
+            for (int i = 0; i < all.Count; i++)
+            {
+                MonsterEntity m = all[i];
+                if (!m.Alive || p.HitIds.Contains(m.Id)) continue;
+                float sq = Vec2.SqrDistance(p.Position, m.Position);
+                if (sq > bestSq) continue;
+                bestSq = sq;
+                best = m;
+            }
+            return best;
         }
 
         private void End(ProjectileEntity p)

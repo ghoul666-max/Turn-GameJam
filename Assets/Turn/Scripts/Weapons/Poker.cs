@@ -9,7 +9,7 @@ namespace Turn.Weapons
     /// 常态：不攻击，每隔 DrawInterval 秒随机替换头顶唯一一张牌，不因抽满而停止。
     ///       牌库 = 52 张点数牌（1–13 × 四花色）+ 小王 + 大王；「精简牌库」从最小的点数开始移除。
     /// 爆发：只打出头顶当前显示的一张牌；大王仍会按原规则额外抽牌并立即打出，每张按花色 + 点数独立触发：
-    ///   ♥ 沿移动方向射出 点数 × 5 发爱心弹（碰到遮挡物 / 地图边缘反弹）；
+    ///   ♥ 沿移动方向射出 点数 × 5 发爱心弹（追踪附近敌人，命中时小范围爆炸；碰到遮挡物 / 地图边缘反弹）；
     ///   ♠ 在怪物最密集处落下炸弹，点数越大伤害与范围越大；
     ///   ♦ 叠方片护盾（层数 = 点数），挡怪物碰撞与弹幕；
     ///   ♣ 在最近的敌人处生成空间裂隙，吸附 + 持续伤害，持续时间随点数增长；
@@ -142,6 +142,8 @@ namespace Turn.Weapons
                 if (p == null) continue;
                 p.PierceLeft = pierce;
                 p.BouncesLeft = Math.Max(0, Cfg.HeartBounces);
+                p.HomingTurnRate = MathF.Max(0f, Cfg.HeartHomingTurn) * (MathF.PI / 180f);
+                p.HomingRange = MathF.Max(0f, Cfg.HeartHomingRange);
             }
         }
 
@@ -280,9 +282,26 @@ namespace Turn.Weapons
             return true;
         }
 
+        /// <summary>爱心弹命中：直接伤害 + 以命中点为中心的小范围爆炸（范围内所有敌人，含被直接命中的那只）。</summary>
         public override bool OnHit(ProjectileEntity p, MonsterEntity m)
         {
+            Vec2 at = m.Position;
             float dealt = Kit.Hit(m, p.Damage, DamageSource.Weapon);
+            float radius = MathF.Max(0f, Cfg.HeartBlastRadius);
+            float blast = p.Damage * MathF.Max(0f, Cfg.HeartBlastRatio);
+            if (radius > 0f && blast > 0f)
+            {
+                Kit.Ctx.Monsters.QueryCircle(at, radius, _query);
+                int hits = 0;
+                for (int i = 0; i < _query.Count; i++)
+                {
+                    if (!_query[i].Alive) continue;
+                    dealt += Kit.Hit(_query[i], blast, DamageSource.Weapon);
+                    hits++;
+                }
+                _query.Clear();
+                Kit.Ctx.Events.Publish(new HeartBlastEvent { Position = at, Radius = radius, Hits = hits });
+            }
             Kit.Lifesteal(dealt, BuildId.PokerLifesteal);
             p.PierceLeft--;
             return p.PierceLeft > 0;

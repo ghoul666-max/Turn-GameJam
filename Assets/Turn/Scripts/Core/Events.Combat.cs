@@ -17,7 +17,8 @@ namespace Turn.Core
     /// <summary>陌刀挥出一道扇形剑气（立即结算）。HalfAngle 为弧度。</summary>
     public struct GravityDisplacedEvent { public int Moved; }
 
-    public struct BladeWaveFiredEvent { public Vec2 Origin; public Vec2 TargetPosition; public Vec2 Direction; public float HalfAngle; public float Range; public int Hits; }
+    /// <summary>陌刀剑气：以 Origin 为圆心、Direction 两侧 HalfAngle、半径 Inner–Outer 的弧形带（特效与伤害判定是同一个形状）。</summary>
+    public struct BladeWaveFiredEvent { public Vec2 Origin; public Vec2 TargetPosition; public Vec2 Direction; public float HalfAngle; public float Range; public float Inner; public float Outer; public int Hits; }
 
     /// <summary>爆发 · 水枪：一滩水渍喷发成喷泉。</summary>
     public struct FountainBurstEvent { public Vec2 Position; public float Radius; public int Hits; }
@@ -98,6 +99,9 @@ namespace Turn.Core
 
     /// <summary>翻滚爆发打出一张牌（按出牌顺序；Position = 效果中心）。</summary>
     public struct CardPlayedEvent { public PlayingCard Card; public Vec2 Position; public float Multiplier; }
+
+    /// <summary>红桃爱心弹命中后的小范围爆炸。</summary>
+    public struct HeartBlastEvent { public Vec2 Position; public float Radius; public int Hits; }
 
     /// <summary>黑桃炸弹落下。</summary>
     public struct SpadeBombEvent { public Vec2 Center; public float Radius; public int Hits; }

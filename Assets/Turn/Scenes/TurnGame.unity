@@ -6594,6 +6594,87 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Turn.View.SpawnManager
   monsterPrefab: {fileID: 8630504662967137972, guid: 2ee7fec687ec5fd4a930b3effd48efc4, type: 3}
   sharkPrefab: {fileID: 756384292482194829, guid: 38cedb573c3cfb3468cf9ae6834fa042, type: 3}
+  horde:
+    Kinds:
+    - MaxHp: 30
+      Speed: 2
+      Damage: 5
+      AttackInterval: 0.5
+      Windup: 0
+      Range: 0
+      Xp: 5
+      DebutWave: 1
+      Weight: 5
+    - MaxHp: 50
+      Speed: 1
+      Damage: 3
+      AttackInterval: 3
+      Windup: 0
+      Range: 0
+      Xp: 8
+      DebutWave: 3
+      Weight: 2
+    - MaxHp: 80
+      Speed: 1.5
+      Damage: 15
+      AttackInterval: 4
+      Windup: 0.8
+      Range: 6
+      Xp: 12
+      DebutWave: 5
+      Weight: 1.5
+    - MaxHp: 60
+      Speed: 1.75
+      Damage: 4
+      AttackInterval: 0.5
+      Windup: 0
+      Range: 0
+      Xp: 10
+      DebutWave: 7
+      Weight: 1.5
+    - MaxHp: 70
+      Speed: 1.25
+      Damage: 20
+      AttackInterval: 5
+      Windup: 1.5
+      Range: 9
+      Xp: 15
+      DebutWave: 10
+      Weight: 1
+    HpPerWave: 0.1
+    DamagePerWave: 0.05
+    SpawnInterval: 1.5
+    BaseCount: 2
+    CountPerWave: 0.5
+    MaxAlive: 160
+    EdgeInset: 0.6
+    MinPlayerDistance: 6
+    Radius: 0.4
+    SporeBullets: 8
+    SporeBulletSpeed: 3.75
+    SporeBulletRadius: 0.2
+    SporeBulletLifetime: 6
+    ChargeSpeed: 7.5
+    ChargeMaxDistance: 9
+    PoolRadius: 1.5
+    PoolDuration: 5
+    PoolDamage: 2
+    PoolInterval: 0.5
+    SniperMinRange: 6
+    SniperMaxRange: 10
+    LaserWidth: 0.3
+    EliteFromWave: 2
+    EliteHp: 5
+    EliteDamage: 1.5
+    EliteScale: 1.5
+    EliteXp: 5
+    BossEveryWaves: 10
+    BossHp: 25
+    BossDamage: 2
+    BossScale: 2.2
+    BossHpMultiplier: 2
+    NormalChaseSpeedMultiplier: 0.85
+    BossXp: 20
   spawn:
     initialCount: 6
     interval: 2.5
@@ -10645,6 +10726,7 @@ MonoBehaviour:
   randomSeed: 0
   simStep: 0.016666668
   maxStepsPerFrame: 5
+  weaponSelect: 1
   debugShortcuts: 1
   phase: 0
   activeMap: 0
@@ -10687,8 +10769,26 @@ MonoBehaviour:
   primalMusic: {fileID: 8300000, guid: 361465e88e721154b8653c6a4af82d66, type: 3}
   futureMusic: {fileID: 8300000, guid: 795ebe8891bae6f4dbb4fd2a682d3438, type: 3}
   titleMusic: {fileID: 8300000, guid: c9610b1788f388a47b62f5a391eb21ca, type: 3}
+  battleMusic: {fileID: 8300000, guid: 96a7244fc35b25d41b256274a79a5aef, type: 3}
+  bossMusic: {fileID: 8300000, guid: 69c42496a1a42884b910d964b5191748, type: 3}
+  subspaceEnter:
+    clip: {fileID: 8300000, guid: cc7d03218fb8189478a9034860e1c277, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.2
+  subspaceExitSwell: {fileID: 8300000, guid: 82cc0fdca0e840748b0a1bc8bd3f2d99, type: 3}
+  subspaceExitSwellVolume: 0.8
+  subspaceExit:
+    clip: {fileID: 0}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.2
+  subspaceMusicCutoff: 900
+  subspaceMusicPitch: 0.88
+  subspaceMusicDuck: 0.7
+  subspaceMusicRamp: 0.08
   roll:
-    clip: {fileID: 8300000, guid: 5144b7fdc37ec5d43bbb5d208b00f0a3, type: 3}
+    clip: {fileID: 0}
     volume: 1
     pitchJitter: 0.05
     minInterval: 0
@@ -10779,6 +10879,187 @@ MonoBehaviour:
     volume: 1
     pitchJitter: 0.05
     minInterval: 0
+  defeat:
+    clip: {fileID: 8300000, guid: dbb6d25814ce83e40a31d9aab9077b4f, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0
+  defeatDelay: 0.8
+  waveStart:
+    clip: {fileID: 8300000, guid: 6205527f9c87f68479176e8bc05def9a, type: 3}
+    volume: 0.6
+    pitchJitter: 0.05
+    minInterval: 1
+  upgradeConfirm:
+    clip: {fileID: 8300000, guid: 87b1aef657ac0b64eb36a30d6ca98bb6, type: 3}
+    volume: 0.7
+    pitchJitter: 0.05
+    minInterval: 0.1
+  chestOpen:
+    clip: {fileID: 8300000, guid: 529fa859e715df64e874837a9fc31f0d, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.2
+  spearShot:
+    clip: {fileID: 8300000, guid: ddbb7f6d77a8b5640b7085d72c9a3439, type: 3}
+    volume: 0.8
+    pitchJitter: 0.05
+    minInterval: 0.05
+  bladeShot:
+    clip: {fileID: 8300000, guid: 6cc657751f7a05644bcabaea27d2b2aa, type: 3}
+    volume: 0.8
+    pitchJitter: 0.05
+    minInterval: 0.05
+  palmShot:
+    clip: {fileID: 8300000, guid: dfa6113d41af3724ebf3bb8e2c53d5fe, type: 3}
+    volume: 0.8
+    pitchJitter: 0.05
+    minInterval: 0.05
+  crossbowShot:
+    clip: {fileID: 8300000, guid: 918759932ab0ba04d8c23c6d7b975c70, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.05
+  pokerShot:
+    clip: {fileID: 8300000, guid: 1baf8177482882b449231f187fb6beff, type: 3}
+    volume: 0.7
+    pitchJitter: 0.05
+    minInterval: 0.05
+  shurikenShot:
+    clip: {fileID: 8300000, guid: 5f9125ed43e6fc5429622a2d81797d99, type: 3}
+    volume: 0.8
+    pitchJitter: 0.05
+    minInterval: 0.05
+  staplerShot:
+    clip: {fileID: 8300000, guid: 4a26a65916d1ea84f807899101185899, type: 3}
+    volume: 0.6
+    pitchJitter: 0.05
+    minInterval: 0.05
+  swordShot:
+    clip: {fileID: 8300000, guid: 1ef3306ce5149b84bbe6653b69fd848d, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.05
+  waterBurst:
+    clip: {fileID: 8300000, guid: 5fbf5b53e3d3bc348b31f4e5ea8c2af9, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  spearBurst:
+    clip: {fileID: 8300000, guid: 933b085531332df4eb110599c1ebd08a, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  bladeBurst:
+    clip: {fileID: 8300000, guid: 17d52481e5b31c24292f2d8b7fa3ac80, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  palmBurst:
+    clip: {fileID: 8300000, guid: 2650e44c3b2f5d24b9fa4de0bb2148a9, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  pokerBurst:
+    clip: {fileID: 8300000, guid: e692cf234985db146b66948e56f06ccb, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  shurikenBurst:
+    clip: {fileID: 8300000, guid: f1fca2453aa90e840aa74ad384149e8e, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  staplerBurst:
+    clip: {fileID: 0}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  swordBurst:
+    clip: {fileID: 8300000, guid: 4582ee01530013d4fbbf83d9cfe1db18, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  crossbowWallSlam:
+    clip: {fileID: 8300000, guid: 46143eb709efd9e41be72c8273d679a4, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.1
+  spadeBomb:
+    clip: {fileID: 8300000, guid: b3c9c01cdf287fc4da2e9c8f32b4b371, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.15
+  heartBlast:
+    clip: {fileID: 0}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.06
+  monsterHit:
+    clip: {fileID: 8300000, guid: 738aa24a8ba545c4dbdc6a40d6ac11f7, type: 3}
+    volume: 0.35
+    pitchJitter: 0.12
+    minInterval: 0.04
+  sniperWarn:
+    clip: {fileID: 8300000, guid: 1df3c23ba4c33254ebf3364ff8f95720, type: 3}
+    volume: 0.9
+    pitchJitter: 0.05
+    minInterval: 0.2
+  sniperFire:
+    clip: {fileID: 8300000, guid: dfa3f5fa6aa2ad44b811add068f0a57b, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.1
+  rotterPoison:
+    clip: {fileID: 8300000, guid: 9390f9e572714b14a8be48da80649852, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.15
+  eliteAppear:
+    clip: {fileID: 8300000, guid: 49f87789d6f57ad4789c86313f82aae4, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.5
+  bossAppear:
+    clip: {fileID: 8300000, guid: f2bfc456003034541993efd04b149d9d, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 1
+  gravityWell:
+    clip: {fileID: 8300000, guid: 7065b135b66b3214d92d192954f0fe48, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.3
+  anchorSlash:
+    clip: {fileID: 8300000, guid: 9cf7a7debd3d3bf4690ec53bfb0396c9, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.3
+  hourglassReset:
+    clip: {fileID: 8300000, guid: 9050a0e380178d34da7545daf792742c, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.3
+  wasdKey:
+    clip: {fileID: 8300000, guid: a3f38e654befa734fa6b72b31e226ab6, type: 3}
+    volume: 0.5
+    pitchJitter: 0.05
+    minInterval: 0.08
+  wasdBurst:
+    clip: {fileID: 8300000, guid: 481419a2b8c4f2541889fe976d19c994, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.3
+  cursorStrike:
+    clip: {fileID: 8300000, guid: c2b8f8087822233428e8a4df1b20c618, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.3
+  magnetCollide:
+    clip: {fileID: 8300000, guid: b3c9c01cdf287fc4da2e9c8f32b4b371, type: 3}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.3
 --- !u!1 &1136955925
 GameObject:
   m_ObjectHideFlags: 0
@@ -12546,8 +12827,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Turn.View.CameraFollow
   target: {fileID: 1067590614}
   bounds: {fileID: 1241849460}
-  sharpness: 8
-  orthographicSize: 7
+  settings:
+    version: 1
+    pitch: 0
+    perspective: 0
+    orthographicSize: 7
+    fieldOfView: 40
+    distance: 20
+    lookAhead: 0
+    standUp: 1
+    standLift: 0
+    depthSort: 1
+    sharpness: 8
 --- !u!81 &1333857956
 AudioListener:
   m_ObjectHideFlags: 0
@@ -16249,6 +16540,581 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Turn.View.UpgradeManager
   experienceOrbPrefab: {fileID: 1873284600162596924, guid: 5a96e21946426894f9148f47479954cd, type: 3}
+  builds:
+    OptionCount: 3
+    Builds:
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 2
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 4
+      Value: 0.25
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.4
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.08
+      Value2: 3
+    - MaxLevel: 3
+      Value: 0.25
+      Value2: 2.5
+    - MaxLevel: 3
+      Value: 0.03
+      Value2: 0
+    - MaxLevel: 2
+      Value: 1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.3
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 1
+      Value2: 0
+    - MaxLevel: 4
+      Value: 0.05
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.25
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 4
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.4
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.08
+      Value2: 3
+    - MaxLevel: 3
+      Value: 0.25
+      Value2: 2.5
+    - MaxLevel: 3
+      Value: 0.03
+      Value2: 0
+    - MaxLevel: 2
+      Value: 2
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 4
+      Value: 0.02
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.4
+      Value2: 0
+    - MaxLevel: 1
+      Value: 0.2
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.08
+      Value2: 3
+    - MaxLevel: 3
+      Value: 0.25
+      Value2: 2.5
+    - MaxLevel: 2
+      Value: 1
+      Value2: 3
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 2
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 4
+      Value: 0.02
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.4
+      Value2: 0
+    - MaxLevel: 1
+      Value: 0.5
+      Value2: 0.3
+    - MaxLevel: 3
+      Value: 0.08
+      Value2: 3
+    - MaxLevel: 3
+      Value: 0.25
+      Value2: 2.5
+    - MaxLevel: 3
+      Value: 0.03
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.3
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 3
+      Value: 1
+      Value2: 0
+    - MaxLevel: 4
+      Value: 0.05
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.3
+      Value2: 0
+    - MaxLevel: 2
+      Value: 1
+      Value2: 0
+    - MaxLevel: 4
+      Value: 0.02
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.3
+      Value2: 10
+    - MaxLevel: 3
+      Value: 1
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.2
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.5
+      Value2: 2.5
+    - MaxLevel: 1
+      Value: 0.2
+      Value2: 8
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 15
+      Value2: 3
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.2
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.05
+      Value2: 0
+    - MaxLevel: 3
+      Value: 20
+      Value2: 2
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 2
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.3
+      Value2: 2
+    - MaxLevel: 2
+      Value: 0.4
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.05
+      Value2: 1
+    - MaxLevel: 6
+      Value: 8
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 3
+      Value: 1
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.5
+      Value2: 0
+    - MaxLevel: 3
+      Value: 15
+      Value2: 2.5
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.25
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.03
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.08
+      Value2: 3
+    - MaxLevel: 2
+      Value: 0.5
+      Value2: 2.5
+    - MaxLevel: 3
+      Value: 0.25
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.03
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 1
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.04
+      Value2: 3
+    - MaxLevel: 1
+      Value: 0.3
+      Value2: 3
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.5
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.3
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.08
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.5
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.5
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.5
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.03
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 3
+    - MaxLevel: 3
+      Value: 0.08
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 3
+      Value: 1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 2
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.05
+      Value2: 0
+    - MaxLevel: 3
+      Value: 1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.4
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.08
+      Value2: 3
+    - MaxLevel: 2
+      Value: 0.5
+      Value2: 2.5
+    - MaxLevel: 3
+      Value: 0.03
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 5
+      Value: 0.15
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.03
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.1
+      Value2: 0
+    - MaxLevel: 2
+      Value: 0.4
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.2
+      Value2: 0
+    - MaxLevel: 3
+      Value: 0.08
+      Value2: 3
+    - MaxLevel: 2
+      Value: 0.5
+      Value2: 2.5
+    - MaxLevel: 3
+      Value: 0.03
+      Value2: 0
+    - MaxLevel: 1
+      Value: 1
+      Value2: 0
+    - MaxLevel: 1
+      Value: 0.05
+      Value2: 0
+    ChestLevels: 1
+    CurseBonusLevels: 3
+    FrailMaxHp: 15
+    FuryDamage: 0.15
+    HasteSpeed: 0.1
   upgrades:
     optionCount: 3
     buildMaxLevels: 05000000040000000200000003000000030000000200000003000000020000000300000000000000020000000300000003000000020000000200000001000000020000000100000002000000i
@@ -16294,6 +17160,10 @@ MonoBehaviour:
     shockwaveKnockback: 1
     shockwaveMaxLevel: 5
   experience:
+    firstLevelXp: 50
+    xpGrowthRate: 0.2
+    pickupRange: 2.5
+    chestOpenRadius: 1
     baseXpToLevel: 4
     xpGrowthPerLevel: 4
     levelOneMaxHp: 100
@@ -19813,6 +20683,7 @@ MonoBehaviour:
     spawnPoints: {fileID: 1771319455}
   environment:
     startMap: 0
+    planeMechanicsEnabled: 0
     terrainCellSize: 1
     dotTickInterval: 0.25
     playerLavaDps: 10
@@ -19832,6 +20703,8 @@ MonoBehaviour:
       phoneIntervalMax: 6
   level:
     version: 1
+    endless: 1
+    waveSeconds: 30
     surviveSeconds: 300
   shareTerrainShape: 1
   lavaHoldTime: 0.25
