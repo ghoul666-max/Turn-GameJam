@@ -139,6 +139,48 @@ namespace Turn.View
             }
         }
 
+        /// <summary>O：打开窗口设置（标题页 / 暂停菜单里，11/27）。</summary>
+        public static bool DisplayPressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                return kb != null && kb.oKey.wasPressedThisFrame;
+#else
+                return Input.GetKeyDown(KeyCode.O);
+#endif
+            }
+        }
+
+        /// <summary>只有 Esc（不含 P）：标题页打开「退出游戏」确认（11/27）。</summary>
+        public static bool EscapePressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                return kb != null && kb.escapeKey.wasPressedThisFrame;
+#else
+                return Input.GetKeyDown(KeyCode.Escape);
+#endif
+            }
+        }
+
+        /// <summary>Space / Enter：确认（退出确认框里用，不含 R，避免误退，11/27）。</summary>
+        public static bool ConfirmPressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                return kb != null && (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame);
+#else
+                return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
+#endif
+            }
+        }
+
         /// <summary>V：打开音量设置（标题页 / 暂停菜单里）。</summary>
         public static bool VolumePressed
         {

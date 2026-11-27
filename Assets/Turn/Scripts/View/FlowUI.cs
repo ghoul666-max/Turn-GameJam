@@ -8,14 +8,18 @@ namespace Turn.View
     /// <summary>
     /// 流程界面（程序A）：标题页、暂停菜单、胜利 / 失败结算。由 GameManager 自动挂上，运行时自己搭 UI，场景里不需要摆东西；
     /// 想改标题文字就在编辑器里给 GameManager 手动加上本组件再改 Inspector。
-    ///   · 标题页：一本“绘本封面”，Space / Enter / 点按钮开始 → 出战选择页 → 选好后封面像翻页一样往左翻开，露出这一局；
+    ///   · 标题页：一本“绘本封面”，Space / Enter / 点按钮开始 → 出战选择页（另有音量设置 V、窗口设置 O、退出游戏 Esc，退出前弹确认） → 选好后封面像翻页一样往左翻开，露出这一局；
     ///   · 出战选择页（正式入口，11/25 双武器策划案）：方案（双主武器 / 主 + 副）→ 主武器 → 第二把主武器或副武器，
     ///     每一页由 GameManager 用 ShowSelectPage 填卡片；点卡片 / 按数字直接选，或 ← → 切换 + Space / Enter 确认，Esc 返回上一步；
     ///     结算界面的「换武器重开」也会打开它（不经过封面）；
-    ///   · 暂停（Esc / P）：继续 / 音量设置（V）/ 重打本关（R）/ 回到标题（T）；左侧血量下方显示「已选强化」卡牌列表（可滚动，GameManager 填）；
+    ///   · 暂停（Esc / P）：继续 / 音量设置（V）/ 窗口设置（O）/ 重打本关（R）/ 回到标题（T）；左侧血量下方显示「已选强化」卡牌列表（可滚动，GameManager 填）；
     ///   · 音量设置（标题页、暂停菜单都能打开）：总音量 / 音乐 / 音效三条滑条 + 静音 + 恢复默认，
     ///     鼠标拖动，或 ↑↓ 选一行、←→ 每次 ±5%，Esc 返回；设置存在 PlayerPrefs（TurnVolume），立即生效；
+    ///   · 窗口设置（O，标题页、暂停菜单都能打开，11/27）：窗口化 / 全屏 / 无边框窗口三选一，点选或 ↑↓ + Space / Enter，Esc 返回；
+    ///     存在 PlayerPrefs（TurnDisplay），立即切换，下次打开游戏沿用；
     ///   · 结算：失败 → 重打本关（R / Enter）；胜利 → 从第一关开始（R / Enter）；都可以回到标题（T）。
+    /// 文字格式（11/27 统一）：按钮 =「动作（快捷键）」，没有快捷键就只写动作；提示行 =「键 动作 · 键 动作」，多个键用「 / 」，
+    /// 方向键写「↑↓」「←→」；标签和值之间用全角冒号「：」。
     /// 只负责显示和按钮，具体做什么由 GameManager 传进来的回调决定（onStart 在封面开始翻开时调用）；键盘输入也由 GameManager 统一读取。
     /// 用到按钮，需要场景里有 EventSystem（白模生成器已经建好）。
     /// </summary>
@@ -24,7 +28,7 @@ namespace Turn.View
         [Header("标题页文字")]
         [SerializeField] private string gameTitle = "TURN";
         [SerializeField] private string subtitle = "翻滚进入亚空间，让铺垫一起爆发";
-        [SerializeField] private string startHint = "Space / Enter 开始（选择武器）      V 音量设置      F1 数值面板      F2 遮挡物      F4 无敌 · F5 加速 · F6 切武器（调试）";
+        [SerializeField, TextArea] private string startHint = "Space / Enter 开始游戏 · V 音量设置 · O 窗口设置 · Esc 退出游戏\n<size=22>调试：F1 数值面板 · F2 遮挡物 · F4 无敌 · F5 加速 · F6 切武器</size>";
         [Tooltip("音乐署名：Incompetech 的曲子是 CC BY 4.0，必须署名（见 docs/AUDIO-HANDOFF.md）。标题页底部和胜利结算都会显示。")]
         [SerializeField] private string credits = "Music by Kevin MacLeod (incompetech.com), licensed under CC BY 4.0.";
 
@@ -70,6 +74,24 @@ namespace Turn.View
 
         /// <summary>音量设置界面是否打开（打开时 GameManager 只把 ↑↓←→ / Esc 交给它）。</summary>
         public bool IsVolumeOpen { get { return _volume != null && _volume.activeSelf; } }
+
+        // 窗口设置（11/27）
+        private GameObject _display;
+        private readonly Image[] _displayOptions = new Image[TurnDisplay.ModeCount];
+        private readonly Image[] _displayCursors = new Image[TurnDisplay.ModeCount];
+        private readonly Text[] _displayNames = new Text[TurnDisplay.ModeCount];
+        private readonly Text[] _displayDescs = new Text[TurnDisplay.ModeCount];
+        private int _displayRow;
+        private TurnDisplay.Mode _displayCurrent;
+
+        /// <summary>窗口设置界面是否打开（打开时 GameManager 只把 ↑↓ / Space / Enter / Esc 交给它）。</summary>
+        public bool IsDisplayOpen { get { return _display != null && _display.activeSelf; } }
+
+        // 退出确认（11/27）
+        private GameObject _quit;
+
+        /// <summary>退出确认框是否打开（打开时 GameManager 只把 Space / Enter / Esc 交给它）。</summary>
+        public bool IsQuitOpen { get { return _quit != null && _quit.activeSelf; } }
 
         // 暂停时的「已选强化」列表
         private RectTransform _buildContent;
@@ -372,6 +394,95 @@ namespace Turn.View
             RefreshVolume();
         }
 
+        // ---------------- 窗口设置 ----------------
+
+        public void ShowDisplay()
+        {
+            EnsureUI();
+            _display.SetActive(true);
+            _display.transform.SetAsLastSibling();
+            _displayCurrent = TurnDisplay.Current;
+            _displayRow = (int)_displayCurrent;
+            RefreshDisplay();
+        }
+
+        public void HideDisplay()
+        {
+            if (_display != null) _display.SetActive(false);
+        }
+
+        /// <summary>↑↓（或 ←→）：移动光标（循环）。</summary>
+        public void DisplayMove(int step)
+        {
+            if (!IsDisplayOpen || step == 0) return;
+            _displayRow = ((_displayRow + step) % TurnDisplay.ModeCount + TurnDisplay.ModeCount) % TurnDisplay.ModeCount;
+            RefreshDisplay();
+        }
+
+        /// <summary>Space / Enter：应用光标所在的选项。</summary>
+        public void DisplayConfirm()
+        {
+            if (IsDisplayOpen) ChooseDisplay(_displayRow);
+        }
+
+        private void ChooseDisplay(int index)
+        {
+            if (index < 0 || index >= TurnDisplay.ModeCount) return;
+            var mode = (TurnDisplay.Mode)index;
+            _displayRow = index;
+            if (mode != _displayCurrent) TurnDisplay.Set(mode); // Screen 下一帧才变，界面按选择显示
+            _displayCurrent = mode;
+            RefreshDisplay();
+        }
+
+        private void RefreshDisplay()
+        {
+            for (int i = 0; i < TurnDisplay.ModeCount; i++)
+            {
+                bool current = i == (int)_displayCurrent;
+                var mode = (TurnDisplay.Mode)i;
+                if (_displayOptions[i] != null)
+                    _displayOptions[i].color = current ? ButtonColor : new Color(InkColor.r, InkColor.g, InkColor.b, 0.08f);
+                if (_displayNames[i] != null)
+                {
+                    _displayNames[i].text = TurnDisplay.DisplayName(mode) + (current ? "（当前）" : "");
+                    _displayNames[i].color = current ? ButtonTextColor : InkColor;
+                }
+                if (_displayDescs[i] != null)
+                    _displayDescs[i].color = current ? new Color(ButtonTextColor.r, ButtonTextColor.g, ButtonTextColor.b, 0.85f)
+                                                     : new Color(InkColor.r, InkColor.g, InkColor.b, 0.7f);
+                if (_displayCursors[i] != null)
+                    _displayCursors[i].color = i == _displayRow ? new Color(ButtonColor.r, ButtonColor.g, ButtonColor.b, 0.35f) : new Color(0f, 0f, 0f, 0f);
+            }
+        }
+
+        // ---------------- 退出游戏 ----------------
+
+        /// <summary>标题页「退出游戏」/ Esc：先弹确认框。</summary>
+        public void ShowQuit()
+        {
+            EnsureUI();
+            _quit.SetActive(true);
+            _quit.transform.SetAsLastSibling();
+        }
+
+        public void HideQuit()
+        {
+            if (_quit != null) _quit.SetActive(false);
+        }
+
+        /// <summary>确认退出：打包后关闭游戏；编辑器里停止 Play。</summary>
+        public void ConfirmQuit()
+        {
+            TurnVolume.Flush();
+            PlayerPrefs.Save();
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
         // ---------------- 暂停 / 结算 ----------------
 
         public void SetPause(bool open)
@@ -486,6 +597,8 @@ namespace Turn.View
             BuildResult(root.transform);
             BuildWeaponSelect(root.transform);
             BuildVolume(root.transform);
+            BuildDisplay(root.transform);
+            BuildQuit(root.transform);
         }
 
         private void BuildVolume(Transform parent)
@@ -522,10 +635,76 @@ namespace Turn.View
             MakeButton("Reset", card, "恢复默认", new Vector2(0.5f, 0.17f), new Vector2(230f, 68f), ResetVolume);
             MakeButton("Back", card, "返回（Esc）", new Vector2(0.8f, 0.17f), new Vector2(230f, 68f), HideVolume);
 
-            Text hint = MakeText("Hint", card, "↑↓ 选择 · ←→ 调节（每次 5%）· 鼠标拖动滑条 · 设置会自动保存", 22, FontStyle.Normal);
+            Text hint = MakeText("Hint", card, "↑↓ 选择 · ←→ 调节（每次 5%） · 拖动滑条也可以 · Esc 返回 · 设置自动保存", 22, FontStyle.Normal);
             hint.color = new Color(InkColor.r, InkColor.g, InkColor.b, 0.6f);
             Stretch(hint.rectTransform, new Vector2(0f, 0.02f), new Vector2(1f, 0.08f), Vector2.zero);
             _volume.SetActive(false);
+        }
+
+        private void BuildDisplay(Transform parent)
+        {
+            RectTransform card = BuildCard(parent, "Display", out _display);
+            Text title = MakeText("Title", card, "窗口设置", 60, FontStyle.Bold);
+            Stretch(title.rectTransform, new Vector2(0f, 0.82f), new Vector2(1f, 0.97f), Vector2.zero);
+
+            float[] rows = { 0.67f, 0.5f, 0.33f };
+            for (int i = 0; i < TurnDisplay.ModeCount; i++)
+            {
+                int index = i;
+                float y = rows[i];
+                var mode = (TurnDisplay.Mode)i;
+
+                // 键盘光标：选项外面一圈半透明底
+                Image cursor = MakeImage("Cursor" + i, card, new Color(0f, 0f, 0f, 0f), false);
+                Stretch(cursor.rectTransform, new Vector2(0.06f, y - 0.075f), new Vector2(0.94f, y + 0.075f), Vector2.zero);
+                _displayCursors[i] = cursor;
+
+                Image option = MakeImage("Option" + i, card, ButtonColor, true);
+                Stretch(option.rectTransform, new Vector2(0.08f, y - 0.06f), new Vector2(0.92f, y + 0.06f), Vector2.zero);
+                var button = option.gameObject.AddComponent<Button>();
+                ColorBlock colors = button.colors;
+                colors.highlightedColor = new Color(1.25f, 1.2f, 1.15f, 1f);
+                colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+                button.colors = colors;
+                Navigation nav = button.navigation;
+                nav.mode = Navigation.Mode.None; // 方向键由 GameManager 统一处理
+                button.navigation = nav;
+                button.onClick.AddListener(() => ChooseDisplay(index));
+                _displayOptions[i] = option;
+
+                Text name = MakeText("Name", option.rectTransform, TurnDisplay.DisplayName(mode), 34, FontStyle.Bold);
+                name.alignment = TextAnchor.MiddleLeft;
+                Stretch(name.rectTransform, new Vector2(0.04f, 0f), new Vector2(0.45f, 1f), Vector2.zero);
+                _displayNames[i] = name;
+
+                Text desc = MakeText("Desc", option.rectTransform, TurnDisplay.Describe(mode), 22, FontStyle.Normal);
+                desc.alignment = TextAnchor.MiddleRight;
+                Stretch(desc.rectTransform, new Vector2(0.4f, 0f), new Vector2(0.96f, 1f), Vector2.zero);
+                _displayDescs[i] = desc;
+            }
+
+            MakeButton("Back", card, "返回（Esc）", new Vector2(0.5f, 0.15f), new Vector2(260f, 68f), HideDisplay);
+
+            string hintText = Application.isEditor
+                ? "↑↓ 选择 · Space / Enter 确认 · Esc 返回 · 编辑器里只记录选择，打包后才会切换"
+                : "↑↓ 选择 · Space / Enter 确认 · Esc 返回 · 设置自动保存 · Alt + Enter 切换全屏";
+            Text hint = MakeText("Hint", card, hintText, 22, FontStyle.Normal);
+            hint.color = new Color(InkColor.r, InkColor.g, InkColor.b, 0.6f);
+            Stretch(hint.rectTransform, new Vector2(0f, 0.02f), new Vector2(1f, 0.08f), Vector2.zero);
+            _display.SetActive(false);
+        }
+
+        private void BuildQuit(Transform parent)
+        {
+            RectTransform card = BuildCard(parent, "Quit", out _quit);
+            card.sizeDelta = new Vector2(720f, 340f);
+            Text title = MakeText("Title", card, "退出游戏", 60, FontStyle.Bold);
+            Stretch(title.rectTransform, new Vector2(0f, 0.68f), new Vector2(1f, 0.94f), Vector2.zero);
+            Text body = MakeText("Body", card, "设置和解锁进度都已保存，确定要退出吗？", 30, FontStyle.Normal);
+            Stretch(body.rectTransform, new Vector2(0.05f, 0.44f), new Vector2(0.95f, 0.66f), Vector2.zero);
+            MakeButton("Confirm", card, "退出（Enter）", new Vector2(0.3f, 0.22f), new Vector2(260f, 72f), ConfirmQuit);
+            MakeButton("Cancel", card, "取消（Esc）", new Vector2(0.7f, 0.22f), new Vector2(260f, 72f), HideQuit);
+            _quit.SetActive(false);
         }
 
         /// <summary>纯色的横向滑条（底槽 + 填充 + 把手），0–1。</summary>
@@ -632,8 +811,10 @@ namespace Turn.View
             credit.color = new Color(InkColor.r, InkColor.g, InkColor.b, 0.6f);
             Stretch(credit.rectTransform, new Vector2(0f, 0.015f), new Vector2(1f, 0.06f), Vector2.zero);
 
-            MakeButton("StartButton", page.rectTransform, "开始游戏", new Vector2(0.5f, 0.27f), new Vector2(360f, 84f), StartFromTitle);
-            MakeButton("VolumeButton", page.rectTransform, "音量设置（V）", new Vector2(0.5f, 0.19f), new Vector2(280f, 60f), ShowVolume);
+            MakeButton("StartButton", page.rectTransform, "开始游戏（Space）", new Vector2(0.5f, 0.27f), new Vector2(400f, 84f), StartFromTitle);
+            MakeButton("VolumeButton", page.rectTransform, "音量设置（V）", new Vector2(0.34f, 0.19f), new Vector2(260f, 60f), ShowVolume);
+            MakeButton("DisplayButton", page.rectTransform, "窗口设置（O）", new Vector2(0.5f, 0.19f), new Vector2(260f, 60f), ShowDisplay);
+            MakeButton("QuitButton", page.rectTransform, "退出游戏（Esc）", new Vector2(0.66f, 0.19f), new Vector2(260f, 60f), ShowQuit);
             _title.gameObject.SetActive(false);
         }
 
@@ -643,7 +824,8 @@ namespace Turn.View
             Text title = MakeText("Title", card, "暂停", 64, FontStyle.Bold);
             Stretch(title.rectTransform, new Vector2(0f, 0.72f), new Vector2(1f, 0.95f), Vector2.zero);
             MakeButton("Resume", card, "继续（Esc）", new Vector2(0.5f, 0.6f), new Vector2(420f, 70f), () => Call(_onResume));
-            MakeButton("Volume", card, "音量设置（V）", new Vector2(0.5f, 0.445f), new Vector2(420f, 70f), ShowVolume);
+            MakeButton("Volume", card, "音量设置（V）", new Vector2(0.29f, 0.445f), new Vector2(330f, 70f), ShowVolume);
+            MakeButton("Display", card, "窗口设置（O）", new Vector2(0.71f, 0.445f), new Vector2(330f, 70f), ShowDisplay);
             MakeButton("Restart", card, "重打本关（R）", new Vector2(0.5f, 0.29f), new Vector2(420f, 70f), () => Call(_onRestartLevel));
             MakeButton("Title", card, "回到标题（T）", new Vector2(0.5f, 0.135f), new Vector2(420f, 70f), () => Call(_onTitle));
             BuildBuildList(_pause.transform);

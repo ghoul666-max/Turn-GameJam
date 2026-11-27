@@ -237,7 +237,7 @@ namespace Turn.View
                 _debugStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Bold };
                 _debugStyle.normal.textColor = new Color(1f, 0.85f, 0.2f, 1f);
             }
-            string text = "调试：" + (_godMode ? "无敌（F4）  " : "") + (_debugSpeed != 1f ? "速度 ×" + _debugSpeed.ToString("0") + "（F5）" : "");
+            string text = "调试：" + (_godMode ? "无敌（F4）" : "") + (_godMode && _debugSpeed != 1f ? " · " : "") + (_debugSpeed != 1f ? "速度 ×" + _debugSpeed.ToString("0") + "（F5）" : "");
             GUI.Label(new Rect(12f, 8f, 600f, 28f), text, _debugStyle);
         }
 
@@ -269,7 +269,7 @@ namespace Turn.View
         // 11/27：删除双主武器方案，出战固定为「1 把主武器 + 1 把副武器（可不带）」，选择页只剩两步。
         private enum SelectStep { Main, Sub }
 
-        private const string SelectHint = "点卡片 / 按数字直接选      ← → 切换，Space / Enter 确认      Esc 返回上一步";
+        private const string SelectHint = "点卡片或按数字键直接选 · ←→ 切换 · Space / Enter 确认 · Esc 返回上一步";
 
         // 选择页上的卡片顺序 = 解锁顺序（已下架的掌 / 订书机不在里面）；未解锁的显示成灰色
         private static readonly WeaponKind[] MainChoices = WeaponKinds.UnlockOrder;
@@ -363,7 +363,7 @@ namespace Turn.View
 
         private static string LockedText(int runs)
         {
-            return "<b>未解锁</b>  完成 " + runs + " 局后解锁（已完成 " + WeaponUnlocks.RunsFinished + " 局）\n\n";
+            return "<b>未解锁</b>：完成 " + runs + " 局后解锁（已完成 " + WeaponUnlocks.RunsFinished + " 局）\n\n";
         }
 
         /// <summary>选择页点了第 index 张卡：翻到下一页，或者选完开局。</summary>
@@ -419,47 +419,47 @@ namespace Turn.View
             {
                 case WeaponKind.WaterGun:
                     return "弹药 " + a.WaterGun.Ammo + " · " + Num(a.WaterGun.FireInterval) + " 秒/发 · 伤害 " + Num(a.WaterGun.Damage) + roll +
-                           "\n\n<b>铺垫</b>  水弹落地或命中处留下一滩水渍，永久存在" +
-                           "\n\n<b>爆发</b>  全图水渍同时喷发喷泉（每滩 " + Num(a.WaterGun.FountainDamage) + "），重叠处伤害叠加";
+                           "\n\n<b>铺垫</b>：水弹落地或命中处留下一滩水渍，永久存在" +
+                           "\n\n<b>爆发</b>：全图水渍同时喷发喷泉（每滩 " + Num(a.WaterGun.FountainDamage) + "），重叠处伤害叠加";
                 case WeaponKind.Spear:
                     return "弹药 " + a.Spear.Ammo + " · " + Num(a.Spear.FireInterval) + " 秒/发 · 伤害 " + Num(a.Spear.Damage) + roll +
-                           "\n\n<b>铺垫</b>  长矛插在敌人身上叠矛印记；直接击杀则穿透下一个，印记一起带走" +
-                           "\n\n<b>爆发</b>  所有长矛向你回收，沿途穿刺（每根 " + Num(a.Spear.RecallDamage) + "）";
+                           "\n\n<b>铺垫</b>：长矛插在敌人身上叠矛印记；直接击杀则穿透下一个，印记一起带走" +
+                           "\n\n<b>爆发</b>：所有长矛向你回收，沿途穿刺（每根 " + Num(a.Spear.RecallDamage) + "）";
                 case WeaponKind.Blade:
                     return "弹药 " + a.Blade.Ammo + " · " + Num(a.Blade.FireInterval) + " 秒/发 · 伤害 " + Num(a.Blade.Damage) + roll +
-                           "\n\n<b>铺垫</b>  朝最近的敌人发射月牙剑气弹，命中第一个敌人即消失，并叠 1 层剑气印记" +
-                           "\n\n<b>爆发</b>  横贯全图的一刀斩（" + Num(a.Blade.SlashDamage) + "），全场每层印记 +" + Mathf.RoundToInt(a.Blade.MarkBonus * 100f) + "%";
+                           "\n\n<b>铺垫</b>：朝最近的敌人发射月牙剑气弹，命中第一个敌人即消失，并叠 1 层剑气印记" +
+                           "\n\n<b>爆发</b>：横贯全图的一刀斩（" + Num(a.Blade.SlashDamage) + "），全场每层印记 +" + Mathf.RoundToInt(a.Blade.MarkBonus * 100f) + "%";
                 case WeaponKind.Palm:
                     return "弹药 " + a.Palm.Ammo + " · " + Num(a.Palm.FireInterval) + " 秒/发 · 伤害 " + Num(a.Palm.Damage) + roll +
-                           "\n\n<b>铺垫</b>  朝面向方向 " + Num(a.Palm.Angle) + "° 扇形掌击，击退敌人（冲锋中的免疫），命中叠 1 层掌印" +
-                           "\n\n<b>爆发</b>  以自身为中心的天降掌（" + Num(a.Palm.SkyDamage) + "），每层掌印 +" + Mathf.RoundToInt(a.Palm.MarkBonus * 100f) + "%";
+                           "\n\n<b>铺垫</b>：朝面向方向 " + Num(a.Palm.Angle) + "° 扇形掌击，击退敌人（冲锋中的免疫），命中叠 1 层掌印" +
+                           "\n\n<b>爆发</b>：以自身为中心的天降掌（" + Num(a.Palm.SkyDamage) + "），每层掌印 +" + Mathf.RoundToInt(a.Palm.MarkBonus * 100f) + "%";
                 case WeaponKind.Poker:
                     return "手牌上限 " + a.Poker.HandSize + " · " + Num(a.Poker.DrawInterval) + " 秒抽 1 张" + roll +
-                           "\n\n<b>常态</b>  不攻击，自动抽牌到头顶（1–K、大小王）" +
-                           "\n\n<b>爆发</b>  打出全部手牌：♥追踪爱心弹（点数×" + a.Poker.HeartsPerPoint + " 发，命中小范围爆炸，会反弹）♠最密集处炸弹 ♦护盾（层数 = 点数）♣吸附裂隙；" +
+                           "\n\n<b>常态</b>：不攻击，自动抽牌到头顶（1–K、大小王）" +
+                           "\n\n<b>爆发</b>：打出全部手牌：♥追踪爱心弹（点数×" + a.Poker.HeartsPerPoint + " 发，命中小范围爆炸，会反弹）♠最密集处炸弹 ♦护盾（层数 = 点数）♣吸附裂隙；" +
                            "小王 / 大王永久 +" + Mathf.RoundToInt(a.Poker.SmallJokerBonus * 100f) + "% / +" + Mathf.RoundToInt(a.Poker.BigJokerBonus * 100f) + "%（切换主武器清零）";
                 case WeaponKind.Shuriken:
                     return "弹药 " + a.Shuriken.Ammo + " · " + Num(a.Shuriken.FireInterval) + " 秒/发 · 旋转 " + Num(a.Shuriken.SpinDamage) + "/" + Num(a.Shuriken.SpinInterval) + " 秒" + roll +
-                           "\n\n<b>铺垫</b>  手里剑飞出后停在原地旋转，持续伤害周围敌人，永久留存" +
-                           "\n\n<b>爆发</b>  全部高速回收，路径穿刺（每枚 " + Num(a.Shuriken.RecallDamage) + "）";
+                           "\n\n<b>铺垫</b>：手里剑飞出后停在原地旋转，持续伤害周围敌人，永久留存" +
+                           "\n\n<b>爆发</b>：全部高速回收，路径穿刺（每枚 " + Num(a.Shuriken.RecallDamage) + "）";
                 case WeaponKind.Stapler:
                     return "弹药 " + a.Stapler.Ammo + " · " + Num(a.Stapler.FireInterval) + " 秒/发 · 伤害 " + Num(a.Stapler.Damage) + roll +
-                           "\n\n<b>铺垫</b>  订书钉击退敌人；被击退的撞到别的怪，就把沿途的钉合成一组（叠钉痕 + 减速，最多 " + a.Stapler.GroupMax + " 只）" +
-                           "\n\n<b>爆发</b>  每只带钉痕的怪向四周散射 " + a.Stapler.SecondaryCount + " 枚次级钉（可继续钉合），钉痕越多越痛";
+                           "\n\n<b>铺垫</b>：订书钉击退敌人；被击退的撞到别的怪，就把沿途的钉合成一组（叠钉痕 + 减速，最多 " + a.Stapler.GroupMax + " 只）" +
+                           "\n\n<b>爆发</b>：每只带钉痕的怪向四周散射 " + a.Stapler.SecondaryCount + " 枚次级钉（可继续钉合），钉痕越多越痛";
                 case WeaponKind.Sword:
                     return "弹药 " + a.Sword.Ammo + " · " + Num(a.Sword.FireInterval) + " 秒/次 · 伤害 " + Num(a.Sword.Damage) + roll +
-                           "\n\n<b>铺垫</b>  朝面向方向突进刺击（突进中无敌），路径留下剑痕" +
-                           "\n\n<b>爆发</b>  影子沿所有剑痕复刻刺击（" + Num(a.Sword.ShadowDamage) + "，每条剑痕 +" + Mathf.RoundToInt(a.Sword.TrailBonus * 100f) +
+                           "\n\n<b>铺垫</b>：朝面向方向突进刺击（突进中无敌），路径留下剑痕" +
+                           "\n\n<b>爆发</b>：影子沿所有剑痕复刻刺击（" + Num(a.Sword.ShadowDamage) + "，每条剑痕 +" + Mathf.RoundToInt(a.Sword.TrailBonus * 100f) +
                            "%）；影刺每击杀 1 名敌人永久 +1 突进次数（切换主武器清零）";
                 case WeaponKind.Lightning:
                     return "弹药 " + a.Lightning.Ammo + " · " + Num(a.Lightning.FireInterval) + " 秒/发 · 伤害 " + Num(a.Lightning.Damage) + roll +
-                           "\n\n<b>铺垫</b>  闪电在怪物之间连锁跳跃（一道最多命中 " + a.Lightning.ChainCount + " 只），命中的怪物叠 1 层雷痕" +
-                           "\n\n<b>爆发</b>  引爆全场雷痕（每层 " + Num(a.Lightning.DetonateDamage) + "）；被炸死的怪会向最近的敌人再发一道同样的闪电，连环传染";
+                           "\n\n<b>铺垫</b>：闪电在怪物之间连锁跳跃（一道最多命中 " + a.Lightning.ChainCount + " 只），命中的怪物叠 1 层雷痕" +
+                           "\n\n<b>爆发</b>：引爆全场雷痕（每层 " + Num(a.Lightning.DetonateDamage) + "）；被炸死的怪会向最近的敌人再发一道同样的闪电，连环传染";
                 default:
                     return "弹药 " + a.Crossbow.Ammo + " · 伤害 " + Num(a.Crossbow.Damage) + " · 穿透 " + a.Crossbow.Pierce + roll +
-                           "\n\n<b>常态</b>  重型弩箭强制击退；敌人撞墙眩晕，你获得 1 层杀气（每层弩伤害 +" + Mathf.RoundToInt(a.Crossbow.IntentBonus * 100f) +
+                           "\n\n<b>常态</b>：重型弩箭强制击退；敌人撞墙眩晕，你获得 1 层杀气（每层弩伤害 +" + Mathf.RoundToInt(a.Crossbow.IntentBonus * 100f) +
                            "%，无限叠加，切换主武器时清零）" +
-                           "\n\n<b>翻滚</b>  没有爆发，冷却特别短：高频翻滚补弹、驱动副武器";
+                           "\n\n<b>翻滚</b>：没有爆发，冷却特别短：高频翻滚补弹、驱动副武器";
             }
         }
 
@@ -472,25 +472,25 @@ namespace Turn.View
                     return "只带一把主武器。\n\n翻滚只触发主武器的爆发。";
                 case SubWeaponKind.Drones:
                     return "环绕你飞行、自动攻击的小炮台（每台每发 " + Num(a.Drones.Damage) + "，" + Num(a.Drones.FireInterval) + " 秒/发）。" +
-                           "\n\n<b>翻滚</b>  盲盒：" + Mathf.RoundToInt(a.Drones.SplitChance * 100f) + "% 分裂（+" + a.Drones.SplitAdd + " 台），否则合体（−" +
+                           "\n\n<b>翻滚</b>：盲盒：" + Mathf.RoundToInt(a.Drones.SplitChance * 100f) + "% 分裂（+" + a.Drones.SplitAdd + " 台），否则合体（−" +
                            a.Drones.MergeRemove + " 台，最少 " + Mathf.Max(1, a.Drones.MinCount) + " 台）";
                 case SubWeaponKind.GravityWell:
                 case SubWeaponKind.Magnet:
                     return "持久黑洞：持续牵引，造成每秒 " + Num(a.Gravity.DamagePerSecond) + " 伤害，并吸取附近经验球。" +
-                           "\n\n<b>翻滚</b>  起点留下黑洞；新旧黑洞相向移动，在中点爆炸（" + Num(a.Magnet.BlastDamage) + "）并留下一个黑洞。合并不叠加基础伤害或体积。";
+                           "\n\n<b>翻滚</b>：起点留下黑洞；新旧黑洞相向移动，在中点爆炸（" + Num(a.Magnet.BlastDamage) + "）并留下一个黑洞。合并不叠加基础伤害或体积。";
                 case SubWeaponKind.Hourglass:
                     return "全场敌人移速随时间渐进衰减，最低降到 " + Mathf.RoundToInt(a.Hourglass.FloorSpeed * 100f) + "%。" +
-                           "\n\n<b>翻滚</b>  敌人移速立即重置回基础值，回到常态后重新开始减速——用翻滚时机把控节奏";
+                           "\n\n<b>翻滚</b>：敌人移速立即重置回基础值，回到常态后重新开始减速——用翻滚时机把控节奏";
                 case SubWeaponKind.Wasd:
                     return "按住移动键时，对应方向生成按键判定区（" + Num(a.Wasd.Damage) + "，每只敌人 " + Num(a.Wasd.HitCooldown) + " 秒最多 1 次），最多同时 2 个方向。" +
-                           "\n\n<b>翻滚</b>  W / A / S / D 四向齐发（" + Num(a.Wasd.BurstDamage) + "）";
+                           "\n\n<b>翻滚</b>：W / A / S / D 四向齐发（" + Num(a.Wasd.BurstDamage) + "）";
                 case SubWeaponKind.Cursor:
                     return "没有常态效果。" +
-                           "\n\n<b>翻滚</b>  第一次翻滚开始绘制，你走过的路线就是选区边界；之后每次翻滚：选区内敌人受到降维打击（" +
+                           "\n\n<b>翻滚</b>：第一次翻滚开始绘制，你走过的路线就是选区边界；之后每次翻滚：选区内敌人受到降维打击（" +
                            Num(a.Cursor.Damage) + "）并被压扁定身，然后自动开始下一轮绘制";
                 default:
                     return "每次翻滚记录一个锚点。" +
-                           "\n\n<b>翻滚</b>  回溯到上一个锚点，连线斩击路径上所有敌人（" + Num(a.Anchor.SlashDamage) + "）；连续翻滚会在两点之间来回折返";
+                           "\n\n<b>翻滚</b>：回溯到上一个锚点，连线斩击路径上所有敌人（" + Num(a.Anchor.SlashDamage) + "）；连续翻滚会在两点之间来回折返";
             }
         }
 
@@ -633,13 +633,13 @@ namespace Turn.View
             {
                 _runCounted = true;
                 string unlocked = WeaponUnlocks.RegisterRunFinished();
-                _unlockMessage = unlocked.Length > 0 ? "\n\n<b>新解锁</b>  " + unlocked : "";
+                _unlockMessage = unlocked.Length > 0 ? "\n\n<b>新解锁</b>：" + unlocked : "";
             }
             if (victory) AddTotals();
             string body;
             if (victory)
             {
-                body = "三组位面全部通过\n\n全程 " + FormatTime(_totalTime) + "    击杀 " + _totalKills + "    翻滚 " + _totalRolls + " 次";
+                body = "三组位面全部通过\n\n全程 " + FormatTime(_totalTime) + " · 击杀 " + _totalKills + " · 翻滚 " + _totalRolls + " 次";
                 if (_flow != null && !string.IsNullOrEmpty(_flow.Credits)) body += "\n\n<size=22>" + _flow.Credits + "</size>";
             }
             else
@@ -648,7 +648,7 @@ namespace Turn.View
                     ? "第 " + _ctx.Session.Wave + " 波 · " + LoadoutName()
                     : "第 " + ((int)_levelPair + 1) + " 关 · " + PlaneIds.DisplayName(_levelPair);
                 body = where + "\n\n存活 " + FormatTime(_ctx.Session.Time) +
-                       "    等级 " + _ctx.Progression.Level + "    击杀 " + _ctx.Progression.Kills + "    翻滚 " + _ctx.Roll.RollCount + " 次";
+                       " · 等级 " + _ctx.Progression.Level + " · 击杀 " + _ctx.Progression.Kills + " · 翻滚 " + _ctx.Roll.RollCount + " 次";
             }
             body += _unlockMessage;
             if (_flow != null) _flow.ShowResult(victory, victory ? "胜利！" : "倒下了……", body);
@@ -801,6 +801,31 @@ namespace Turn.View
             if (TurnInput.ObstacleDebugPressed) Obstacle.ShowDebug = !Obstacle.ShowDebug;
             if (debugShortcuts) HandleDebugKeys();
 
+            // 退出确认（11/27）：盖在标题页上；Space / Enter 退出，Esc 取消（不认 R，避免误退）
+            if (_flow != null && _flow.IsQuitOpen)
+            {
+                _ctx.Player.SetMoveInput(Vec2.Zero);
+                _accumulator = 0f;
+                if (PanelOpen) return;
+                if (TurnInput.ConfirmPressed) _flow.ConfirmQuit();
+                else if (TurnInput.PausePressed) _flow.HideQuit();
+                return;
+            }
+
+            // 窗口设置（11/27）：盖在标题页 / 暂停菜单上；打开时只处理 ↑↓←→ / Space / Enter / Esc，模拟不推进
+            if (_flow != null && _flow.IsDisplayOpen)
+            {
+                _ctx.Player.SetMoveInput(Vec2.Zero);
+                _accumulator = 0f;
+                if (PanelOpen) return;
+                int displayStep = TurnInput.VerticalStepPressed;
+                if (displayStep == 0) displayStep = TurnInput.SelectStepPressed;
+                if (displayStep != 0) _flow.DisplayMove(displayStep);
+                else if (TurnInput.RollPressed || TurnInput.RestartPressed) _flow.DisplayConfirm();
+                else if (TurnInput.PausePressed) _flow.HideDisplay();
+                return;
+            }
+
             // 音量设置：盖在标题页 / 暂停菜单上；打开时只处理 ↑↓←→ / Esc，模拟不推进
             if (_flow != null && _flow.IsVolumeOpen)
             {
@@ -836,6 +861,8 @@ namespace Turn.View
                 _ctx.Player.SetMoveInput(Vec2.Zero);
                 _accumulator = 0f;
                 if (!PanelOpen && TurnInput.VolumePressed) _flow.ShowVolume();
+                else if (!PanelOpen && TurnInput.DisplayPressed) _flow.ShowDisplay();
+                else if (!PanelOpen && TurnInput.EscapePressed) _flow.ShowQuit();
                 else if (!PanelOpen && (TurnInput.RollPressed || TurnInput.RestartPressed)) _flow.StartFromTitle();
                 return;
             }
@@ -888,10 +915,15 @@ namespace Turn.View
             }
             if (_paused)
             {
-                // 暂停菜单快捷键：V 音量设置，R 重打本关，T 回到标题（Esc / P 继续）
+                // 暂停菜单快捷键：V 音量设置，O 窗口设置，R 重打本关，T 回到标题（Esc / P 继续）
                 if (TurnInput.VolumePressed && _flow != null)
                 {
                     _flow.ShowVolume();
+                    return;
+                }
+                if (TurnInput.DisplayPressed && _flow != null)
+                {
+                    _flow.ShowDisplay();
                     return;
                 }
                 if (TurnInput.TitlePressed)
