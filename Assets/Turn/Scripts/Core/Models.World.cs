@@ -29,7 +29,7 @@ namespace Turn.Core
         /// 按 (int)WeaponKind：每把主武器独立的翻滚冷却（秒）。从回到常态空间开始计，按「回到常态时正在用的那把」算
         /// （双主武器方案里 = 切换后的那把）。策划：水枪 2 / 投矛 2.5 / 陌刀 3；掌 2.5、弩 1.2 为暂定（弩「显著短于其他」）。
         /// </summary>
-        public float[] WeaponCooldowns = { 2f, 2.5f, 3f, 2.5f, 1.2f, 2.5f, 2.5f, 2.5f, 2.5f };
+        public float[] WeaponCooldowns = { 2f, 2.5f, 3f, 2.5f, 1.2f, 2.5f, 2.5f, 2.5f, 2.5f, 2.5f }; // 按 WeaponKind 下标；11/27 加了闪电
         /// <summary>数组缺项时的兜底冷却（秒）。</summary>
         public float Cooldown = 2f;
         /// <summary>亚空间持续时长（现实秒，策划 1）。全程无敌。</summary>

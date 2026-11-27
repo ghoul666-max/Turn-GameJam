@@ -53,7 +53,6 @@ namespace Turn.View
         [Tooltip("开局（标题页之后）弹出出战选择页（方案 → 主武器 → 第二主武器 / 副武器）；关掉 = 直接用水枪、不带副武器开局")]
         [SerializeField] private bool weaponSelect = true;
         // 上一次的选择（选择页默认高亮它们；R 重开沿用）
-        private LoadoutScheme _scheme = LoadoutScheme.MainAndSub;
         private WeaponKind _mainWeapon = WeaponKind.WaterGun;
         private WeaponKind _secondWeapon = WeaponKind.Spear;
         private SubWeaponKind _subWeapon = SubWeaponKind.None;
@@ -91,6 +90,9 @@ namespace Turn.View
         private PlanePairId _levelPair;
         private bool _levelChosen;
         private bool _resultShown;
+        // 武器解锁（11/27）：这一局是否已经记过「完成 1 局」，以及结算界面上的新解锁提示
+        private bool _runCounted;
+        private string _unlockMessage = "";
         // 全程统计（胜利结算用，只累计已通过的关）
         private float _totalTime;
         private int _totalKills;
@@ -113,8 +115,6 @@ namespace Turn.View
                 Destroy(gameObject);
                 return;
             }
-            // 武器解锁（11/27）：本次打开游戏计一次（同一次运行只计一次）
-            WeaponUnlocks.RegisterLaunch();
             Instance = this;
 
             // 游戏内数值面板（F1）：没有手动挂就自动挂一个
@@ -303,7 +303,6 @@ namespace Turn.View
         {
             if (WeaponKinds.IsRetired(_mainWeapon) || !WeaponUnlocks.IsUnlocked(_mainWeapon)) _mainWeapon = WeaponKinds.UnlockOrder[0];
             if (!WeaponUnlocks.IsUnlocked(_subWeapon)) _subWeapon = SubWeaponKind.None;
-            _scheme = LoadoutScheme.MainAndSub;
         }
 
         /// <summary>打开出战选择页的第一页（主武器）。卡片上的数值直接读这一局的配置（Inspector / F1 面板改了这里跟着变）。</summary>
@@ -331,7 +330,7 @@ namespace Turn.View
                     cards[i] = new FlowUI.SelectCard
                     {
                         Title = KeyLabel(i) + "  " + WeaponKinds.DisplayName(w),
-                        Body = ok ? WeaponCard(w) : LockedText(WeaponUnlocks.UnlockLaunch(w)) + WeaponCard(w),
+                        Body = ok ? WeaponCard(w) : LockedText(WeaponUnlocks.UnlockAfterRuns(w)) + WeaponCard(w),
                         Color = ViewMath.WeaponColor(w),
                         Enabled = ok,
                     };
@@ -352,7 +351,7 @@ namespace Turn.View
                     cards[i] = new FlowUI.SelectCard
                     {
                         Title = KeyLabel(i) + "  " + (k == SubWeaponKind.None ? "不带副武器" : SubWeaponKinds.DisplayName(k)),
-                        Body = ok ? SubWeaponCard(k) : LockedText(WeaponUnlocks.UnlockLaunch(k)) + SubWeaponCard(k),
+                        Body = ok ? SubWeaponCard(k) : LockedText(WeaponUnlocks.UnlockAfterRuns(k)) + SubWeaponCard(k),
                         Color = ViewMath.SubWeaponColor(k),
                         Enabled = ok,
                     };
@@ -362,9 +361,9 @@ namespace Turn.View
             }
         }
 
-        private static string LockedText(int launch)
+        private static string LockedText(int runs)
         {
-            return "<b>未解锁</b>  第 " + launch + " 次打开游戏时解锁\n\n";
+            return "<b>未解锁</b>  完成 " + runs + " 局后解锁（已完成 " + WeaponUnlocks.RunsFinished + " 局）\n\n";
         }
 
         /// <summary>选择页点了第 index 张卡：翻到下一页，或者选完开局。</summary>
@@ -374,7 +373,6 @@ namespace Turn.View
             {
                 if (index < 0 || index >= MainChoices.Length || !MainSelectable(MainChoices[index])) return;
                 _mainWeapon = MainChoices[index];
-                _scheme = LoadoutScheme.MainAndSub;
                 // 一把副武器都还没解锁（第一次打开）：不用再翻一页，直接不带副武器开局
                 if (WeaponUnlocks.SubCount > 0)
                 {
@@ -453,6 +451,10 @@ namespace Turn.View
                            "\n\n<b>铺垫</b>  朝面向方向突进刺击（突进中无敌），路径留下剑痕" +
                            "\n\n<b>爆发</b>  影子沿所有剑痕复刻刺击（" + Num(a.Sword.ShadowDamage) + "，每条剑痕 +" + Mathf.RoundToInt(a.Sword.TrailBonus * 100f) +
                            "%）；影刺每击杀 1 名敌人永久 +1 突进次数（切换主武器清零）";
+                case WeaponKind.Lightning:
+                    return "弹药 " + a.Lightning.Ammo + " · " + Num(a.Lightning.FireInterval) + " 秒/发 · 伤害 " + Num(a.Lightning.Damage) + roll +
+                           "\n\n<b>铺垫</b>  闪电在怪物之间连锁跳跃（一道最多命中 " + a.Lightning.ChainCount + " 只），命中的怪物叠 1 层雷痕" +
+                           "\n\n<b>爆发</b>  引爆全场雷痕（每层 " + Num(a.Lightning.DetonateDamage) + "）；被炸死的怪会向最近的敌人再发一道同样的闪电，连环传染";
                 default:
                     return "弹药 " + a.Crossbow.Ammo + " · 伤害 " + Num(a.Crossbow.Damage) + " · 穿透 " + a.Crossbow.Pierce + roll +
                            "\n\n<b>常态</b>  重型弩箭强制击退；敌人撞墙眩晕，你获得 1 层杀气（每层弩伤害 +" + Mathf.RoundToInt(a.Crossbow.IntentBonus * 100f) +
@@ -626,6 +628,13 @@ namespace Turn.View
         private void ShowResult(bool victory)
         {
             _resultShown = true;
+            // 武器解锁：一局打到结算界面算完成 1 局（每局只记一次；从结算进选择页再退回来不会重复记）
+            if (!_runCounted)
+            {
+                _runCounted = true;
+                string unlocked = WeaponUnlocks.RegisterRunFinished();
+                _unlockMessage = unlocked.Length > 0 ? "\n\n<b>新解锁</b>  " + unlocked : "";
+            }
             if (victory) AddTotals();
             string body;
             if (victory)
@@ -641,6 +650,7 @@ namespace Turn.View
                 body = where + "\n\n存活 " + FormatTime(_ctx.Session.Time) +
                        "    等级 " + _ctx.Progression.Level + "    击杀 " + _ctx.Progression.Kills + "    翻滚 " + _ctx.Roll.RollCount + " 次";
             }
+            body += _unlockMessage;
             if (_flow != null) _flow.ShowResult(victory, victory ? "胜利！" : "倒下了……", body);
             else if (hud != null) hud.SetResultText(body);
         }
@@ -720,6 +730,8 @@ namespace Turn.View
                 config.Environment.StartPlane = PlaneIds.First(_levelPair);
             }
             _resultShown = false;
+            _runCounted = false;
+            _unlockMessage = "";
             int seed = randomSeed != 0 ? randomSeed : System.Environment.TickCount;
             _ctx = TurnFactory.Create(config, seed);
 

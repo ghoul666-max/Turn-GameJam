@@ -65,6 +65,7 @@ namespace Turn.View
                 case WeaponKind.Shuriken: return new Color(0.6f, 0.65f, 0.85f, 1f);
                 case WeaponKind.Stapler: return new Color(0.85f, 0.85f, 0.9f, 1f);
                 case WeaponKind.Sword: return new Color(0.55f, 0.8f, 1f, 1f);
+                case WeaponKind.Lightning: return new Color(0.75f, 0.7f, 1f, 1f);
                 default: return Color.white;
             }
         }

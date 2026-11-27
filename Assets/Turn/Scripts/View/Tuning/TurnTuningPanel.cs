@@ -404,6 +404,7 @@ namespace Turn.View
                 r.shurikenCooldown = F("r.cdShuriken", "手里剑：翻滚冷却（秒）", r.shurikenCooldown, 0f, 10f);
                 if (!WeaponKinds.IsRetired(WeaponKind.Stapler)) r.staplerCooldown = F("r.cdStapler", "订书机：翻滚冷却（秒）", r.staplerCooldown, 0f, 10f);
                 r.swordCooldown = F("r.cdSword", "剑：翻滚冷却（秒）", r.swordCooldown, 0f, 10f);
+                r.lightningCooldown = F("r.cdLightning", "闪电：翻滚冷却（秒）", r.lightningCooldown, 0f, 10f);
                 r.subspaceDuration = F("r.subDur", "亚空间时长（现实秒）", r.subspaceDuration, 0.05f, 5f);
                 r.subspaceTimeScale = F("r.subScale", "亚空间时间倍率", r.subspaceTimeScale, 0f, 1f);
                 r.duration = F("r.dur", "翻滚位移时长（游戏秒）", r.duration, 0.05f, 1.5f);
@@ -658,7 +659,7 @@ namespace Turn.View
                 hg.SecondsToFloor = F("hg.floorTime", "线性降至下限所需秒数", hg.SecondsToFloor, .1f, 30f);
                 hg.FloorSpeed = F("hg.floor", "最低移速下限", hg.FloorSpeed, 0.05f, 1f);
             }
-            if (Section("wasd", "副武器 · WASD"))
+            if (!SubWeaponKinds.IsHiddenInPanels(SubWeaponKind.Wasd) && Section("wasd", "副武器 · WASD")) // 11/27 WASD 已下架：面板不再显示
             {
                 WasdConfig w = a.Wasd;
                 w.Damage = F("wd.dmg", "按键伤害", w.Damage, 0f, 200f);
@@ -679,6 +680,20 @@ namespace Turn.View
                 m.StunTime = F("mg.stun", "爆炸眩晕（秒）", m.StunTime, 0f, 10f);
                 m.SpawnPullRadius = F("mg.spawnR", "「磁场」吸附半径", m.SpawnPullRadius, 0.3f, 10f);
                 m.PathPullRadius = F("mg.pathR", "「磁流」路径两侧拉扯范围", m.PathPullRadius, 0.3f, 10f);
+            }
+            if (Section("lightning", "闪电"))
+            {
+                LightningConfig lt = a.Lightning;
+                lt.Ammo = I("lt.ammo", "弹药上限", lt.Ammo, 1, 200);
+                lt.FireInterval = F("lt.interval", "攻击间隔（秒 / 发）", lt.FireInterval, 0.03f, 5f);
+                lt.Damage = F("lt.dmg", "闪电命中伤害（每只）", lt.Damage, 0f, 200f);
+                lt.Range = F("lt.range", "第一下的射程 / 索敌", lt.Range, 1f, 30f);
+                lt.ChainCount = I("lt.chain", "一道闪电最多命中几只（含第一下）", lt.ChainCount, 1, 30);
+                lt.JumpRange = F("lt.jump", "连锁跳跃距离", lt.JumpRange, 0.3f, 20f);
+                lt.DetonateDamage = F("lt.det", "每层雷痕引爆伤害", lt.DetonateDamage, 0f, 500f);
+                lt.InfectionRange = F("lt.infect", "传染：向多远内最近的敌人发闪电", lt.InfectionRange, 0.5f, 40f);
+                lt.MaxDetonations = I("lt.maxDet", "一次翻滚最多引爆几只（性能）", lt.MaxDetonations, 1, 3000);
+                lt.MaxInfections = I("lt.maxInf", "一次翻滚最多传染几次（性能）", lt.MaxInfections, 0, 3000);
             }
             if (Section("cursor", "副武器 · 光标"))
             {
@@ -775,6 +790,7 @@ namespace Turn.View
                     SubWeaponKind subKind = isSub ? (SubWeaponKind)(w - WeaponKinds.Count + 1) : SubWeaponKind.None;
                     string owner = isSub ? SubWeaponKinds.DisplayName(subKind) : WeaponKinds.DisplayName(weapon);
                     if (!isSub && WeaponKinds.IsRetired(weapon)) continue; // 11/27 已下架的主武器不显示词条表
+                    if (isSub && SubWeaponKinds.IsHiddenInPanels(subKind)) continue; // 11/27 已下架的副武器（WASD）不显示词条表
                     if (!Section("bd" + w, "词条表 · " + owner + "（每层数值 / 最大层数）")) continue;
                     for (int i = 0; i < bc.Builds.Length && i < BuildIds.Count; i++)
                     {

@@ -124,6 +124,8 @@ namespace Turn.View
         [SerializeField] private SoundCue staplerShot = new SoundCue(0.05f);
         [Tooltip("剑的常态攻击就是突进")]
         [SerializeField] private SoundCue swordShot = new SoundCue(0.05f);
+        [Tooltip("闪电（11/27）：空着 = 用通用开火")]
+        [SerializeField] private SoundCue lightningShot = new SoundCue(0.05f);
 
         [Header("主武器 · 爆发（同一次爆发里多次触发只响一次，靠最短间隔）")]
         [SerializeField] private SoundCue waterBurst = new SoundCue(0.5f);
@@ -134,6 +136,8 @@ namespace Turn.View
         [SerializeField] private SoundCue shurikenBurst = new SoundCue(0.5f);
         [SerializeField] private SoundCue staplerBurst = new SoundCue(0.5f);
         [SerializeField] private SoundCue swordBurst = new SoundCue(0.5f);
+        [Tooltip("闪电（11/27）：雷痕引爆，一次翻滚里多次引爆靠最短间隔限制")]
+        [SerializeField] private SoundCue lightningBurst = new SoundCue(0.25f);
 
         [Header("主武器 · 其它")]
         [SerializeField] private SoundCue crossbowWallSlam = new SoundCue(0.1f);
@@ -215,6 +219,7 @@ namespace Turn.View
             e.Subscribe<ShurikenRecalledEvent>(OnShurikenRecalled);
             e.Subscribe<StapleScatterEvent>(OnStapleScatter);
             e.Subscribe<ShadowStrikeEvent>(OnShadowStrike);
+            e.Subscribe<LightningDetonatedEvent>(OnLightningDetonated);
             e.Subscribe<WallSlammedEvent>(OnWallSlammed);
             e.Subscribe<SpadeBombEvent>(OnSpadeBomb);
             e.Subscribe<HeartBlastEvent>(OnHeartBlast);
@@ -266,6 +271,7 @@ namespace Turn.View
             e.Unsubscribe<ShurikenRecalledEvent>(OnShurikenRecalled);
             e.Unsubscribe<StapleScatterEvent>(OnStapleScatter);
             e.Unsubscribe<ShadowStrikeEvent>(OnShadowStrike);
+            e.Unsubscribe<LightningDetonatedEvent>(OnLightningDetonated);
             e.Unsubscribe<WallSlammedEvent>(OnWallSlammed);
             e.Unsubscribe<SpadeBombEvent>(OnSpadeBomb);
             e.Unsubscribe<HeartBlastEvent>(OnHeartBlast);
@@ -392,6 +398,7 @@ namespace Turn.View
         private void OnShurikenRecalled(ShurikenRecalledEvent evt) { Play(shurikenBurst); }
         private void OnStapleScatter(StapleScatterEvent evt) { Play(staplerBurst); }
         private void OnShadowStrike(ShadowStrikeEvent evt) { Play(swordBurst); }
+        private void OnLightningDetonated(LightningDetonatedEvent evt) { Play(lightningBurst); }
         private void OnWallSlammed(WallSlammedEvent evt) { Play(crossbowWallSlam); }
         private void OnSpadeBomb(SpadeBombEvent evt) { Play(spadeBomb); }
         private void OnHeartBlast(HeartBlastEvent evt) { Play(heartBlast); }
@@ -434,6 +441,7 @@ namespace Turn.View
                 case WeaponKind.Shuriken: return shurikenShot;
                 case WeaponKind.Stapler: return staplerShot;
                 case WeaponKind.Sword: return swordShot;
+                case WeaponKind.Lightning: return lightningShot;
                 default: return null;
             }
         }

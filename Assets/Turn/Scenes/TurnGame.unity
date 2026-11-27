@@ -10940,6 +10940,11 @@ MonoBehaviour:
     volume: 1
     pitchJitter: 0.05
     minInterval: 0.05
+  lightningShot:
+    clip: {fileID: 0}
+    volume: 1
+    pitchJitter: 0.05
+    minInterval: 0.05
   waterBurst:
     clip: {fileID: 8300000, guid: 5fbf5b53e3d3bc348b31f4e5ea8c2af9, type: 3}
     volume: 1
@@ -10980,6 +10985,11 @@ MonoBehaviour:
     volume: 1
     pitchJitter: 0.05
     minInterval: 0.5
+  lightningBurst:
+    clip: {fileID: 8300000, guid: b3c9c01cdf287fc4da2e9c8f32b4b371, type: 3}
+    volume: 0.6
+    pitchJitter: 0.05
+    minInterval: 0.25
   crossbowWallSlam:
     clip: {fileID: 8300000, guid: 46143eb709efd9e41be72c8273d679a4, type: 3}
     volume: 1
@@ -17168,6 +17178,7 @@ MonoBehaviour:
     xpGrowthPerLevel: 4
     levelOneMaxHp: 100
     maxHpPerLevel: 10
+    maxHpCap: 100
     levelOneMoveSpeed: 4.2
     moveSpeedPerLevel: 0.08
     maxLevel: 12

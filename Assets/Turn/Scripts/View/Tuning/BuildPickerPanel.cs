@@ -140,6 +140,7 @@ namespace Turn.View
                 WeaponKind weapon = isSub ? WeaponKind.WaterGun : (WeaponKind)g;
                 SubWeaponKind sub = isSub ? (SubWeaponKind)(g - WeaponKinds.Count + 1) : SubWeaponKind.None;
                 if (!isSub && WeaponKinds.IsRetired(weapon)) continue; // 11/27 已下架的主武器（掌 / 订书机）不显示
+                if (isSub && SubWeaponKinds.IsHiddenInPanels(sub)) continue; // 11/27 已下架的副武器（WASD）不显示
 
                 _rows.Clear();
                 int levels = 0;

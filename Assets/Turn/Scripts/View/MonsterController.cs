@@ -342,6 +342,7 @@ namespace Turn.View
             if (e.BladeMarks > 0) text += (text.Length > 0 ? " " : "") + "剑" + e.BladeMarks;
             if (e.PalmMarks > 0) text += (text.Length > 0 ? " " : "") + "掌" + e.PalmMarks;
             if (e.StapleMarks > 0) text += (text.Length > 0 ? " " : "") + (e.StapleGroup != 0 ? "钉▣" : "钉") + e.StapleMarks;
+            if (e.LightningMarks > 0) text += (text.Length > 0 ? " " : "") + "雷" + e.LightningMarks;
             if (text != _markText)
             {
                 _markText = text;

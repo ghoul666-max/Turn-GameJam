@@ -78,11 +78,17 @@ namespace Turn.Core
         // ---------------- 剑 ----------------
         SwordAmmo, SwordRate, SwordRange, SwordWidth, SwordHitRamp, SwordShadowDamage, SwordTrailBonus, SwordCrit,
         SwordStun, SwordKillThreshold, SwordBurstRing, SwordPostHaste, SwordLifesteal, SwordHurtDash, SwordKillRefund,
+
+        // ======== 11/27 ========
+
+        // ---------------- 闪电 ----------------
+        LightningAmmo, LightningRate, LightningJumps, LightningJumpRange, LightningDamage, LightningDetonateDamage,
+        LightningCrit, LightningStun, LightningExtraMark, LightningPostHaste, LightningLifesteal,
     }
 
     public static class BuildIds
     {
-        public const int Count = 189;
+        public const int Count = 200;
 
         /// <summary>第一批主武器词条的最后一条（之后是第一批副武器词条）。</summary>
         public const BuildId LastMain = BuildId.BowKillReload;
@@ -113,7 +119,8 @@ namespace Turn.Core
             if (i <= (int)BuildId.ShurikenLifesteal) return WeaponKind.Shuriken;
             if (i < (int)BuildId.StaplerAmmo) return WeaponKind.WaterGun; // 第二 / 三批副武器词条
             if (i <= (int)BuildId.StaplerLifesteal) return WeaponKind.Stapler;
-            return WeaponKind.Sword;
+            if (i <= (int)BuildId.SwordKillRefund) return WeaponKind.Sword;
+            return WeaponKind.Lightning; // 11/27
         }
 
         /// <summary>副武器词条属于哪把副武器（主武器词条返回 None）。</summary>

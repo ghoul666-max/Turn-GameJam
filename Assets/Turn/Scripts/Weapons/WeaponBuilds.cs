@@ -203,6 +203,18 @@ namespace Turn.Weapons
             d[186] = B(3, 0.03f, 0f); // 饮血
             d[187] = B(1, 1f, 0f); // 回身
             d[188] = B(1, 0.05f, 0f); // 补剑
+            // ---- 闪电（11/27；策划书没给词条，以下为暂定）----
+            d[189] = B(5, 0.15f, 0f); // 电容
+            d[190] = B(5, 0.1f, 0f); // 疾电
+            d[191] = B(3, 1f, 0f); // 链跃
+            d[192] = B(5, 0.15f, 0f); // 电弧
+            d[193] = B(5, 0.15f, 0f); // 高压
+            d[194] = B(5, 0.15f, 0f); // 雷爆
+            d[195] = B(3, 0.15f, 0f); // 落雷
+            d[196] = B(2, 0.4f, 0f); // 麻痹
+            d[197] = B(3, 0.25f, 0f); // 重雷
+            d[198] = B(3, 0.25f, 2.5f); // 余电
+            d[199] = B(3, 0.03f, 0f); // 汲电
             // 保留旧 ID / 数组索引兼容存档，但这些追加免费伤害词条不再进入升级池。
             DisableRollDamageBuilds(d);
             return d;
@@ -430,6 +442,17 @@ namespace Turn.Weapons
                 case BuildId.SwordLifesteal: return "饮血";
                 case BuildId.SwordHurtDash: return "回身";
                 case BuildId.SwordKillRefund: return "补剑";
+                case BuildId.LightningAmmo: return "电容";
+                case BuildId.LightningRate: return "疾电";
+                case BuildId.LightningJumps: return "链跃";
+                case BuildId.LightningJumpRange: return "电弧";
+                case BuildId.LightningDamage: return "高压";
+                case BuildId.LightningDetonateDamage: return "雷爆";
+                case BuildId.LightningCrit: return "落雷";
+                case BuildId.LightningStun: return "麻痹";
+                case BuildId.LightningExtraMark: return "重雷";
+                case BuildId.LightningPostHaste: return "余电";
+                case BuildId.LightningLifesteal: return "汲电";
                 default: return id.ToString();
             }
         }
@@ -628,6 +651,17 @@ namespace Turn.Weapons
                 case BuildId.SwordLifesteal: return "影刺爆发造成伤害时吸血 {p}";
                 case BuildId.SwordHurtDash: return "受到伤害时，自动向后突进一段距离并留下剑痕";
                 case BuildId.SwordKillRefund: return "常态突进击杀敌人有 {p} 概率补充 1 颗弹药";
+                case BuildId.LightningAmmo: return "弹药上限 +{p}";
+                case BuildId.LightningRate: return "闪电发射攻速 +{p}";
+                case BuildId.LightningJumps: return "每道闪电多连锁 {n} 只敌人";
+                case BuildId.LightningJumpRange: return "连锁跳跃距离 +{p}";
+                case BuildId.LightningDamage: return "闪电命中伤害 +{p}";
+                case BuildId.LightningDetonateDamage: return "雷痕引爆伤害 +{p}";
+                case BuildId.LightningCrit: return "引爆伤害有 {p} 概率暴击";
+                case BuildId.LightningStun: return "引爆后没死的敌人眩晕 {n} 秒";
+                case BuildId.LightningExtraMark: return "闪电命中有 {p} 概率多叠 1 层雷痕";
+                case BuildId.LightningPostHaste: return "翻滚结束后 {v2} 秒内闪电攻速 +{p}";
+                case BuildId.LightningLifesteal: return "雷痕引爆造成伤害时吸血 {p}";
                 default: return "";
             }
         }

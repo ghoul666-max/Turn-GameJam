@@ -410,6 +410,34 @@ namespace Turn.Core
         public float BurstRadius = 1.6f;
     }
 
+    /// <summary>
+    /// 主武器 · 闪电（11/27 定稿）。常态：发射一道闪电，在怪物之间超快速连锁跳跃，命中的怪物各叠 1 层雷痕；
+    /// 同一条链里同一只怪不会被重复命中，每一跳选离上一只最近的。
+    /// 翻滚：逐个引爆全场雷痕（伤害 = 每层引爆伤害 × 层数）；因引爆而死的怪物向最近的敌人再发一道规格完全相同的闪电（传染），
+    /// 传染打上的雷痕在同一次引爆里接着结算（每只怪每次翻滚最多被引爆一次），结算后全场雷痕清空。数值策划书没给，以下均为暂定。
+    /// </summary>
+    [Serializable]
+    public sealed class LightningConfig
+    {
+        public int Ammo = 20;
+        public float FireInterval = 0.5f;
+        /// <summary>闪电每命中一只怪的伤害。</summary>
+        public float Damage = 6f;
+        /// <summary>第一下的索敌 / 射程（单位）。</summary>
+        public float Range = 8f;
+        /// <summary>一条闪电最多命中几只怪（含第一下；策划「五次连锁跳跃」暂按 5 只算）。</summary>
+        public int ChainCount = 5;
+        /// <summary>每一跳最远能跳多远（单位）。</summary>
+        public float JumpRange = 3.5f;
+        /// <summary>每层雷痕的引爆伤害。</summary>
+        public float DetonateDamage = 12f;
+        /// <summary>传染：引爆致死的怪向这么远内最近的敌人发闪电（单位）。</summary>
+        public float InfectionRange = 8f;
+        /// <summary>一次翻滚最多引爆几只 / 最多传染几次（性能兜底）。</summary>
+        public int MaxDetonations = 400;
+        public int MaxInfections = 150;
+    }
+
     /// <summary>五把主武器 + 三把副武器 + 共用参数。</summary>
     [Serializable]
     public sealed class ArsenalConfig
@@ -431,6 +459,7 @@ namespace Turn.Core
         public SwordConfig Sword = new SwordConfig();
         public MagnetConfig Magnet = new MagnetConfig();
         public CursorConfig Cursor = new CursorConfig();
+        public LightningConfig Lightning = new LightningConfig();
 
         /// <summary>旧存档 / 旧场景里缺的分组补成默认值（JsonUtility 读不到的嵌套对象可能是 null）。</summary>
         public ArsenalConfig Normalize()
@@ -451,6 +480,7 @@ namespace Turn.Core
             if (Sword == null || Sword.Ammo <= 0) Sword = new SwordConfig();
             if (Magnet == null || Magnet.PathWidth <= 0f) Magnet = new MagnetConfig();
             if (Cursor == null || Cursor.MaxLength <= 0f) Cursor = new CursorConfig();
+            if (Lightning == null || Lightning.Ammo <= 0) Lightning = new LightningConfig();
             return this;
         }
         /// <summary>暴击伤害倍率（暴击词条共用）。</summary>
@@ -879,6 +909,8 @@ namespace Turn.Core
         public float BurstVulnerability;
         /// <summary>WeaponSystem 写（订书机）：钉痕层数。翻滚爆发散射时清零（爆发后次级钉打出的新钉痕留到下一次爆发）。</summary>
         public int StapleMarks;
+        /// <summary>WeaponSystem 写（闪电，11/27）：雷痕层数。闪电每次命中 +1 层；翻滚引爆后全场清零。</summary>
+        public int LightningMarks;
         /// <summary>WeaponSystem 写（订书机）：钉合组编号（0 = 没被钉合）。同一组不会再被钉合；和钉痕一起在爆发时清零。</summary>
         public int StapleGroup;
         /// <summary>SubWeaponSystem 写（光标）：「降维打击」定身剩余秒数（表现层压扁贴地；「定身易伤」读它）。</summary>

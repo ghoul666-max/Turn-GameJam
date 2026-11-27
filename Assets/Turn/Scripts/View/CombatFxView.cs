@@ -78,6 +78,8 @@ namespace Turn.View
             ctx.Events.Subscribe<BladeWaveFiredEvent>(OnBladeWave);
             ctx.Events.Subscribe<FountainBurstEvent>(OnFountain);
             ctx.Events.Subscribe<SpearRecalledEvent>(OnSpearRecalled);
+            ctx.Events.Subscribe<LightningChainedEvent>(OnLightningChained);
+            ctx.Events.Subscribe<LightningDetonatedEvent>(OnLightningDetonated);
             ctx.Events.Subscribe<BladeSlashedEvent>(OnBladeSlashed);
             ctx.Events.Subscribe<BurstRingEvent>(OnBurstRing);
             ctx.Events.Subscribe<LaserFiredEvent>(OnLaser);
@@ -112,6 +114,8 @@ namespace Turn.View
                 _ctx.Events.Unsubscribe<BladeWaveFiredEvent>(OnBladeWave);
                 _ctx.Events.Unsubscribe<FountainBurstEvent>(OnFountain);
                 _ctx.Events.Unsubscribe<SpearRecalledEvent>(OnSpearRecalled);
+                _ctx.Events.Unsubscribe<LightningChainedEvent>(OnLightningChained);
+                _ctx.Events.Unsubscribe<LightningDetonatedEvent>(OnLightningDetonated);
                 _ctx.Events.Unsubscribe<BladeSlashedEvent>(OnBladeSlashed);
                 _ctx.Events.Unsubscribe<BurstRingEvent>(OnBurstRing);
                 _ctx.Events.Unsubscribe<LaserFiredEvent>(OnLaser);
@@ -450,6 +454,49 @@ namespace Turn.View
             Color c = new Color(0.45f, 0.9f, 1f, 0.85f);
             r.color = c;
             AddFx(r.gameObject, r, null, 0.55f, true, c, evt.Radius * 0.6f, evt.Radius * 2.2f);
+        }
+
+        /// <summary>闪电（11/27）：沿命中顺序画一条锯齿折线；传染发出的闪电更粗、更亮（亚空间里保持彩色）。</summary>
+        private void OnLightningChained(LightningChainedEvent evt)
+        {
+            if (evt.Points == null || evt.Points.Length < 2) return;
+            Color c = ViewMath.WeaponColor(WeaponKind.Lightning);
+            if (evt.Infection) c = Color.Lerp(c, Color.white, 0.5f);
+            const int Kinks = 3; // 每一段中间插几个折点
+            LineRenderer line = NewLine("Lightning", evt.Infection ? 0.14f : 0.09f, c, evt.Infection);
+            line.numCapVertices = 0;
+            line.positionCount = (evt.Points.Length - 1) * (Kinks + 1) + 1;
+            int index = 0;
+            for (int s = 0; s < evt.Points.Length - 1; s++)
+            {
+                Vector3 a = ViewMath.ToWorld(evt.Points[s]);
+                Vector3 b = ViewMath.ToWorld(evt.Points[s + 1]);
+                Vector3 dir = b - a;
+                Vector3 normal = new Vector3(-dir.y, dir.x, 0f).normalized;
+                float jitter = Mathf.Min(0.35f, dir.magnitude * 0.15f);
+                line.SetPosition(index++, a);
+                for (int k = 1; k <= Kinks; k++)
+                {
+                    float t = k / (float)(Kinks + 1);
+                    line.SetPosition(index++, a + dir * t + normal * UnityEngine.Random.Range(-jitter, jitter));
+                }
+            }
+            line.SetPosition(index, ViewMath.ToWorld(evt.Points[evt.Points.Length - 1]));
+            AddFx(line.gameObject, null, line, evt.Infection ? 0.3f : 0.18f, evt.Infection, c, 1f, 1f);
+        }
+
+        /// <summary>闪电（11/27）：雷痕引爆，层数越多圈越大；打死的更亮。</summary>
+        private void OnLightningDetonated(LightningDetonatedEvent evt)
+        {
+            SpriteRenderer r = NewSprite("LightningBlast", Circle(), ViewMath.VfxOrder);
+            r.transform.position = ViewMath.ToWorld(evt.Position);
+            SubspaceView.KeepColor(r.gameObject);
+            Color c = ViewMath.WeaponColor(WeaponKind.Lightning);
+            c = evt.Killed ? Color.Lerp(c, Color.white, 0.6f) : c;
+            c.a = 0.85f;
+            r.color = c;
+            float size = 0.6f + 0.15f * Mathf.Min(evt.Marks, 10);
+            AddFx(r.gameObject, r, null, 0.35f, true, c, size * 0.4f, size);
         }
 
         private void OnSpearRecalled(SpearRecalledEvent evt)

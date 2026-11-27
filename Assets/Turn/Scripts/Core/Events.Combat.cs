@@ -139,5 +139,11 @@ namespace Turn.Core
     public struct MagnetCollideEvent { public Vec2 From; public Vec2 To; public Vec2 Center; public float Width; public float BlastRadius; public int Hits; }
 
     /// <summary>光标：降维打击（Outline = 选区边界的拷贝）。</summary>
+    /// <summary>闪电（11/27）：一条连锁闪电打完。Points = 起点 + 依次命中的怪物位置；Infection = 翻滚引爆时由死去的怪物传染发出。</summary>
+    public struct LightningChainedEvent { public Vec2[] Points; public int Hits; public bool Infection; }
+
+    /// <summary>闪电（11/27）：一只怪物身上的雷痕被引爆。</summary>
+    public struct LightningDetonatedEvent { public Vec2 Position; public int Marks; public float Damage; public bool Killed; }
+
     public struct CursorStrikeEvent { public Vec2[] Outline; public float Thickness; public int Hits; }
 }

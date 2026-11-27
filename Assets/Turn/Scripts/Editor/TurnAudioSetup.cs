@@ -80,6 +80,7 @@ namespace Turn.EditorTools
             { "swordBurst", SfxDir + "/22-weaponBurst/sword__sword-slash5.wav" },
             { "crossbowWallSlam", SfxDir + "/23-weaponExtra/crossbowWallSlam__blow4.wav" },
             { "spadeBomb", SfxDir + "/23-weaponExtra/spadeBomb__bomb2.wav" },
+            { "lightningBurst", SfxDir + "/23-weaponExtra/spadeBomb__bomb2.wav" }, // 11/27 闪电引爆：先借黑桃炸弹的爆炸占位
             // 怪物受击：沿用 Kenney 的短促打击（有声 0.09 s、起音 1 ms），比候选更适合最高频的音效
             { "monsterHit", SfxDir + "/13-shockwave/impactGeneric_light_000.ogg" },
             { "sniperWarn", SfxDir + "/24-monster/sniperWarn__beam-gun-charge1.wav" },
@@ -107,7 +108,7 @@ namespace Turn.EditorTools
             "monsterHit.volume=0.35", "monsterHit.pitchJitter=0.12",
             "pokerShot.volume=0.7", "staplerShot.volume=0.6", "wasdKey.volume=0.5",
             "spearShot.volume=0.8", "bladeShot.volume=0.8", "palmShot.volume=0.8", "shurikenShot.volume=0.8",
-            "waveStart.volume=0.6", "upgradeConfirm.volume=0.7", "sniperWarn.volume=0.9",
+            "waveStart.volume=0.6", "lightningBurst.volume=0.6", "upgradeConfirm.volume=0.7", "sniperWarn.volume=0.9",
         };
 
         [MenuItem("Turn/音频：把素材填进 GameManager 的 TurnAudio 槽位", false, 30)]

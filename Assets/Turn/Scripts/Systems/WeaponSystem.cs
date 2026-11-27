@@ -55,6 +55,7 @@ namespace Turn.Systems
             _weapons[(int)WeaponKind.Stapler] = _stapler;
             _sword = new SwordWeapon(_kit);
             _weapons[(int)WeaponKind.Sword] = _sword;
+            _weapons[(int)WeaponKind.Lightning] = new LightningWeapon(_kit); // 11/27
             // 新增主武器：写一个 WeaponBehavior 并在这里登记，Supports 自动跟着变
             for (int i = 0; i < _ammo.Length; i++)
             {
@@ -248,6 +249,7 @@ namespace Turn.Systems
                 // 矛的旧印记由 Burst 消耗；回收击杀衍生矛的新印记必须保留到下次回收。
                 all[i].BladeMarks = 0;
                 all[i].PalmMarks = 0;
+                all[i].LightningMarks = 0; // 闪电：爆发里已经清过，这里兜底（例如切武器后翻滚）
             }
             // 翻滚结束后的短时间内攻速提升（方案 A：切换后的那把）
             WeaponBehavior weapon = Behavior(Current);

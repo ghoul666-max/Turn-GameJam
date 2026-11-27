@@ -43,6 +43,8 @@ namespace Turn.View
         [Min(0f)] public float shurikenCooldown = 2.5f;
         [Min(0f)] public float staplerCooldown = 2.5f;
         [Min(0f)] public float swordCooldown = 2.5f;
+        [Tooltip("闪电（11/27，策划书没给，暂定 2.5）")]
+        [Min(0f)] public float lightningCooldown = 2.5f;
 
         [Header("亚空间")]
         [Tooltip("亚空间持续时长（现实秒，策划 1）。全程无敌，结束后补满弹药、清空印记")]
@@ -67,7 +69,7 @@ namespace Turn.View
                 WeaponCooldowns = new[]
                 {
                     waterGunCooldown, spearCooldown, bladeCooldown, palmCooldown, crossbowCooldown,
-                    pokerCooldown, shurikenCooldown, staplerCooldown, swordCooldown,
+                    pokerCooldown, shurikenCooldown, staplerCooldown, swordCooldown, lightningCooldown,
                 },
                 Cooldown = waterGunCooldown,
                 SubspaceDuration = subspaceDuration,

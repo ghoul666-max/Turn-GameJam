@@ -120,11 +120,11 @@ namespace Turn.Core
     /// 主武器种类。数值会被 Unity 序列化，只能在末尾追加。
     /// 水枪 / 投矛 / 陌刀（11/24 策划案），掌 / 弩（11/25 双武器策划案）。
     /// </summary>
-    public enum WeaponKind { WaterGun = 0, Spear = 1, Blade = 2, Palm = 3, Crossbow = 4, Poker = 5, Shuriken = 6, Stapler = 7, Sword = 8 }
+    public enum WeaponKind { WaterGun = 0, Spear = 1, Blade = 2, Palm = 3, Crossbow = 4, Poker = 5, Shuriken = 6, Stapler = 7, Sword = 8, Lightning = 9 }
 
     public static class WeaponKinds
     {
-        public const int Count = 9;
+        public const int Count = 10;
 
         public static bool IsValid(WeaponKind kind) { return (int)kind >= 0 && (int)kind < Count; }
 
@@ -138,7 +138,7 @@ namespace Turn.Core
         public static readonly WeaponKind[] UnlockOrder =
         {
             WeaponKind.WaterGun, WeaponKind.Spear, WeaponKind.Blade, WeaponKind.Crossbow,
-            WeaponKind.Poker, WeaponKind.Shuriken, WeaponKind.Sword,
+            WeaponKind.Poker, WeaponKind.Shuriken, WeaponKind.Sword, WeaponKind.Lightning,
         };
 
         public static string DisplayName(WeaponKind kind)
@@ -154,6 +154,7 @@ namespace Turn.Core
                 case WeaponKind.Shuriken: return "手里剑";
                 case WeaponKind.Stapler: return "订书机";
                 case WeaponKind.Sword: return "剑";
+                case WeaponKind.Lightning: return "闪电";
                 default: return kind.ToString();
             }
         }
@@ -169,11 +170,21 @@ namespace Turn.Core
 
         public static bool IsValid(SubWeaponKind kind) { return (int)kind >= 0 && (int)kind < Count; }
 
-        /// <summary>副武器的解锁顺序（11/27，不含 None）：第 1 次打开游戏一把都没有，之后每打开一次往下解锁 3 把。也是选择页的排列顺序。</summary>
+        /// <summary>
+        /// 已下架的副武器（11/27：WASD、强磁铁）。代码与存档编号保留，但选择页、解锁都不再出现。
+        /// WASD 的 F1 参数分组 / 词条表 / F7 分组也隐藏；强磁铁的配置与词条已并入引力黑洞（黑洞读 MagnetConfig、共用词条池），面板里保留。
+        /// 想加回来：从这里去掉，再把它放进 <see cref="UnlockOrder"/>。
+        /// </summary>
+        public static bool IsRetired(SubWeaponKind kind) { return kind == SubWeaponKind.Wasd || kind == SubWeaponKind.Magnet; }
+
+        /// <summary>已下架、且面板里也要隐藏的副武器（强磁铁的配置被引力黑洞用着，不隐藏）。</summary>
+        public static bool IsHiddenInPanels(SubWeaponKind kind) { return IsRetired(kind) && kind != SubWeaponKind.Magnet; }
+
+        /// <summary>副武器的解锁顺序（11/27，不含 None；已下架的不在里面）：一局都没完成时一把都没有，之后每完成 1 局往下解锁 3 把。也是选择页的排列顺序。</summary>
         public static readonly SubWeaponKind[] UnlockOrder =
         {
             SubWeaponKind.Drones, SubWeaponKind.GravityWell, SubWeaponKind.SpaceAnchor, SubWeaponKind.Hourglass,
-            SubWeaponKind.Wasd, SubWeaponKind.Magnet, SubWeaponKind.Cursor,
+            SubWeaponKind.Cursor,
         };
 
         public static string DisplayName(SubWeaponKind kind)
