@@ -20,12 +20,13 @@
             "shurikenCooldown": 2.5,
             "staplerCooldown": 2.5,
             "swordCooldown": 2.5,
+            "lightningCooldown": 2.5,
             "subspaceDuration": 1.0,
             "subspaceTimeScale": 0.30000001192092896,
             "duration": 0.20000000298023224,
-            "distance": 0.800000011920929,
-            "pokerDurationMultiplier": 0.65,
-            "crossbowDurationMultiplier": 0.65
+            "pokerDurationMultiplier": 0.6499999761581421,
+            "crossbowDurationMultiplier": 0.6499999761581421,
+            "distance": 0.800000011920929
         },
         "weapon": {
             "magazineSize": 6,
@@ -227,13 +228,13 @@
             "xpGrowthPerLevel": 4,
             "levelOneMaxHp": 20.0,
             "maxHpPerLevel": 4.0,
+            "maxHpCap": 100.0,
             "levelOneMoveSpeed": 4.199999809265137,
             "moveSpeedPerLevel": 0.07999999821186066,
             "maxLevel": 12,
             "pickupRadius": 0.5,
             "magnetRadius": 2.0,
-            "magnetSpeed": 10.0,
-            "maxHpCap": 100.0
+            "magnetSpeed": 10.0
         },
         "battleVersion": 2,
         "monster": {
@@ -466,14 +467,14 @@
                 "Ammo": 25,
                 "FireInterval": 0.5,
                 "Damage": 6.0,
+                "WaveSpeed": 12.0,
+                "WaveHalfWidth": 0.6000000238418579,
                 "Angle": 60.0,
                 "Range": 7.5,
                 "RingThickness": 0.8999999761581421,
                 "SlashDamage": 25.0,
                 "MarkBonus": 0.07999999821186066,
-                "SlashHalfHeight": 1.5,
-                "WaveSpeed": 12.0,
-                "WaveHalfWidth": 0.6
+                "SlashHalfHeight": 1.5
             },
             "Palm": {
                 "Ammo": 25,
@@ -492,18 +493,18 @@
                 "FireInterval": 0.30000001192092896,
                 "Speed": 24.0,
                 "Damage": 30.0,
-                "Radius": 0.6599999964237213,
+                "Radius": 0.6599999666213989,
                 "Range": 22.5,
+                "KillsPerSizeStep": 5,
+                "SizePerKillStep": 0.009999999776482582,
+                "MaxSizeMultiplier": 5.0,
+                "SwordWaveRangeMultiplier": 3.0,
                 "Pierce": 3,
                 "PierceFalloff": 0.25,
                 "Knockback": 2.5,
                 "WallStun": 1.0,
                 "IntentBonus": 0.05000000074505806,
-                "SplashRadius": 1.2000000476837158,
-                "KillsPerSizeStep": 5,
-                "SizePerKillStep": 0.01,
-                "MaxSizeMultiplier": 5,
-                "SwordWaveRangeMultiplier": 3
+                "SplashRadius": 1.2000000476837158
             },
             "Drones": {
                 "StartCount": 1,
@@ -519,19 +520,19 @@
                 "OrbitRadius": 1.2999999523162842,
                 "OrbitSpeed": 2.0,
                 "MaxActive": 32,
-                "SplitChance": 0.7
+                "SplitChance": 0.699999988079071
             },
             "Gravity": {
                 "Radius": 5.0,
+                "DamagePerSecond": 6.0,
+                "MergeSpeed": 8.0,
+                "PickupRadius": 5.0,
+                "PickupSpeed": 8.0,
                 "PullDistance": 3.0,
                 "MinGap": 0.6000000238418579,
                 "SecondaryRadius": 2.5,
                 "SecondaryPull": 1.2000000476837158,
-                "SecondaryOffset": 3.0,
-                "DamagePerSecond": 6,
-                "MergeSpeed": 8,
-                "PickupRadius": 5,
-                "PickupSpeed": 8
+                "SecondaryOffset": 3.0
             },
             "Anchor": {
                 "SlashDamage": 30.0,
@@ -540,6 +541,14 @@
             "Poker": {
                 "HandSize": 1,
                 "DrawInterval": 1.5,
+                "JokerChanceMultiplier": 0.5,
+                "ShieldMultiplier": 0.5,
+                "SpadeChildCount": 4,
+                "SpadeChildDamageRatio": 0.375,
+                "SpadeChildRadiusRatio": 0.5,
+                "SpadeChildOffsetRatio": 0.5,
+                "SpadeChildDelay": 0.15000000596046448,
+                "ClubAspectRatio": 0.3499999940395355,
                 "HeartsPerPoint": 10,
                 "HeartDamage": 3.0,
                 "HeartSpeed": 10.0,
@@ -563,15 +572,7 @@
                 "ClubDurationPerPoint": 0.4000000059604645,
                 "SmallJokerBonus": 0.07999999821186066,
                 "BigJokerBonus": 0.15000000596046448,
-                "TargetRange": 12.0,
-                "JokerChanceMultiplier": 0.5,
-                "ShieldMultiplier": 0.5,
-                "SpadeChildCount": 4,
-                "SpadeChildDamageRatio": 0.375,
-                "SpadeChildRadiusRatio": 0.5,
-                "SpadeChildOffsetRatio": 0.5,
-                "SpadeChildDelay": 0.15,
-                "ClubAspectRatio": 0.35
+                "TargetRange": 12.0
             },
             "Shuriken": {
                 "Ammo": 12,
@@ -652,6 +653,18 @@
                 "MaxLength": 30.0,
                 "Thickness": 0.6000000238418579,
                 "SampleSpacing": 0.30000001192092896
+            },
+            "Lightning": {
+                "Ammo": 20,
+                "FireInterval": 0.5,
+                "Damage": 6.0,
+                "Range": 8.0,
+                "ChainCount": 5,
+                "JumpRange": 3.5,
+                "DetonateDamage": 12.0,
+                "InfectionRange": 8.0,
+                "MaxDetonations": 400,
+                "MaxInfections": 150
             },
             "CritMultiplier": 2.0,
             "BurstRingRadius": 3.0,
@@ -814,9 +827,9 @@
                     "Value2": 0.0
                 },
                 {
-                    "MaxLevel": 3,
-                    "Value": 0.07999999821186066,
-                    "Value2": 3.0
+                    "MaxLevel": 0,
+                    "Value": 0.0,
+                    "Value2": 0.0
                 },
                 {
                     "MaxLevel": 3,
@@ -894,9 +907,9 @@
                     "Value2": 0.0
                 },
                 {
-                    "MaxLevel": 3,
-                    "Value": 0.07999999821186066,
-                    "Value2": 3.0
+                    "MaxLevel": 0,
+                    "Value": 0.0,
+                    "Value2": 0.0
                 },
                 {
                     "MaxLevel": 3,
@@ -969,9 +982,9 @@
                     "Value2": 0.0
                 },
                 {
-                    "MaxLevel": 3,
-                    "Value": 0.07999999821186066,
-                    "Value2": 3.0
+                    "MaxLevel": 0,
+                    "Value": 0.0,
+                    "Value2": 0.0
                 },
                 {
                     "MaxLevel": 3,
@@ -1049,9 +1062,9 @@
                     "Value2": 0.30000001192092896
                 },
                 {
-                    "MaxLevel": 3,
-                    "Value": 0.07999999821186066,
-                    "Value2": 3.0
+                    "MaxLevel": 0,
+                    "Value": 0.0,
+                    "Value2": 0.0
                 },
                 {
                     "MaxLevel": 3,
@@ -1085,7 +1098,7 @@
                 },
                 {
                     "MaxLevel": 3,
-                    "Value": 0.15,
+                    "Value": 0.15000000596046448,
                     "Value2": 0.0
                 },
                 {
@@ -1364,9 +1377,9 @@
                     "Value2": 0.0
                 },
                 {
-                    "MaxLevel": 3,
-                    "Value": 0.07999999821186066,
-                    "Value2": 3.0
+                    "MaxLevel": 0,
+                    "Value": 0.0,
+                    "Value2": 0.0
                 },
                 {
                     "MaxLevel": 2,
@@ -1609,9 +1622,9 @@
                     "Value2": 0.0
                 },
                 {
-                    "MaxLevel": 3,
-                    "Value": 0.07999999821186066,
-                    "Value2": 3.0
+                    "MaxLevel": 0,
+                    "Value": 0.0,
+                    "Value2": 0.0
                 },
                 {
                     "MaxLevel": 2,
@@ -1674,9 +1687,9 @@
                     "Value2": 0.0
                 },
                 {
-                    "MaxLevel": 3,
-                    "Value": 0.07999999821186066,
-                    "Value2": 3.0
+                    "MaxLevel": 0,
+                    "Value": 0.0,
+                    "Value2": 0.0
                 },
                 {
                     "MaxLevel": 2,
@@ -1697,6 +1710,61 @@
                     "MaxLevel": 1,
                     "Value": 0.05000000074505806,
                     "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.10000000149011612,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 1.0,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 5,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.15000000596046448,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 2,
+                    "Value": 0.4000000059604645,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.25,
+                    "Value2": 0.0
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.25,
+                    "Value2": 2.5
+                },
+                {
+                    "MaxLevel": 3,
+                    "Value": 0.029999999329447746,
+                    "Value2": 0.0
                 }
             ],
             "ChestLevels": 1,
@@ -1707,16 +1775,33 @@
         },
         "camera": {
             "version": 1,
-            "pitch": 35.0,
-            "perspective": false,
+            "pitch": 45.0,
+            "perspective": true,
             "orthographicSize": 7.0,
-            "fieldOfView": 40.0,
-            "distance": 20.0,
+            "fieldOfView": 42.0,
+            "distance": 16.0,
             "lookAhead": 0.0,
             "standUp": true,
-            "standLift": 0.20000000298023224,
+            "standLift": 0.0,
             "depthSort": true,
-            "sharpness": 8.0
+            "sharpness": 8.0,
+            "hardFollow": true,
+            "vertical": true,
+            "stretch": true,
+            "autoFoot": true,
+            "paperTurn": true,
+            "playerTurnSpeed": 270.0,
+            "monsterTurnSpeed": 180.0,
+            "turnAngle": 30.0,
+            "playerDiagonalMin": 0.5,
+            "playerDiagonalMax": 0.800000011920929,
+            "monsterDiagonalMin": 0.20000000298023224,
+            "monsterDiagonalMax": 0.699999988079071,
+            "silhouetteShadow": true,
+            "blobShadow": false,
+            "shadowDirection": 60.0,
+            "shadowLength": 0.6000000238418579,
+            "shadowAlpha": 0.3499999940395355
         }
     },
     "defaults": {
@@ -1738,12 +1823,13 @@
             "shurikenCooldown": 2.5,
             "staplerCooldown": 2.5,
             "swordCooldown": 2.5,
+            "lightningCooldown": 2.5,
             "subspaceDuration": 1.0,
             "subspaceTimeScale": 0.30000001192092896,
             "duration": 0.20000000298023224,
-            "distance": 0.800000011920929,
-            "pokerDurationMultiplier": 0.65,
-            "crossbowDurationMultiplier": 0.65
+            "pokerDurationMultiplier": 0.6499999761581421,
+            "crossbowDurationMultiplier": 0.6499999761581421,
+            "distance": 0.800000011920929
         },
         "weapon": {
             "magazineSize": 6,
@@ -1945,13 +2031,13 @@
             "xpGrowthPerLevel": 4,
             "levelOneMaxHp": 20.0,
             "maxHpPerLevel": 4.0,
+            "maxHpCap": 100.0,
             "levelOneMoveSpeed": 4.199999809265137,
             "moveSpeedPerLevel": 0.07999999821186066,
             "maxLevel": 12,
             "pickupRadius": 0.5,
             "magnetRadius": 2.0,
-            "magnetSpeed": 10.0,
-            "maxHpCap": 100.0
+            "magnetSpeed": 10.0
         },
         "battleVersion": 2,
         "monster": {
@@ -2184,14 +2270,14 @@
                 "Ammo": 25,
                 "FireInterval": 0.5,
                 "Damage": 6.0,
+                "WaveSpeed": 12.0,
+                "WaveHalfWidth": 0.6000000238418579,
                 "Angle": 60.0,
                 "Range": 7.5,
                 "RingThickness": 0.8999999761581421,
                 "SlashDamage": 25.0,
                 "MarkBonus": 0.07999999821186066,
-                "SlashHalfHeight": 1.5,
-                "WaveSpeed": 12.0,
-                "WaveHalfWidth": 0.6
+                "SlashHalfHeight": 1.5
             },
             "Palm": {
                 "Ammo": 25,
@@ -2210,18 +2296,18 @@
                 "FireInterval": 0.30000001192092896,
                 "Speed": 24.0,
                 "Damage": 30.0,
-                "Radius": 0.6599999964237213,
+                "Radius": 0.6599999666213989,
                 "Range": 22.5,
+                "KillsPerSizeStep": 5,
+                "SizePerKillStep": 0.009999999776482582,
+                "MaxSizeMultiplier": 5.0,
+                "SwordWaveRangeMultiplier": 3.0,
                 "Pierce": 3,
                 "PierceFalloff": 0.25,
                 "Knockback": 2.5,
                 "WallStun": 1.0,
                 "IntentBonus": 0.05000000074505806,
-                "SplashRadius": 1.2000000476837158,
-                "KillsPerSizeStep": 5,
-                "SizePerKillStep": 0.01,
-                "MaxSizeMultiplier": 5,
-                "SwordWaveRangeMultiplier": 3
+                "SplashRadius": 1.2000000476837158
             },
             "Drones": {
                 "StartCount": 1,
@@ -2237,19 +2323,19 @@
                 "OrbitRadius": 1.2999999523162842,
                 "OrbitSpeed": 2.0,
                 "MaxActive": 32,
-                "SplitChance": 0.7
+                "SplitChance": 0.699999988079071
             },
             "Gravity": {
                 "Radius": 5.0,
+                "DamagePerSecond": 6.0,
+                "MergeSpeed": 8.0,
+                "PickupRadius": 5.0,
+                "PickupSpeed": 8.0,
                 "PullDistance": 3.0,
                 "MinGap": 0.6000000238418579,
                 "SecondaryRadius": 2.5,
                 "SecondaryPull": 1.2000000476837158,
-                "SecondaryOffset": 3.0,
-                "DamagePerSecond": 6,
-                "MergeSpeed": 8,
-                "PickupRadius": 5,
-                "PickupSpeed": 8
+                "SecondaryOffset": 3.0
             },
             "Anchor": {
                 "SlashDamage": 30.0,
@@ -2258,6 +2344,14 @@
             "Poker": {
                 "HandSize": 1,
                 "DrawInterval": 1.5,
+                "JokerChanceMultiplier": 0.5,
+                "ShieldMultiplier": 0.5,
+                "SpadeChildCount": 4,
+                "SpadeChildDamageRatio": 0.375,
+                "SpadeChildRadiusRatio": 0.5,
+                "SpadeChildOffsetRatio": 0.5,
+                "SpadeChildDelay": 0.15000000596046448,
+                "ClubAspectRatio": 0.3499999940395355,
                 "HeartsPerPoint": 10,
                 "HeartDamage": 3.0,
                 "HeartSpeed": 10.0,
@@ -2281,15 +2375,7 @@
                 "ClubDurationPerPoint": 0.4000000059604645,
                 "SmallJokerBonus": 0.07999999821186066,
                 "BigJokerBonus": 0.15000000596046448,
-                "TargetRange": 12.0,
-                "JokerChanceMultiplier": 0.5,
-                "ShieldMultiplier": 0.5,
-                "SpadeChildCount": 4,
-                "SpadeChildDamageRatio": 0.375,
-                "SpadeChildRadiusRatio": 0.5,
-                "SpadeChildOffsetRatio": 0.5,
-                "SpadeChildDelay": 0.15,
-                "ClubAspectRatio": 0.35
+                "TargetRange": 12.0
             },
             "Shuriken": {
                 "Ammo": 12,
@@ -2370,6 +2456,18 @@
                 "MaxLength": 30.0,
                 "Thickness": 0.6000000238418579,
                 "SampleSpacing": 0.30000001192092896
+            },
+            "Lightning": {
+                "Ammo": 20,
+                "FireInterval": 0.5,
+                "Damage": 6.0,
+                "Range": 8.0,
+                "ChainCount": 5,
+                "JumpRange": 3.5,
+                "DetonateDamage": 12.0,
+                "InfectionRange": 8.0,
+                "MaxDetonations": 400,
+                "MaxInfections": 150
             },
             "CritMultiplier": 2.0,
             "BurstRingRadius": 3.0,
@@ -2710,16 +2808,33 @@
         },
         "camera": {
             "version": 1,
-            "pitch": 0.0,
-            "perspective": false,
+            "pitch": 45.0,
+            "perspective": true,
             "orthographicSize": 7.0,
-            "fieldOfView": 40.0,
-            "distance": 20.0,
+            "fieldOfView": 42.0,
+            "distance": 10.0,
             "lookAhead": 0.0,
             "standUp": true,
             "standLift": 0.0,
             "depthSort": true,
-            "sharpness": 8.0
+            "sharpness": 8.0,
+            "hardFollow": true,
+            "vertical": true,
+            "stretch": true,
+            "autoFoot": true,
+            "paperTurn": true,
+            "playerTurnSpeed": 270.0,
+            "monsterTurnSpeed": 180.0,
+            "turnAngle": 30.0,
+            "playerDiagonalMin": 0.5,
+            "playerDiagonalMax": 0.800000011920929,
+            "monsterDiagonalMin": 0.20000000298023224,
+            "monsterDiagonalMax": 0.699999988079071,
+            "silhouetteShadow": true,
+            "blobShadow": false,
+            "shadowDirection": 60.0,
+            "shadowLength": 0.6000000238418579,
+            "shadowAlpha": 0.3499999940395355
         }
     }
 }

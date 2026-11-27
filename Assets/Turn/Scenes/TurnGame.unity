@@ -12849,6 +12849,23 @@ MonoBehaviour:
     standLift: 0
     depthSort: 1
     sharpness: 8
+    hardFollow: 1
+    vertical: 1
+    stretch: 1
+    autoFoot: 1
+    paperTurn: 1
+    playerTurnSpeed: 270
+    monsterTurnSpeed: 180
+    turnAngle: 30
+    playerDiagonalMin: 0.5
+    playerDiagonalMax: 0.8
+    monsterDiagonalMin: 0.2
+    monsterDiagonalMax: 0.7
+    silhouetteShadow: 1
+    blobShadow: 0
+    shadowDirection: 60
+    shadowLength: 0.6
+    shadowAlpha: 0.35
 --- !u!81 &1333857956
 AudioListener:
   m_ObjectHideFlags: 0

@@ -223,6 +223,7 @@ namespace Turn.View
         private int _frameIndex = -1;
         private float _swayTime;
         private bool _faceLeft;
+        private UprightView _upright;
         private bool _frozen;
         private float _punch;
 
@@ -235,7 +236,7 @@ namespace Turn.View
             if (volcanoRenderer != null) _volcanoColor = volcanoRenderer.color;
             if (oceanRenderer != null) _oceanColor = oceanRenderer.color;
             SetSkin(map);
-            UprightView.Ensure(gameObject); // 2.5D：倾斜相机时贴图 / 血条 / 印记立起来面向镜头（脚下阴影留在地面）
+            _upright = UprightView.Ensure(gameObject); // 2.5D：倾斜相机时贴图立起来（纸片翻面），血条 / 印记正对镜头，脚下阴影留在地面（程序A 11/27）
         }
 
         /// <summary>只改外观：火山显示 VolcanoSkin，海洋显示 OceanSkin。</summary>
@@ -252,6 +253,7 @@ namespace Turn.View
         public void Sync(MonsterEntity e)
         {
             transform.position = ViewMath.ToWorld(e.Position);
+            bool paper = CameraRig.PaperTurn; // 纸片翻面时朝向交给 UprightView，不再 flipX（程序A 11/27）
             if (_artRoot != null)
             {
                 // 同一排序层里靠 Z 决定前后：越靠下（Y 越小）越靠前，避免重叠的怪物互相闪烁
@@ -261,8 +263,9 @@ namespace Turn.View
                 if (e.Kind == MonsterKind.Charger && e.AiPhase >= 1) fx = e.AttackDirection.X; // 蓄力 / 冲锋时朝冲锋方向
                 if (fx < -0.05f) _faceLeft = true;
                 else if (fx > 0.05f) _faceLeft = false;
-                _artRenderer.flipX = _faceLeft;
-                if (_flashRenderer != null) _flashRenderer.flipX = _faceLeft;
+                _artRenderer.flipX = _faceLeft && !paper;
+                if (_flashRenderer != null) _flashRenderer.flipX = _faceLeft && !paper;
+                if (_upright != null) _upright.SetFacing(new Vector2(fx, e.Kind == MonsterKind.Charger && e.AiPhase >= 1 ? e.AttackDirection.Y : e.Velocity.Y));
                 _frozen = e.StunLeft > 0f || e.PinnedLeft > 0f;
             }
             hp = e.Hp;
@@ -273,9 +276,10 @@ namespace Turn.View
             slowLeft = e.SlowLeft;
             laserWarningLeft = e.Kind == MonsterKind.FutureSoldier && e.AiPhase == 1 ? e.AiTimer : 0f;
 
-            bool flip = e.Velocity.X < -0.01f;
+            bool flip = e.Velocity.X < -0.01f && !paper;
             if (volcanoRenderer != null) volcanoRenderer.flipX = flip;
             if (oceanRenderer != null) oceanRenderer.flipX = flip;
+            if (_artRoot == null && _upright != null) _upright.SetFacing(new Vector2(e.Velocity.X, e.Velocity.Y));
 
             float ratio = e.MaxHp > 0f ? Mathf.Clamp01(e.Hp / e.MaxHp) : 0f;
             if (hpBar != null) hpBar.SetActive(ratio < 0.999f);
@@ -620,7 +624,7 @@ namespace Turn.View
                 bob = 0f;
                 tilt = -8f;
             }
-            if (_faceLeft) tilt = -tilt;
+            if (_faceLeft && !CameraRig.PaperTurn) tilt = -tilt; // 纸片翻面时贴图本身已经转过去了
 
             _punch = Mathf.Max(0f, _punch - dt * 8f);
             float punch = 1f + 0.12f * _punch;

@@ -371,8 +371,27 @@ namespace Turn.View
                 c.standUp = Toggle("倾斜时玩家 / 怪物立起来面向镜头", c.standUp);
                 c.standLift = F("cam.lift", "立起物体离地高度", c.standLift, -1f, 2f);
                 c.depthSort = Toggle("倾斜时按前后遮挡（画面靠下的挡住靠上的）", c.depthSort);
-                c.sharpness = F("cam.sharp", "跟随灵敏度", c.sharpness, 0.5f, 30f);
-                GUILayout.Label("提示：玩法判定不变（伤害范围、拾取、碰撞都还是地面上的圆）。透视时相机距离要配合视角调，视角 40° / 距离 20 ≈ 正交 7。", _wrap);
+                c.hardFollow = Toggle("硬跟随（玩家永远在画面正中，原作做法；关 = 按灵敏度平滑）", c.hardFollow);
+                c.sharpness = F("cam.sharp", "跟随灵敏度（硬跟随关闭时）", c.sharpness, 0.5f, 30f);
+                GUILayout.Label("—— 纸片角色（倾斜且立起来时生效）——", _wrap);
+                c.vertical = Toggle("竖直站立（立牌垂直于地面，原作做法；关 = 正对镜头）", c.vertical);
+                c.stretch = Toggle("竖直站立时竖向拉长 1/sin(倾斜角)（45° = √2）", c.stretch);
+                c.autoFoot = Toggle("自动脚底（贴图底边落在地面上）", c.autoFoot);
+                c.paperTurn = Toggle("纸片翻面（转身时绕竖轴转过去，代替左右镜像）", c.paperTurn);
+                c.playerTurnSpeed = F("cam.pTurn", "玩家转身速度（度/秒，原作 270）", c.playerTurnSpeed, 30f, 2000f);
+                c.monsterTurnSpeed = F("cam.mTurn", "怪物转身速度（度/秒，原作 180）", c.monsterTurnSpeed, 30f, 2000f);
+                c.turnAngle = F("cam.tAngle", "斜向移动多转的角度（度，原作 30）", c.turnAngle, 0f, 80f);
+                c.playerDiagonalMin = F("cam.pDiagMin", "玩家斜向阈值下限（|x|，原作 0.5）", c.playerDiagonalMin, 0f, 1f);
+                c.playerDiagonalMax = F("cam.pDiagMax", "玩家斜向阈值上限（原作 0.8）", c.playerDiagonalMax, 0f, 1f);
+                c.monsterDiagonalMin = F("cam.mDiagMin", "怪物斜向阈值下限（原作 0.2）", c.monsterDiagonalMin, 0f, 1f);
+                c.monsterDiagonalMax = F("cam.mDiagMax", "怪物斜向阈值上限（原作 0.7）", c.monsterDiagonalMax, 0f, 1f);
+                GUILayout.Label("—— 脚下阴影（倾斜时；倾斜角 0 始终是圆影）——", _wrap);
+                c.silhouetteShadow = Toggle("剪影投影（当前帧染黑铺在地面，翻面时跟着变窄）", c.silhouetteShadow);
+                c.blobShadow = Toggle("圆形脚底阴影", c.blobShadow);
+                c.shadowDirection = F("cam.shDir", "剪影倒向（度，0 = 右，90 = 画面里侧）", c.shadowDirection, -180f, 180f);
+                c.shadowLength = F("cam.shLen", "剪影长度（× 角色高度）", c.shadowLength, 0f, 3f);
+                c.shadowAlpha = F("cam.shAlpha", "剪影浓度", c.shadowAlpha, 0f, 1f);
+                GUILayout.Label("提示：玩法判定不变（伤害范围、拾取、碰撞都还是地面上的圆）。默认照搬《通神榜》：透视 42°、俯角 45°、距离 10；视角 40° / 距离 20 ≈ 原来的正交 7。", _wrap);
             }
             if (Section("level", "关卡 / 波次"))
             {

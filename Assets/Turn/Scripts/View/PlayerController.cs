@@ -119,6 +119,7 @@ namespace Turn.View
         private float _hurtTimer;
         private float _rollAngle;
         private float _rollDuration;
+        private UprightView _upright;
 
         public PlayerSettings Settings { get { return settings; } }
         public RollSettings RollSettings { get { return rollSettings; } }
@@ -140,7 +141,7 @@ namespace Turn.View
             }
             if (bodyRenderer != null) bodyRenderer.color = bodyColor;
             transform.position = ViewMath.ToWorld(ctx.Player.State.Position);
-            UprightView.Ensure(gameObject); // 2.5D：倾斜相机时身体立起来面向镜头（阴影 / 箭头 / 护盾圈留在地面）
+            _upright = UprightView.Ensure(gameObject, UprightRole.Player); // 2.5D：倾斜相机时身体立起来（纸片），阴影 / 箭头 / 护盾圈留在地面
         }
 
         public void Unbind()
@@ -172,6 +173,8 @@ namespace Turn.View
             PlayerState s = _ctx.Player.State;
 
             transform.position = ViewMath.ToWorld(s.Position);
+            // 纸片翻面：按移动输入转身（没有水平输入时沿用上次朝向）；翻面关闭时不起作用
+            if (_upright != null && s.MoveDir.SqrMagnitude > 0.01f) _upright.SetFacing(new Vector2(s.MoveDir.X, s.MoveDir.Y));
             hp = s.Hp;
             rollCooldownLeft = s.RollCooldownLeft;
             invincibleLeft = s.InvincibleLeft;
@@ -228,6 +231,7 @@ namespace Turn.View
                     float total = Mathf.Max(0.001f, _rollDuration);
                     float t = 1f - Mathf.Clamp01(s.RollTimer / total);
                     _rollAngle = (s.RollDirection.X >= 0f ? -360f : 360f) * t;
+                    if (_upright != null && _upright.ShowsBack) _rollAngle = -_rollAngle; // 纸片翻到背面时局部旋转是镜像的，保持屏幕上的滚动方向
                     body.localRotation = Quaternion.Euler(0f, 0f, _rollAngle);
                     body.localScale = new Vector3(0.85f, 0.85f, 1f);
                     break;

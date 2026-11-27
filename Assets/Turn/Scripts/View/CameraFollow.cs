@@ -14,15 +14,15 @@ namespace Turn.View
         [HideInInspector] public int version = 1;
 
         [Tooltip("倾斜角（度）：0 = 正俯视（原来的画面），越大越像斜着看地面的 2.5D")]
-        [UnityEngine.Range(0f, 70f)] public float pitch = 0f;
+        [UnityEngine.Range(0f, 70f)] public float pitch = 45f;
         [Tooltip("透视投影（近大远小）。关 = 正交：倾斜后地面只在纵向压扁，不会近大远小")]
-        public bool perspective = false;
+        public bool perspective = true;
         [Tooltip("正交：画面半高（世界单位，原来是 7）。越大看得越多")]
         [Min(1f)] public float orthographicSize = 7f;
         [Tooltip("透视：竖直视角（度）")]
-        [UnityEngine.Range(10f, 90f)] public float fieldOfView = 40f;
+        [UnityEngine.Range(10f, 90f)] public float fieldOfView = 42f;
         [Tooltip("相机到注视点的距离（= 相机高度 / 镜头远近）。透视时决定画面大小；正交时只影响裁剪，不影响画面")]
-        [Min(1f)] public float distance = 20f;
+        [Min(1f)] public float distance = 10f;
         [Tooltip("注视点相对玩家往地图上方（+Y）偏移：倾斜后让玩家落在画面偏下、多看一点前方")]
         public float lookAhead = 0f;
         [Tooltip("倾斜时玩家 / 怪物立起来面向镜头（关 = 和地面一样平躺，会被压扁）")]
@@ -33,6 +33,41 @@ namespace Turn.View
         public bool depthSort = true;
         [Tooltip("跟随灵敏度（越大越紧）")]
         [Min(0.1f)] public float sharpness = 8f;
+        [Tooltip("硬跟随：玩家脚点永远在画面正中、没有延迟（原作做法）。关 = 按「跟随灵敏度」平滑跟随")]
+        public bool hardFollow = true;
+
+        [Header("纸片角色（B 档，只在倾斜且立起来时生效）")]
+        [Tooltip("竖直站立（原作做法）：玩家 / 怪物像立牌一样垂直于地面。关 = 整张图正对镜头（11/26 的做法）")]
+        public bool vertical = true;
+        [Tooltip("竖直站立时竖向拉长 1 / sin(倾斜角)，抵消俯视造成的压扁（45° 时 = √2）。倾斜角很小时最多拉长 3 倍")]
+        public bool stretch = true;
+        [Tooltip("自动脚底：贴图底边在锚点以下（白模圆心锚点的图）时整体抬起，让底边落在地面上；手绘图锚点放在脚底时不变")]
+        public bool autoFoot = true;
+        [Tooltip("纸片翻面：转身时绕竖轴转过去（正侧面变成一条线），代替左右镜像")]
+        public bool paperTurn = true;
+        [Tooltip("玩家转身速度（度 / 秒，原作 270）")]
+        public float playerTurnSpeed = 270f;
+        [Tooltip("怪物转身速度（度 / 秒，原作 180）")]
+        public float monsterTurnSpeed = 180f;
+        [Tooltip("斜向移动时多转的角度（度，原作 30）：往右上走时纸片往画面里侧转一点")]
+        public float turnAngle = 30f;
+        [Tooltip("玩家：移动方向的水平分量（单位向量的 |x|）落在 [下限, 上限] 之间算斜向，原作 0.5 ~ 0.8")]
+        public float playerDiagonalMin = 0.5f;
+        public float playerDiagonalMax = 0.8f;
+        [Tooltip("怪物：同上，原作 0.2 ~ 0.7")]
+        public float monsterDiagonalMin = 0.2f;
+        public float monsterDiagonalMax = 0.7f;
+
+        [Header("脚下阴影（倾斜时）")]
+        [Tooltip("剪影投影：把角色当前帧染黑、按光照方向斜铺在地面上，翻面时跟着变窄")]
+        public bool silhouetteShadow = true;
+        [Tooltip("原来的圆形脚底阴影（倾斜角 = 0 时总是显示）")]
+        public bool blobShadow = false;
+        [Tooltip("剪影往哪个方向倒（度，地面上从 +X 逆时针量；90 = 往画面里侧）")]
+        public float shadowDirection = 60f;
+        [Tooltip("剪影长度 = 角色高度 × 这个系数（相当于太阳越低越长）")]
+        public float shadowLength = 0.6f;
+        [UnityEngine.Range(0f, 1f)] public float shadowAlpha = 0.35f;
 
         public CameraRigSettings Clone()
         {
@@ -56,13 +91,65 @@ namespace Turn.View
         /// <summary>立起时是否按前后遮挡排序。</summary>
         public static bool DepthSort { get; private set; }
 
+        /// <summary>立起时是否竖直站立（垂直于地面）；否则正对镜头。</summary>
+        public static bool Vertical { get; private set; }
+        /// <summary>竖直站立时的竖向拉伸（1 / sin(倾斜角)，最多 3）；其他情况为 1。</summary>
+        public static float Stretch { get; private set; } = 1f;
+        /// <summary>身体（纸片）相对 <see cref="Upright"/> 的额外倾斜：竖直站立时把正对镜头的牌再立直。</summary>
+        public static Quaternion BodyTilt { get; private set; } = Quaternion.identity;
+        /// <summary>竖直站立 / 正对镜头时身体的世界旋转（静态立起物体直接用它）。</summary>
+        public static Quaternion Stand { get; private set; } = Quaternion.identity;
+        /// <summary>立起时是否自动把贴图底边放到脚底。</summary>
+        public static bool AutoFoot { get; private set; } = true;
+        /// <summary>立起姿态（Standing / Stand / Stretch）每变一次加 1，静态立起物体靠它判断要不要重算。</summary>
+        public static int Revision { get; private set; }
+        /// <summary>纸片翻面是否生效（倾斜、立起来且打开了翻面）。不生效时各控制器照旧用 flipX。</summary>
+        public static bool PaperTurn { get; private set; }
+        public static float PlayerTurnSpeed { get; private set; } = 270f;
+        public static float MonsterTurnSpeed { get; private set; } = 180f;
+        public static float TurnAngle { get; private set; } = 30f;
+        public static Vector2 PlayerDiagonal { get; private set; } = new Vector2(0.5f, 0.8f);
+        public static Vector2 MonsterDiagonal { get; private set; } = new Vector2(0.2f, 0.7f);
+        /// <summary>是否显示剪影投影（只在立起时）。</summary>
+        public static bool Silhouette { get; private set; }
+        /// <summary>是否显示原来的圆形脚底阴影（不立起时总是显示）。</summary>
+        public static bool Blob { get; private set; } = true;
+        /// <summary>剪影倒向（地面上的单位向量）。</summary>
+        public static Vector2 ShadowDir { get; private set; } = new Vector2(0.5f, 0.866f);
+        public static float ShadowLength { get; private set; } = 0.6f;
+        public static float ShadowAlpha { get; private set; } = 0.35f;
+
         internal static void Set(CameraRigSettings s)
         {
+            bool wasStanding = Standing;
+            float wasStretch = Stretch;
+            bool wasAutoFoot = AutoFoot;
             Pitch = s.pitch;
             Standing = s.standUp && s.pitch > 0.5f;
             Upright = Standing ? Quaternion.Euler(-s.pitch, 0f, 0f) : Quaternion.identity;
             Lift = Standing ? s.standLift : 0f;
             DepthSort = Standing && s.depthSort;
+
+            Vertical = Standing && s.vertical;
+            float sin = Mathf.Sin(Mathf.Clamp(s.pitch, 0.5f, 89.5f) * Mathf.Deg2Rad);
+            Stretch = Vertical && s.stretch ? Mathf.Min(3f, 1f / sin) : 1f;
+            BodyTilt = Vertical ? Quaternion.Euler(-(90f - s.pitch), 0f, 0f) : Quaternion.identity;
+            Quaternion stand = Upright * BodyTilt;
+            if (stand != Stand || wasStanding != Standing || Mathf.Abs(wasStretch - Stretch) > 1e-5f || wasAutoFoot != (Standing && s.autoFoot)) Revision++;
+            Stand = stand;
+            AutoFoot = Standing && s.autoFoot;
+            PaperTurn = Standing && s.paperTurn;
+            PlayerTurnSpeed = Mathf.Max(1f, s.playerTurnSpeed);
+            MonsterTurnSpeed = Mathf.Max(1f, s.monsterTurnSpeed);
+            TurnAngle = s.turnAngle;
+            PlayerDiagonal = new Vector2(s.playerDiagonalMin, s.playerDiagonalMax);
+            MonsterDiagonal = new Vector2(s.monsterDiagonalMin, s.monsterDiagonalMax);
+            Silhouette = Standing && s.silhouetteShadow;
+            Blob = !Standing || s.blobShadow;
+            float a = s.shadowDirection * Mathf.Deg2Rad;
+            ShadowDir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            ShadowLength = Mathf.Max(0f, s.shadowLength);
+            ShadowAlpha = Mathf.Clamp01(s.shadowAlpha);
         }
 
         /// <summary>地面上一点「头顶上方」h 处的世界坐标（倾斜时沿立起方向往上，正俯视时就是 +Y）。</summary>
@@ -78,6 +165,7 @@ namespace Turn.View
     /// 支持 2.5D：相机绕 X 轴倾斜 pitch 度斜看 Z = 0 的地面（正交 / 透视可选），
     /// 玩家 / 怪物由 <see cref="UprightView"/> 立起来面向镜头。玩法坐标全在模拟层，相机怎么转都不影响判定。
     /// 参数来源优先级：F1 面板打开时的实时预览 → F1 存档（开局 ApplySettings）→ Inspector 上这一份。
+    /// 默认值（11/27 起）照搬《通神榜》：透视 42°、俯角 45°、距离 10、硬跟随，角色竖直站立并竖向拉长 √2。
     /// </summary>
     [RequireComponent(typeof(Camera))]
     [DefaultExecutionOrder(100)] // 在 PlayerController.LateUpdate 同步完玩家位置之后再跟随
@@ -139,7 +227,7 @@ namespace Turn.View
                 Vector3 goal = Clamp(Goal(s), s);
                 // 游戏暂停（F1 面板）时也要能预览：用现实时间
                 float dt = Time.timeScale > 0.01f ? Time.deltaTime : Time.unscaledDeltaTime;
-                _focus = _hasFocus ? Vector3.Lerp(_focus, goal, 1f - Mathf.Exp(-s.sharpness * dt)) : goal;
+                _focus = _hasFocus && !s.hardFollow ? Vector3.Lerp(_focus, goal, 1f - Mathf.Exp(-s.sharpness * dt)) : goal;
                 _hasFocus = true;
             }
             Place(s);
