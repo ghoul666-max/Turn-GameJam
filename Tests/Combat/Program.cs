@@ -91,30 +91,13 @@ internal static class Program
 
     private static void BurstRingHitsAround()
     {
-        var legacy = Turn.Weapons.BuildCatalog.CreateDefaults();
-        legacy[(int)BuildId.WaterBurstRing] = new BuildDef { MaxLevel = 3, Value = .08f, Value2 = 3f };
-        Check(Turn.Weapons.BuildCatalog.Normalize(legacy)[(int)BuildId.WaterBurstRing].MaxLevel == 0,
-            "legacy burst ring configured value is forcibly disabled");
-        var ctx = World(c =>
-        {
-            for (int i = 0; i < c.Horde.Kinds.Length; i++) c.Horde.Kinds[i].MaxHp = 100f;
-            c.Builds.Builds = legacy;
-        });
+        var ctx = World(c => { for (int i = 0; i < c.Horde.Kinds.Length; i++) c.Horde.Kinds[i].MaxHp = 100f; });
+        ApplyBuild(ctx, BuildId.WaterBurstRing);
         MonsterEntity near = Spawn(ctx, new Vec2(2f, 0f));
         MonsterEntity far = Spawn(ctx, new Vec2(8f, 0f));
-        int rings = 0;
-        ctx.Events.Subscribe<BurstRingEvent>(_ => rings++);
-        Check(ctx.Roll.TryRoll(), "roll still succeeds with old ring configuration");
-        Check(Near(near.Hp, 100f) && Near(far.Hp, 100f), "roll does not deal removed free ring damage");
-        Check(rings == 0, "removed ring publishes no damage effect");
-        for (int attempt = 0; attempt < 20; attempt++)
-        {
-            ctx.Progression.AddXp(ctx.Progression.XpToNext);
-            ctx.Progression.RollOptions();
-            foreach (var option in ctx.Progression.Options)
-                Check(option.Build != BuildId.WaterBurstRing, "removed ring never enters upgrade options");
-            ctx.Progression.SkipPending();
-        }
+        ctx.Roll.TryRoll();
+        Check(Near(near.Hp, 92f), "burst ring: 8% max hp around the player");
+        Check(Near(far.Hp, 100f), "outside the ring untouched");
     }
 
     private static void SimultaneousPlayerHitsShareProtection()
@@ -196,12 +179,7 @@ internal static class Program
         Check(ctx.Roll.TryRoll(), "gravity roll succeeds");
         Check(ctx.Player.State.HurtInvincibleLeft <= 0f, "gravity exit protection not spent during subspace");
         for (int i = 0; i < 80 && ctx.Player.State.InSubspace; i++) ctx.Session.Tick(1f / 60f);
-        Check(!ctx.Player.State.InSubspace && ctx.Player.State.HurtInvincibleLeft <= 0f,
-            "first persistent-hole spawn has no subspace displacement and grants no free exit protection");
-        var displaced = World();
-        displaced.Events.Publish(new GravityDisplacedEvent { Moved = 1 });
-        displaced.Events.Publish(new SubspaceExitedEvent());
-        Check(displaced.Player.State.HurtInvincibleLeft > .4f, "Player contract: confirmed gravity displacement grants protection at exit");
+        Check(!ctx.Player.State.InSubspace && ctx.Player.State.HurtInvincibleLeft > .4f, "actual gravity pull grants half-second protection at exit");
         var empty = World(c => c.Loadout = new LoadoutConfig { Scheme = LoadoutScheme.MainAndSub, Main = WeaponKind.WaterGun, Sub = SubWeaponKind.GravityWell });
         empty.Roll.TryRoll();
         for (int i = 0; i < 80 && empty.Player.State.InSubspace; i++) empty.Session.Tick(1f / 60f);

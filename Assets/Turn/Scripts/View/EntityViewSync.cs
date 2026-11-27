@@ -242,6 +242,8 @@ namespace Turn.View
             else if (!e.Enemy && e.Weapon == WeaponKind.WaterGun) view.transform.localScale = Vector3.one * 0.7f;
             else if (!e.Enemy && e.Weapon == WeaponKind.Crossbow) view.transform.localScale = new Vector3(1.4f, 1.2f, 1f);
             else if (!e.Enemy && e.Weapon == WeaponKind.Poker) view.transform.localScale = Vector3.one * 0.5f;
+            // 陌刀剑气弹（11/27）：沿飞行方向扁、垂直方向宽的月牙（视图已经转向速度方向，Y 轴 = 垂直于飞行方向）
+            else if (!e.Enemy && e.Weapon == WeaponKind.Blade) view.transform.localScale = new Vector3(0.45f, Mathf.Max(0.3f, e.Radius * 3f), 1f);
             else if (!e.Enemy && e.Weapon == WeaponKind.Stapler) view.transform.localScale = Vector3.one * (e.CarriedMarks == 1 ? 0.4f : 0.55f);
         }
 

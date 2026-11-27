@@ -128,6 +128,19 @@ namespace Turn.Core
 
         public static bool IsValid(WeaponKind kind) { return (int)kind >= 0 && (int)kind < Count; }
 
+        /// <summary>
+        /// 已下架的主武器（11/27：掌、订书机）。代码与存档编号保留，但选择页、解锁、F6 调试、F1 面板都不再出现。
+        /// 想加回来：从这里去掉，再把它放进 <see cref="UnlockOrder"/>。
+        /// </summary>
+        public static bool IsRetired(WeaponKind kind) { return kind == WeaponKind.Palm || kind == WeaponKind.Stapler; }
+
+        /// <summary>主武器的解锁顺序（11/27）：第 1 次打开游戏只有第一把，之后每打开一次往下解锁 3 把。也是选择页的排列顺序。</summary>
+        public static readonly WeaponKind[] UnlockOrder =
+        {
+            WeaponKind.WaterGun, WeaponKind.Spear, WeaponKind.Blade, WeaponKind.Crossbow,
+            WeaponKind.Poker, WeaponKind.Shuriken, WeaponKind.Sword,
+        };
+
         public static string DisplayName(WeaponKind kind)
         {
             switch (kind)
@@ -156,6 +169,13 @@ namespace Turn.Core
 
         public static bool IsValid(SubWeaponKind kind) { return (int)kind >= 0 && (int)kind < Count; }
 
+        /// <summary>副武器的解锁顺序（11/27，不含 None）：第 1 次打开游戏一把都没有，之后每打开一次往下解锁 3 把。也是选择页的排列顺序。</summary>
+        public static readonly SubWeaponKind[] UnlockOrder =
+        {
+            SubWeaponKind.Drones, SubWeaponKind.GravityWell, SubWeaponKind.SpaceAnchor, SubWeaponKind.Hourglass,
+            SubWeaponKind.Wasd, SubWeaponKind.Magnet, SubWeaponKind.Cursor,
+        };
+
         public static string DisplayName(SubWeaponKind kind)
         {
             switch (kind)
@@ -176,6 +196,7 @@ namespace Turn.Core
     /// <summary>
     /// 出战方案（11/25 双武器策划案，二选一、互斥）。
     /// DualMain：两把主武器，翻滚爆发后自动切到另一把；MainAndSub：一把主武器 + 一把常驻副武器（不切换）。
+    /// 11/27：双主武器方案已删除，出战固定为 MainAndSub；DualMain 只为兼容旧存档 / 旧代码分支保留。
     /// </summary>
     public enum LoadoutScheme { DualMain = 0, MainAndSub = 1 }
 

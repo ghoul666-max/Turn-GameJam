@@ -387,7 +387,7 @@ namespace Turn.View
             {
                 PlayerSettings p = d.player;
                 p.moveSpeed = F("p.speed", "移动速度（1 单位 = 40 像素）", p.moveSpeed, 0.5f, 15f);
-                p.maxHp = F("p.hp", "最大生命", p.maxHp, 1f, 500f);
+                p.maxHp = F("p.hp", "1 级生命（之后每级成长见「经验曲线」）", p.maxHp, 1f, 500f);
                 p.radius = F("p.radius", "碰撞半径", p.radius, 0.05f, 2f);
                 p.hurtInvincibleTime = F("p.hurtInv", "受伤无敌帧（秒）", p.hurtInvincibleTime, 0f, 2f);
                 p.gravityExitProtectionTime = F("p.gravityExit", "黑洞退出保护（秒）", p.gravityExitProtectionTime, 0f, 2f);
@@ -398,11 +398,11 @@ namespace Turn.View
                 r.waterGunCooldown = F("r.cdWater", "水枪：翻滚冷却（秒）", r.waterGunCooldown, 0f, 10f);
                 r.spearCooldown = F("r.cdSpear", "投矛：翻滚冷却（秒）", r.spearCooldown, 0f, 10f);
                 r.bladeCooldown = F("r.cdBlade", "陌刀：翻滚冷却（秒）", r.bladeCooldown, 0f, 10f);
-                r.palmCooldown = F("r.cdPalm", "掌：翻滚冷却（秒）", r.palmCooldown, 0f, 10f);
+                if (!WeaponKinds.IsRetired(WeaponKind.Palm)) r.palmCooldown = F("r.cdPalm", "掌：翻滚冷却（秒）", r.palmCooldown, 0f, 10f);
                 r.crossbowCooldown = F("r.cdBow", "弩：翻滚冷却（秒）", r.crossbowCooldown, 0f, 10f);
                 r.pokerCooldown = F("r.cdPoker", "扑克牌：翻滚冷却（秒）", r.pokerCooldown, 0f, 10f);
                 r.shurikenCooldown = F("r.cdShuriken", "手里剑：翻滚冷却（秒）", r.shurikenCooldown, 0f, 10f);
-                r.staplerCooldown = F("r.cdStapler", "订书机：翻滚冷却（秒）", r.staplerCooldown, 0f, 10f);
+                if (!WeaponKinds.IsRetired(WeaponKind.Stapler)) r.staplerCooldown = F("r.cdStapler", "订书机：翻滚冷却（秒）", r.staplerCooldown, 0f, 10f);
                 r.swordCooldown = F("r.cdSword", "剑：翻滚冷却（秒）", r.swordCooldown, 0f, 10f);
                 r.subspaceDuration = F("r.subDur", "亚空间时长（现实秒）", r.subspaceDuration, 0.05f, 5f);
                 r.subspaceTimeScale = F("r.subScale", "亚空间时间倍率", r.subspaceTimeScale, 0f, 1f);
@@ -487,14 +487,14 @@ namespace Turn.View
                 b.Ammo = I("bl.ammo", "弹药上限", b.Ammo, 1, 200);
                 b.FireInterval = F("bl.interval", "攻击间隔（秒 / 发）", b.FireInterval, 0.03f, 3f);
                 b.Damage = F("bl.dmg", "剑气伤害", b.Damage, 0f, 200f);
-                b.Angle = F("bl.angle", "扇形角度（度）", b.Angle, 5f, 360f);
+                b.WaveSpeed = F("bl.speed", "剑气弹速度", b.WaveSpeed, 0.5f, 40f);
+                b.WaveHalfWidth = F("bl.width", "剑气弹半宽（月牙宽度的一半）", b.WaveHalfWidth, 0.05f, 5f);
                 b.Range = F("bl.range", "剑气射程（7.5 = 300 像素）", b.Range, 1f, 30f);
-                b.RingThickness = F("bl.ring", "剑气厚度（命中最近一圈）", b.RingThickness, 0.1f, 10f);
                 b.SlashDamage = F("bl.slash", "一刀斩基础伤害", b.SlashDamage, 0f, 500f);
                 b.MarkBonus = F("bl.mark", "每层印记增伤", b.MarkBonus, 0f, 1f);
                 b.SlashHalfHeight = F("bl.height", "斩击半高", b.SlashHalfHeight, 0.1f, 10f);
             }
-            if (Section("palm", "掌"))
+            if (!WeaponKinds.IsRetired(WeaponKind.Palm) && Section("palm", "掌")) // 11/27 掌已下架：面板不再显示
             {
                 PalmConfig p = a.Palm;
                 p.Ammo = I("pm2.ammo", "弹药上限", p.Ammo, 1, 200);
@@ -617,7 +617,7 @@ namespace Turn.View
                 s.MaxOnField = I("sk.max", "场上最多几枚（性能）", s.MaxOnField, 1, 300);
                 s.TargetRange = F("sk.range", "索敌范围", s.TargetRange, 1f, 30f);
             }
-            if (Section("stapler", "订书机"))
+            if (!WeaponKinds.IsRetired(WeaponKind.Stapler) && Section("stapler", "订书机")) // 11/27 订书机已下架：面板不再显示
             {
                 StaplerConfig s = a.Stapler;
                 s.Ammo = I("st.ammo", "弹药上限", s.Ammo, 1, 200);
@@ -774,6 +774,7 @@ namespace Turn.View
                     WeaponKind weapon = isSub ? WeaponKind.WaterGun : (WeaponKind)w;
                     SubWeaponKind subKind = isSub ? (SubWeaponKind)(w - WeaponKinds.Count + 1) : SubWeaponKind.None;
                     string owner = isSub ? SubWeaponKinds.DisplayName(subKind) : WeaponKinds.DisplayName(weapon);
+                    if (!isSub && WeaponKinds.IsRetired(weapon)) continue; // 11/27 已下架的主武器不显示词条表
                     if (!Section("bd" + w, "词条表 · " + owner + "（每层数值 / 最大层数）")) continue;
                     for (int i = 0; i < bc.Builds.Length && i < BuildIds.Count; i++)
                     {
@@ -797,6 +798,8 @@ namespace Turn.View
                     e.xpGrowthRate = F("xp.rate", "每级递增比例（策划 0.2）", e.xpGrowthRate, 0f, 1f);
                     e.pickupRange = F("xp.pickup", "拾取范围（2.5 = 100 像素）", e.pickupRange, 0.1f, 20f);
                     e.chestOpenRadius = F("xp.chest", "靠近多近自动开宝箱", e.chestOpenRadius, 0.1f, 5f);
+                    e.maxHpPerLevel = F("xp.hpLv", "每级生命上限 +（1 级生命在「主角」里）", e.maxHpPerLevel, 0f, 50f);
+                    e.maxHpCap = F("xp.hpCap", "生命上限封顶（0 = 不封顶）", e.maxHpCap, 0f, 1000f);
                 }
             }
         }

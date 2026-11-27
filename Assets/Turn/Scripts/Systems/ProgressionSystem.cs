@@ -98,6 +98,7 @@ namespace Turn.Systems
                 Xp -= XpToNext;
                 Level++;
                 PendingLevelUps++;
+                ApplyLevelMaxHp(); // 11/27：每级 +4 生命上限（同时回复增加的那部分），封顶 100
                 _ctx.Events.Publish(new LeveledUpEvent { Level = Level });
             }
             _ctx.Events.Publish(new XpChangedEvent { Xp = Xp, XpToNext = XpToNext, Level = Level });
@@ -234,11 +235,22 @@ namespace Turn.Systems
             int i = (int)curse;
             if (i <= 0 || i >= _curses.Length) return;
             _curses[i]++;
-            if (curse == ChestCurse.Frail)
-            {
-                PlayerState p = _ctx.Player.State;
-                _ctx.Player.SetLevelStats(MathF.Max(10f, p.MaxHp - MathF.Max(0f, _builds.FrailMaxHp)), 0f);
-            }
+            if (curse == ChestCurse.Frail) ApplyLevelMaxHp();
+        }
+
+        /// <summary>
+        /// 生命上限 = min(封顶, 1 级生命 + 每级成长 × (等级 − 1)) − 血契层数 × 每层扣减，最少 10（11/27）。
+        /// 1 级生命 = PlayerConfig.MaxHp（20）；每级成长、封顶在 ExperienceConfig（4 / 100）。上限提高时同步回复增加的部分。
+        /// </summary>
+        private void ApplyLevelMaxHp()
+        {
+            ExperienceConfig xp = _ctx.Config.Experience;
+            float baseHp = MathF.Max(1f, _ctx.Config.Player.MaxHp);
+            float perLevel = xp != null ? MathF.Max(0f, xp.MaxHpPerLevel) : 0f;
+            float cap = xp != null && xp.MaxHpCap > 0f ? MathF.Max(baseHp, xp.MaxHpCap) : float.MaxValue;
+            float levelHp = MathF.Min(cap, baseHp + perLevel * Math.Max(0, Level - 1));
+            float frail = CurseStacks(ChestCurse.Frail) * MathF.Max(0f, _builds.FrailMaxHp);
+            _ctx.Player.SetLevelStats(MathF.Max(10f, levelHp - frail), 0f);
         }
 
         private void GrantRandomLevels(WeaponKind weapon, int levels)

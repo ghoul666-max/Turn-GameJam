@@ -14,7 +14,8 @@ namespace Turn.Core
     {
         /// <summary>移动速度（单位/秒）。策划 200 像素/秒 = 5。</summary>
         public float MoveSpeed = 5f;
-        public float MaxHp = 100f;
+        /// <summary>1 级生命（11/27：20）。之后每级成长与封顶见 ExperienceConfig.MaxHpPerLevel / MaxHpCap，由 ProgressionSystem 写入。</summary>
+        public float MaxHp = 20f;
         /// <summary>碰撞半径（世界单位）。</summary>
         public float Radius = 0.35f;
         /// <summary>受伤后的全局无敌帧（秒，本轮调整为 0.5）。</summary>

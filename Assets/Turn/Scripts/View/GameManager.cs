@@ -61,7 +61,7 @@ namespace Turn.View
         private bool _selectFromTitle;
 
         [Header("调试快捷键（发布前取消勾选）")]
-        [Tooltip("F3 立刻通过本关 / F4 无敌开关 / F5 游戏速度 1× → 2× → 4× / F6 换主武器（双主武器：立刻互换；主 + 副：换下一把）")]
+        [Tooltip("F3 立刻通过本关 / F4 无敌开关 / F5 游戏速度 1× → 2× → 4× / F6 换主武器（换成下一把，跳过已下架的；调试用，不检查解锁）")]
         [SerializeField] private bool debugShortcuts = true;
         private bool _godMode;
         private float _debugSpeed = 1f;
@@ -113,6 +113,8 @@ namespace Turn.View
                 Destroy(gameObject);
                 return;
             }
+            // 武器解锁（11/27）：本次打开游戏计一次（同一次运行只计一次）
+            WeaponUnlocks.RegisterLaunch();
             Instance = this;
 
             // 游戏内数值面板（F1）：没有手动挂就自动挂一个
@@ -206,7 +208,7 @@ namespace Turn.View
             for (int i = 1; i < WeaponKinds.Count; i++)
             {
                 var next = (WeaponKind)((start + i) % WeaponKinds.Count);
-                if (_ctx.Weapons.Supports(next))
+                if (_ctx.Weapons.Supports(next) && !WeaponKinds.IsRetired(next))
                 {
                     loadout.Equip(next);
                     return;
@@ -264,111 +266,129 @@ namespace Turn.View
 
         // ---------------- 出战选择（正式入口，11/25 双武器策划案） ----------------
 
-        private enum SelectStep { Scheme, Main, Second, Sub }
+        // 11/27：删除双主武器方案，出战固定为「1 把主武器 + 1 把副武器（可不带）」，选择页只剩两步。
+        private enum SelectStep { Main, Sub }
 
         private const string SelectHint = "点卡片 / 按数字直接选      ← → 切换，Space / Enter 确认      Esc 返回上一步";
 
-        /// <summary>打开出战选择页的第一页（出战方案）。卡片上的数值直接读这一局的配置（Inspector / F1 面板改了这里跟着变）。</summary>
+        // 选择页上的卡片顺序 = 解锁顺序（已下架的掌 / 订书机不在里面）；未解锁的显示成灰色
+        private static readonly WeaponKind[] MainChoices = WeaponKinds.UnlockOrder;
+        private static SubWeaponKind[] _subChoices;
+        private static SubWeaponKind[] SubChoices
+        {
+            get
+            {
+                if (_subChoices == null)
+                {
+                    _subChoices = new SubWeaponKind[SubWeaponKinds.UnlockOrder.Length + 1];
+                    _subChoices[0] = SubWeaponKind.None;
+                    Array.Copy(SubWeaponKinds.UnlockOrder, 0, _subChoices, 1, SubWeaponKinds.UnlockOrder.Length);
+                }
+                return _subChoices;
+            }
+        }
+
+        private bool MainSelectable(WeaponKind w)
+        {
+            return !WeaponKinds.IsRetired(w) && WeaponUnlocks.IsUnlocked(w) && _ctx != null && _ctx.Weapons.Supports(w);
+        }
+
+        private bool SubSelectable(SubWeaponKind k)
+        {
+            return WeaponUnlocks.IsUnlocked(k) && _ctx != null && _ctx.SubWeapons.Supports(k);
+        }
+
+        /// <summary>选中的装备没解锁 / 已下架时退回第一把可选的（主武器）/ 不带（副武器）。</summary>
+        private void ClampLoadoutToUnlocked()
+        {
+            if (WeaponKinds.IsRetired(_mainWeapon) || !WeaponUnlocks.IsUnlocked(_mainWeapon)) _mainWeapon = WeaponKinds.UnlockOrder[0];
+            if (!WeaponUnlocks.IsUnlocked(_subWeapon)) _subWeapon = SubWeaponKind.None;
+            _scheme = LoadoutScheme.MainAndSub;
+        }
+
+        /// <summary>打开出战选择页的第一页（主武器）。卡片上的数值直接读这一局的配置（Inspector / F1 面板改了这里跟着变）。</summary>
         private void OpenWeaponSelect()
         {
             if (_flow == null || _ctx == null) return;
             _selectFromTitle = _flow.IsTitleOpen;
-            _selectStep = SelectStep.Scheme;
+            ClampLoadoutToUnlocked();
+            _selectStep = SelectStep.Main;
             ShowSelectStep();
         }
 
         private void ShowSelectStep()
         {
             string prefix = _selectFromTitle ? "" : "换装备重开 · ";
-            switch (_selectStep)
+            if (_selectStep == SelectStep.Main)
             {
-                case SelectStep.Scheme:
+                var cards = new FlowUI.SelectCard[MainChoices.Length];
+                int highlight = 0;
+                for (int i = 0; i < MainChoices.Length; i++)
                 {
-                    var cards = new FlowUI.SelectCard[2];
-                    cards[0] = new FlowUI.SelectCard
+                    WeaponKind w = MainChoices[i];
+                    bool ok = MainSelectable(w);
+                    if (w == _mainWeapon) highlight = i;
+                    cards[i] = new FlowUI.SelectCard
                     {
-                        Title = "1  " + LoadoutSchemes.DisplayName(LoadoutScheme.DualMain), Enabled = true,
-                        Color = new Color(0.95f, 0.75f, 0.3f, 1f),
-                        Body = "携带 2 把主武器：当前生效 + 待切换。\n\n<b>翻滚</b>  触发当前主武器的爆发 → 自动切到另一把 → 补满弹药、清空所有铺垫。" +
-                               "\n\n两把主武器各算各的弹药、攻速、翻滚冷却和词条；升级时两把的词条一起进三选一。",
+                        Title = KeyLabel(i) + "  " + WeaponKinds.DisplayName(w),
+                        Body = ok ? WeaponCard(w) : LockedText(WeaponUnlocks.UnlockLaunch(w)) + WeaponCard(w),
+                        Color = ViewMath.WeaponColor(w),
+                        Enabled = ok,
                     };
-                    cards[1] = new FlowUI.SelectCard
-                    {
-                        Title = "2  " + LoadoutSchemes.DisplayName(LoadoutScheme.MainAndSub), Enabled = true,
-                        Color = new Color(0.45f, 0.85f, 0.75f, 1f),
-                        Body = "携带 1 把主武器 + 1 把副武器。\n\n<b>翻滚</b>  只触发主武器的爆发、不切换；补满弹药、清空铺垫，同时触发副武器的翻滚联动。" +
-                               "\n\n副武器全程常驻，有独立词条池，和主武器词条一起进三选一。",
-                    };
-                    _flow.ShowSelectPage(prefix + "第 1 / 3 步 · 选择出战方案", SelectHint, cards, (int)_scheme);
-                    break;
                 }
-                case SelectStep.Main:
-                case SelectStep.Second:
-                {
-                    bool second = _selectStep == SelectStep.Second;
-                    var cards = new FlowUI.SelectCard[WeaponKinds.Count];
-                    for (int i = 0; i < WeaponKinds.Count; i++)
-                    {
-                        var w = (WeaponKind)i;
-                        bool same = second && w == _mainWeapon;
-                        cards[i] = new FlowUI.SelectCard
-                        {
-                            Title = KeyLabel(i) + "  " + WeaponKinds.DisplayName(w),
-                            Body = same ? "（已选为第一把主武器）\n\n" + WeaponCard(w) : WeaponCard(w),
-                            Color = ViewMath.WeaponColor(w),
-                            Enabled = _ctx.Weapons.Supports(w) && !same,
-                        };
-                    }
-                    string header = !second
-                        ? (_scheme == LoadoutScheme.DualMain ? "第 2 / 3 步 · 选择第一把主武器（开局生效）" : "第 2 / 3 步 · 选择主武器")
-                        : "第 3 / 3 步 · 选择第二把主武器（第一次翻滚后切过来）";
-                    int highlight = second ? (_secondWeapon == _mainWeapon ? (int)_mainWeapon + 1 : (int)_secondWeapon) : (int)_mainWeapon;
-                    _flow.ShowSelectPage(prefix + header, SelectHint, cards, highlight);
-                    break;
-                }
-                default:
-                {
-                    var cards = new FlowUI.SelectCard[SubWeaponKinds.Count - 1];
-                    for (int i = 0; i < cards.Length; i++)
-                    {
-                        var k = (SubWeaponKind)(i >= (int)SubWeaponKind.Magnet ? i + 1 : i);
-                        cards[i] = new FlowUI.SelectCard
-                        {
-                            Title = KeyLabel(i) + "  " + (k == SubWeaponKind.None ? "不带副武器" : SubWeaponKinds.DisplayName(k)),
-                            Body = SubWeaponCard(k),
-                            Color = ViewMath.SubWeaponColor(k),
-                            Enabled = _ctx.SubWeapons.Supports(k),
-                        };
-                    }
-                    int selectedSub = _subWeapon == SubWeaponKind.Magnet ? (int)SubWeaponKind.GravityWell : (int)_subWeapon;
-                    if (selectedSub > (int)SubWeaponKind.Magnet) selectedSub--;
-                    _flow.ShowSelectPage(prefix + "第 3 / 3 步 · 选择副武器", SelectHint, cards, selectedSub);
-                    break;
-                }
+                string header = "第 1 / 2 步 · 选择主武器（已解锁 " + WeaponUnlocks.MainCount + " / " + MainChoices.Length + "）";
+                _flow.ShowSelectPage(prefix + header, SelectHint, cards, highlight);
             }
+            else
+            {
+                SubWeaponKind[] subs = SubChoices;
+                var cards = new FlowUI.SelectCard[subs.Length];
+                int highlight = 0;
+                for (int i = 0; i < subs.Length; i++)
+                {
+                    SubWeaponKind k = subs[i];
+                    bool ok = SubSelectable(k);
+                    if (k == _subWeapon) highlight = i;
+                    cards[i] = new FlowUI.SelectCard
+                    {
+                        Title = KeyLabel(i) + "  " + (k == SubWeaponKind.None ? "不带副武器" : SubWeaponKinds.DisplayName(k)),
+                        Body = ok ? SubWeaponCard(k) : LockedText(WeaponUnlocks.UnlockLaunch(k)) + SubWeaponCard(k),
+                        Color = ViewMath.SubWeaponColor(k),
+                        Enabled = ok,
+                    };
+                }
+                string header = "第 2 / 2 步 · 选择副武器（已解锁 " + WeaponUnlocks.SubCount + " / " + SubWeaponKinds.UnlockOrder.Length + "）";
+                _flow.ShowSelectPage(prefix + header, SelectHint, cards, highlight);
+            }
+        }
+
+        private static string LockedText(int launch)
+        {
+            return "<b>未解锁</b>  第 " + launch + " 次打开游戏时解锁\n\n";
         }
 
         /// <summary>选择页点了第 index 张卡：翻到下一页，或者选完开局。</summary>
         private void OnSelectCard(int index)
         {
-            switch (_selectStep)
+            if (_selectStep == SelectStep.Main)
             {
-                case SelectStep.Scheme:
-                    _scheme = index == 0 ? LoadoutScheme.DualMain : LoadoutScheme.MainAndSub;
-                    _selectStep = SelectStep.Main;
+                if (index < 0 || index >= MainChoices.Length || !MainSelectable(MainChoices[index])) return;
+                _mainWeapon = MainChoices[index];
+                _scheme = LoadoutScheme.MainAndSub;
+                // 一把副武器都还没解锁（第一次打开）：不用再翻一页，直接不带副武器开局
+                if (WeaponUnlocks.SubCount > 0)
+                {
+                    _selectStep = SelectStep.Sub;
                     ShowSelectStep();
                     return;
-                case SelectStep.Main:
-                    _mainWeapon = (WeaponKind)index;
-                    _selectStep = _scheme == LoadoutScheme.DualMain ? SelectStep.Second : SelectStep.Sub;
-                    ShowSelectStep();
-                    return;
-                case SelectStep.Second:
-                    _secondWeapon = (WeaponKind)index;
-                    break;
-                default:
-                    _subWeapon = (SubWeaponKind)(index >= (int)SubWeaponKind.Magnet ? index + 1 : index);
-                    break;
+                }
+                _subWeapon = SubWeaponKind.None;
+            }
+            else
+            {
+                SubWeaponKind[] subs = SubChoices;
+                if (index < 0 || index >= subs.Length || !SubSelectable(subs[index])) return;
+                _subWeapon = subs[index];
             }
             // 选完：从头开一局新的（标题页来的会接着翻开封面；结算界面来的直接开始）
             RestartFromFirstLevel();
@@ -378,22 +398,14 @@ namespace Turn.View
         /// <summary>Esc：返回上一页；第一页再按就关掉选择页（回到标题 / 结算界面）。</summary>
         private void OnSelectBack()
         {
-            switch (_selectStep)
+            if (_selectStep == SelectStep.Sub)
             {
-                case SelectStep.Main:
-                    _selectStep = SelectStep.Scheme;
-                    ShowSelectStep();
-                    return;
-                case SelectStep.Second:
-                case SelectStep.Sub:
-                    _selectStep = SelectStep.Main;
-                    ShowSelectStep();
-                    return;
-                default:
-                    _flow.HideWeaponSelect();
-                    _resultShown = false; // 从结算界面来的：重新显示结算
-                    return;
+                _selectStep = SelectStep.Main;
+                ShowSelectStep();
+                return;
             }
+            _flow.HideWeaponSelect();
+            _resultShown = false; // 从结算界面来的：重新显示结算
         }
 
         /// <summary>选择页卡片的数字键（第 10 张是 0）。</summary>
@@ -417,7 +429,7 @@ namespace Turn.View
                            "\n\n<b>爆发</b>  所有长矛向你回收，沿途穿刺（每根 " + Num(a.Spear.RecallDamage) + "）";
                 case WeaponKind.Blade:
                     return "弹药 " + a.Blade.Ammo + " · " + Num(a.Blade.FireInterval) + " 秒/发 · 伤害 " + Num(a.Blade.Damage) + roll +
-                           "\n\n<b>铺垫</b>  " + Num(a.Blade.Angle) + "° 扇形剑气，命中的敌人各叠 1 层剑气印记" +
+                           "\n\n<b>铺垫</b>  朝最近的敌人发射月牙剑气弹，命中第一个敌人即消失，并叠 1 层剑气印记" +
                            "\n\n<b>爆发</b>  横贯全图的一刀斩（" + Num(a.Blade.SlashDamage) + "），全场每层印记 +" + Mathf.RoundToInt(a.Blade.MarkBonus * 100f) + "%";
                 case WeaponKind.Palm:
                     return "弹药 " + a.Palm.Ammo + " · " + Num(a.Palm.FireInterval) + " 秒/发 · 伤害 " + Num(a.Palm.Damage) + roll +
@@ -431,7 +443,7 @@ namespace Turn.View
                 case WeaponKind.Shuriken:
                     return "弹药 " + a.Shuriken.Ammo + " · " + Num(a.Shuriken.FireInterval) + " 秒/发 · 旋转 " + Num(a.Shuriken.SpinDamage) + "/" + Num(a.Shuriken.SpinInterval) + " 秒" + roll +
                            "\n\n<b>铺垫</b>  手里剑飞出后停在原地旋转，持续伤害周围敌人，永久留存" +
-                           "\n\n<b>爆发</b>  全部高速回收，路径穿刺（每枚 " + Num(a.Shuriken.RecallDamage) + "）；双主武器方案下回收后环绕你旋转，直到下一次切换";
+                           "\n\n<b>爆发</b>  全部高速回收，路径穿刺（每枚 " + Num(a.Shuriken.RecallDamage) + "）";
                 case WeaponKind.Stapler:
                     return "弹药 " + a.Stapler.Ammo + " · " + Num(a.Stapler.FireInterval) + " 秒/发 · 伤害 " + Num(a.Stapler.Damage) + roll +
                            "\n\n<b>铺垫</b>  订书钉击退敌人；被击退的撞到别的怪，就把沿途的钉合成一组（叠钉痕 + 减速，最多 " + a.Stapler.GroupMax + " 只）" +
@@ -442,11 +454,10 @@ namespace Turn.View
                            "\n\n<b>爆发</b>  影子沿所有剑痕复刻刺击（" + Num(a.Sword.ShadowDamage) + "，每条剑痕 +" + Mathf.RoundToInt(a.Sword.TrailBonus * 100f) +
                            "%）；影刺每击杀 1 名敌人永久 +1 突进次数（切换主武器清零）";
                 default:
-                    return "弹药 " + a.Crossbow.Ammo + " · 伤害 " + Num(a.Crossbow.Damage) + " · 穿透弩箭" + roll +
-                           "\n\n<b>常态</b>  巨型高速弩箭贯穿并击退沿途敌人；同一颗箭对同一敌人只伤害一次。" +
-                           "\n\n<b>杀气</b>  玩家每击杀 " + a.Crossbow.KillsPerSizeStep + " 名敌人，尺寸增加基础尺寸的 " + Num(a.Crossbow.SizePerKillStep * 100f) +
-                           "%，上限 " + Num(a.Crossbow.MaxSizeMultiplier * 100f) + "%，本局保留，不增加伤害。" +
-                           "\n\n<b>翻滚</b>  无原生伤害爆发，快速翻滚补弹。";
+                    return "弹药 " + a.Crossbow.Ammo + " · 伤害 " + Num(a.Crossbow.Damage) + " · 穿透 " + a.Crossbow.Pierce + roll +
+                           "\n\n<b>常态</b>  重型弩箭强制击退；敌人撞墙眩晕，你获得 1 层杀气（每层弩伤害 +" + Mathf.RoundToInt(a.Crossbow.IntentBonus * 100f) +
+                           "%，无限叠加，切换主武器时清零）" +
+                           "\n\n<b>翻滚</b>  没有爆发，冷却特别短：高频翻滚补弹、驱动副武器";
             }
         }
 
@@ -700,7 +711,9 @@ namespace Turn.View
                 cameraFollow.ApplySettings(tuningFile != null && tuningFile.useTuning && tuningFile.values != null ? tuningFile.values.camera : null);
             }
             // 出战配置 = 选择页的选择（局内不再按波次解锁）
-            config.Loadout = new LoadoutConfig { Scheme = _scheme, Main = _mainWeapon, SecondMain = _secondWeapon, Sub = _subWeapon };
+            // 11/27：只剩「主 + 副」方案；没解锁 / 已下架的装备退回默认（防止旧选择残留）
+            ClampLoadoutToUnlocked();
+            config.Loadout = new LoadoutConfig { Scheme = LoadoutScheme.MainAndSub, Main = _mainWeapon, SecondMain = _secondWeapon, Sub = _subWeapon };
             // 关卡：开局位面换成本关这一组的第一面（如果 Inspector 的开局位面就在这一组里，保留它，方便测试第二面）
             if (_levelChosen && PlaneIds.PairOf(config.Environment.StartPlane) != _levelPair)
             {

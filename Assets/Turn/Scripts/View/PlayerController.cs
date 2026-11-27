@@ -9,7 +9,8 @@ namespace Turn.View
     {
         [Tooltip("每秒移动的世界单位（策划 200 像素/秒，按 1 单位 = 40 像素 = 5）")]
         public float moveSpeed = 5f;
-        [Min(1f)] public float maxHp = 100f;
+        [Tooltip("1 级生命（11/27：20；之后每级 +4，封顶 100，见 UpgradeManager 的等级属性成长）")]
+        [Min(1f)] public float maxHp = 20f;
         [Tooltip("碰撞半径（世界单位）")]
         public float radius = 0.35f;
         [Tooltip("受伤后的无敌帧（秒，本轮调整为 0.5）")]

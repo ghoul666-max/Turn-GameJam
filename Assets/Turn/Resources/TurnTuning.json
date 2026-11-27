@@ -4,7 +4,7 @@
     "values": {
         "player": {
             "moveSpeed": 4.199999809265137,
-            "maxHp": 100.0,
+            "maxHp": 20.0,
             "radius": 0.3499999940395355,
             "hurtInvincibleTime": 0.5,
             "gravityExitProtectionTime": 0.5
@@ -225,14 +225,15 @@
             "chestOpenRadius": 1.0,
             "baseXpToLevel": 4,
             "xpGrowthPerLevel": 4,
-            "levelOneMaxHp": 100.0,
-            "maxHpPerLevel": 10.0,
+            "levelOneMaxHp": 20.0,
+            "maxHpPerLevel": 4.0,
             "levelOneMoveSpeed": 4.199999809265137,
             "moveSpeedPerLevel": 0.07999999821186066,
             "maxLevel": 12,
             "pickupRadius": 0.5,
             "magnetRadius": 2.0,
-            "magnetSpeed": 10.0
+            "magnetSpeed": 10.0,
+            "maxHpCap": 100.0
         },
         "battleVersion": 2,
         "monster": {
@@ -470,7 +471,9 @@
                 "RingThickness": 0.8999999761581421,
                 "SlashDamage": 25.0,
                 "MarkBonus": 0.07999999821186066,
-                "SlashHalfHeight": 1.5
+                "SlashHalfHeight": 1.5,
+                "WaveSpeed": 12.0,
+                "WaveHalfWidth": 0.6
             },
             "Palm": {
                 "Ammo": 25,
@@ -507,7 +510,7 @@
                 "SplitAdd": 1,
                 "MergeRemove": 1,
                 "MinCount": 1,
-                "MaxCount": 0,
+                "MaxCount": 50,
                 "Damage": 4.0,
                 "FireInterval": 0.800000011920929,
                 "Range": 7.0,
@@ -516,7 +519,7 @@
                 "OrbitRadius": 1.2999999523162842,
                 "OrbitSpeed": 2.0,
                 "MaxActive": 32,
-                "SplitChance": 0.5
+                "SplitChance": 0.7
             },
             "Gravity": {
                 "Radius": 5.0,
@@ -1719,7 +1722,7 @@
     "defaults": {
         "player": {
             "moveSpeed": 4.199999809265137,
-            "maxHp": 100.0,
+            "maxHp": 20.0,
             "radius": 0.3499999940395355,
             "hurtInvincibleTime": 0.5,
             "gravityExitProtectionTime": 0.5
@@ -1940,14 +1943,15 @@
             "chestOpenRadius": 1.0,
             "baseXpToLevel": 4,
             "xpGrowthPerLevel": 4,
-            "levelOneMaxHp": 100.0,
-            "maxHpPerLevel": 10.0,
+            "levelOneMaxHp": 20.0,
+            "maxHpPerLevel": 4.0,
             "levelOneMoveSpeed": 4.199999809265137,
             "moveSpeedPerLevel": 0.07999999821186066,
             "maxLevel": 12,
             "pickupRadius": 0.5,
             "magnetRadius": 2.0,
-            "magnetSpeed": 10.0
+            "magnetSpeed": 10.0,
+            "maxHpCap": 100.0
         },
         "battleVersion": 2,
         "monster": {
@@ -2185,7 +2189,9 @@
                 "RingThickness": 0.8999999761581421,
                 "SlashDamage": 25.0,
                 "MarkBonus": 0.07999999821186066,
-                "SlashHalfHeight": 1.5
+                "SlashHalfHeight": 1.5,
+                "WaveSpeed": 12.0,
+                "WaveHalfWidth": 0.6
             },
             "Palm": {
                 "Ammo": 25,
@@ -2222,7 +2228,7 @@
                 "SplitAdd": 1,
                 "MergeRemove": 1,
                 "MinCount": 1,
-                "MaxCount": 0,
+                "MaxCount": 50,
                 "Damage": 4.0,
                 "FireInterval": 0.800000011920929,
                 "Range": 7.0,
@@ -2231,7 +2237,7 @@
                 "OrbitRadius": 1.2999999523162842,
                 "OrbitSpeed": 2.0,
                 "MaxActive": 32,
-                "SplitChance": 0.5
+                "SplitChance": 0.7
             },
             "Gravity": {
                 "Radius": 5.0,

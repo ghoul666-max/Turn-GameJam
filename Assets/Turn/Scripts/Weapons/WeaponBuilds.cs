@@ -473,10 +473,10 @@ namespace Turn.Weapons
                 case BuildId.SpearHurtMarks: return "受到伤害时，在最近的敌人身上叠加 {n} 层矛";
                 case BuildId.BladeAmmo: return "弹药上限 +{p}";
                 case BuildId.BladeRate: return "剑气发射攻速 +{p}";
-                case BuildId.BladeAngle: return "扇形剑气的展开角度 +{p}";
+                case BuildId.BladeAngle: return "月牙剑气的宽度 +{p}";
                 case BuildId.BladeRange: return "扇形剑气的攻击距离 +{p}";
-                case BuildId.BladePierce: return "剑气可多穿透 {n} 名敌人（向纵深多推进一圈）";
-                case BuildId.BladeLength: return "武器长度 +{p}：同时提升扇形角度与攻击距离";
+                case BuildId.BladePierce: return "剑气可多穿透 {n} 名敌人";
+                case BuildId.BladeLength: return "武器长度 +{p}：同时提升剑气宽度与射程";
                 case BuildId.BladeMarkBonus: return "每层剑气印记的增伤 +{p}";
                 case BuildId.BladeSlashWidth: return "横向斩击的有效宽度 +{p}";
                 case BuildId.BladeCrit: return "斩击伤害有 {p} 概率暴击";

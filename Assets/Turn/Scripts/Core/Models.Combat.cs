@@ -66,18 +66,25 @@ namespace Turn.Core
         public float RecallKillTargetRange = 9f;
     }
 
-    /// <summary>陌刀。常态：前方扇形剑气，命中的敌人各叠 1 层剑气印记；爆发：横贯屏幕的巨型斩击，按全场印记总层数增伤。</summary>
+    /// <summary>
+    /// 陌刀。常态（11/27 起）：朝最近敌人发射一道月牙剑气弹，命中第一个敌人即消失（「破阵」每层 +1 穿透），命中叠 1 层剑气印记；
+    /// 爆发：横贯屏幕的巨型斩击，按全场印记总层数增伤。
+    /// </summary>
     [Serializable]
     public sealed class BladeConfig
     {
         public int Ammo = 25;
         public float FireInterval = 0.5f;
         public float Damage = 6f;
-        /// <summary>扇形总角度（度）。</summary>
+        /// <summary>剑气弹飞行速度（单位/秒）。11/27 剑气改弹幕后新增，暂定 12。</summary>
+        public float WaveSpeed = 12f;
+        /// <summary>剑气弹判定半宽（单位，月牙的宽度一半）；「开阖」「长刀」按比例加宽。暂定 0.6。</summary>
+        public float WaveHalfWidth = 0.6f;
+        /// <summary>旧扇形剑气的总角度（度）。11/27 剑气改弹幕后不再使用，字段保留以兼容存档。</summary>
         public float Angle = 60f;
         /// <summary>剑气射程（单位，策划 300 像素 = 7.5）。</summary>
         public float Range = 7.5f;
-        /// <summary>剑气厚度：默认只命中最近一圈敌人（离最近目标不超过这个距离），穿透词条每层多推进一圈。</summary>
+        /// <summary>旧弧形剑气的厚度。11/27 剑气改弹幕后不再使用，字段保留以兼容存档。</summary>
         public float RingThickness = 0.9f;
         /// <summary>一刀斩基础伤害。</summary>
         public float SlashDamage = 25f;
@@ -156,8 +163,8 @@ namespace Turn.Core
         public int MergeRemove = 1;
         /// <summary>合体最少保留几台（「双核」词条至少 2 台）。</summary>
         public int MinCount = 1;
-        /// <summary>台数上限；0 = 不限。</summary>
-        public int MaxCount = 0;
+        /// <summary>台数上限；0 = 不限。11/27 定为 50 台封顶。</summary>
+        public int MaxCount = 50;
         /// <summary>单台每发伤害。</summary>
         public float Damage = 4f;
         public float FireInterval = 0.8f;
@@ -169,8 +176,8 @@ namespace Turn.Core
         public float OrbitSpeed = 2f;
         /// <summary>同时真正开火的台数上限（性能）。超出的台数折算进这些炮的伤害里，逻辑数量本身没有上限。</summary>
         public int MaxActive = 32;
-        /// <summary>翻滚时分裂的基础概率。</summary>
-        public float SplitChance = 0.5f;
+        /// <summary>翻滚时分裂（+台数）的基础概率。11/27 调为 70%。</summary>
+        public float SplitChance = 0.7f;
     }
 
     /// <summary>副武器 · 引力黑洞：翻滚时以翻滚前的站位为中心，把周围怪物拉向中心（无基础伤害）。数值暂定。</summary>
@@ -775,8 +782,13 @@ namespace Turn.Core
         /// <summary>每升一级所需经验每级增长 4。</summary>
         public int XpGrowthPerLevel = 4;
         public float PickupRadius = 0.5f;
-        /// <summary>首级成长基础与每级固定增长。</summary>
-        public float LevelOneMaxHp = 100f, MaxHpPerLevel = 10f;
+        /// <summary>
+        /// 生命成长（11/27）：1 级生命 = PlayerConfig.MaxHp（20），每升 1 级 +MaxHpPerLevel（4），最多到 MaxHpCap（100）。
+        /// ProgressionSystem 升级时写入；LevelOneMaxHp 是旧方案字段，不再读取（1 级生命以 PlayerConfig.MaxHp 为准）。
+        /// </summary>
+        public float LevelOneMaxHp = 20f, MaxHpPerLevel = 4f;
+        /// <summary>生命上限封顶（11/27，100）；≤ 0 = 不封顶。</summary>
+        public float MaxHpCap = 100f;
         public float LevelOneMoveSpeed = 4.2f, MoveSpeedPerLevel = .08f;
         public int MaxLevel = 12;
         public float MagnetRadius = 2f;

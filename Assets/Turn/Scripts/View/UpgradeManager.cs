@@ -131,7 +131,12 @@ namespace Turn.View
         [Tooltip("经验成长参数：每升一级，下一级多需要的经验")]
         [Min(0)] public int xpGrowthPerLevel = 4;
         [Header("等级属性成长")]
-        public float levelOneMaxHp = 100f, maxHpPerLevel = 10f;
+        [Tooltip("旧方案字段，不再读取：1 级生命以主角的 maxHp（20）为准")]
+        public float levelOneMaxHp = 20f;
+        [Tooltip("每升 1 级生命上限 +（11/27：4）")]
+        [Min(0f)] public float maxHpPerLevel = 4f;
+        [Tooltip("生命上限封顶（11/27：100；0 = 不封顶）")]
+        [Min(0f)] public float maxHpCap = 100f;
         public float levelOneMoveSpeed = 4.2f, moveSpeedPerLevel = .08f;
         [Min(1)] public int maxLevel = 12;
         [Tooltip("拾取半径")]
@@ -146,7 +151,7 @@ namespace Turn.View
             {
                 BaseXpToLevel = baseXpToLevel,
                 XpGrowthPerLevel = xpGrowthPerLevel,
-                LevelOneMaxHp = levelOneMaxHp, MaxHpPerLevel = maxHpPerLevel,
+                LevelOneMaxHp = levelOneMaxHp, MaxHpPerLevel = maxHpPerLevel, MaxHpCap = maxHpCap,
                 LevelOneMoveSpeed = levelOneMoveSpeed, MoveSpeedPerLevel = moveSpeedPerLevel,
                 MaxLevel = maxLevel,
                 PickupRadius = pickupRadius,
