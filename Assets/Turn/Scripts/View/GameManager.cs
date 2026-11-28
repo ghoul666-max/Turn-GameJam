@@ -720,6 +720,12 @@ namespace Turn.View
                 TurnTuningFile tuningFile = TurnTuningStore.Load();
                 cameraFollow.ApplySettings(tuningFile != null && tuningFile.useTuning && tuningFile.values != null ? tuningFile.values.camera : null);
             }
+            if (player != null)
+            {
+                // 主角手绘外观：同上，面板启用且存档里有这一组时用存档，否则用 PlayerController 的 Inspector 参数
+                TurnTuningFile artFile = TurnTuningStore.Load();
+                player.ApplyArt(artFile != null && artFile.useTuning && artFile.values != null ? artFile.values.playerArt : null);
+            }
             // 出战配置 = 选择页的选择（局内不再按波次解锁）
             // 11/27：只剩「主 + 副」方案；没解锁 / 已下架的装备退回默认（防止旧选择残留）
             ClampLoadoutToUnlocked();

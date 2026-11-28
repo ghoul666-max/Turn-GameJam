@@ -513,6 +513,8 @@ namespace Turn.Core
         public int DebutWave;
         /// <summary>刷新权重。</summary>
         public float Weight;
+        /// <summary>体型倍率：碰撞半径 = HordeConfig.Radius × 这个值（精英 / Boss 再乘各自倍率），贴图 / 阴影 / 血条跟着一起放大。≤ 0 按 1 算。</summary>
+        public float Scale = 1f;
     }
 
     /// <summary>怪物与波次（新策划案）。Kinds 按 MonsterKind.Walker..Sniper 的顺序。</summary>

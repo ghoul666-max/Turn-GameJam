@@ -16,6 +16,8 @@ namespace Turn.View
     /// 数值存到 TurnTuningStore（编辑器里是 Assets/Turn/Resources/TurnTuning.json），开局时覆盖 Inspector 数值。
     /// 历史记录：每次保存（有改动时）自动记一条完整快照 + 改动明细（TurnTuningHistory），
     /// 「历史记录」页可以展开看改了什么、和当前面板对比、载入某一版（载入后要再保存才生效）、删除。
+    /// 剪贴板（11/28，TurnTuningClipboard）：「复制全部」/「复制改动项」（和默认值不同的字段）；
+    /// 「从剪贴板读取」先列出会改哪些项，确认后载入面板（只覆盖剪贴板里有的字段，要再保存才生效）。
     /// </summary>
     public sealed class TurnTuningPanel : MonoBehaviour
     {
@@ -52,6 +54,16 @@ namespace Turn.View
         private float _unsavedCountTime = -10f;
         private GUIStyle _wrap;
 
+        // 剪贴板（11/28）：读取后先预览改动，确认才载入
+        private bool _clipOpen;
+        private TurnTuningData _clipData;
+        private int _clipCount;
+        private string _clipText = "";
+        private Vector2 _clipScroll;
+        private bool _pendingClipRead;
+        private bool _pendingClipApply;
+        private bool _pendingClipCancel;
+
         private GUIStyle _title;
         private GUIStyle _header;
         private GUIStyle _label;
@@ -84,6 +96,7 @@ namespace Turn.View
         {
             _open = open;
             if (!open) CameraFollow.Preview = null; // 关闭面板：相机回到本局开局时的参数
+            if (!open) PlayerController.ArtPreview = null; // 主角外观同理
             GUIUtility.keyboardControl = 0;
             if (open) Reload();
         }
@@ -106,6 +119,8 @@ namespace Turn.View
             _lastSaved = fromDisk ? _file.values.Clone() : null;
             _lastSavedUse = _file.useTuning;
             _history = TurnTuningHistory.Load();
+            _clipOpen = false;
+            _clipData = null;
         }
 
         private void SetStatus(string text)
@@ -165,6 +180,7 @@ namespace Turn.View
                 _foldRequests.Clear();
             }
             if (e.type == EventType.Layout) ApplyHistoryRequests();
+            if (e.type == EventType.Layout) ApplyClipboardRequests();
 
             EnsureStyles();
             float scale = Mathf.Clamp(Screen.height / 820f, 1f, 3f);
@@ -182,6 +198,7 @@ namespace Turn.View
             if (_file == null) Reload();
             // 相机 / 2.5D 视角：面板打开时实时预览正在编辑的参数（不保存也能看效果）
             if (!standalone && _file.values != null) CameraFollow.Preview = _file.useTuning ? _file.values.camera : null;
+            if (!standalone && _file.values != null) PlayerController.ArtPreview = _file.useTuning ? _file.values.playerArt : null;
 
             float pw = Mathf.Min(680f, w - 20f);
             Rect r = new Rect((w - pw) * 0.5f, 10f, pw, h - 20f);
@@ -259,8 +276,102 @@ namespace Turn.View
             }
             GUILayout.EndHorizontal();
 
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("复制全部", GUILayout.Height(24f))) CopyAllToClipboard();
+            if (GUILayout.Button("复制改动项", GUILayout.Height(24f))) CopyChangesToClipboard();
+            if (GUILayout.Button("从剪贴板读取", GUILayout.Height(24f))) _pendingClipRead = true;
+            GUILayout.EndHorizontal();
+
             string line = Time.unscaledTime - _statusTime < 4f ? _status : (_dirty ? "有未保存的修改" : "拖动滑条或直接输入数字；保存后下一局生效");
             GUILayout.Label(line, _hint);
+            if (_clipOpen) DrawClipboardPreview();
+        }
+
+        // ================================================================
+        // 剪贴板
+        // ================================================================
+
+        private void CopyAllToClipboard()
+        {
+            Sanitize(_file.values);
+            TurnTuningClipboard.CopyAll(_file.values);
+            SetStatus("已复制全部数值到剪贴板（面板当前值，包括还没保存的修改）");
+        }
+
+        private void CopyChangesToClipboard()
+        {
+            Sanitize(_file.values);
+            int count = TurnTuningClipboard.CopyChanges(_file.values, _file.defaults);
+            SetStatus(count > 0 ? "已复制 " + count + " 项改动到剪贴板（和默认值相比，包括还没保存的修改）"
+                                : "当前数值和默认值完全一样，没有改动项可以复制");
+        }
+
+        /// <summary>读取 / 载入 / 取消都会改变控件数量：只在 Layout 阶段执行。</summary>
+        private void ApplyClipboardRequests()
+        {
+            if (_file == null) { _pendingClipRead = _pendingClipApply = _pendingClipCancel = false; return; }
+            if (_pendingClipRead)
+            {
+                ReadClipboard();
+                GUIUtility.keyboardControl = 0;
+            }
+            if (_pendingClipApply && _clipData != null)
+            {
+                _file.values = _clipData;
+                ClearEdits();
+                SetStatus("已载入剪贴板数值（改了 " + _clipCount + " 项，还没保存，保存后生效）");
+                _clipOpen = false;
+                _clipData = null;
+            }
+            if (_pendingClipCancel)
+            {
+                _clipOpen = false;
+                _clipData = null;
+            }
+            _pendingClipRead = _pendingClipApply = _pendingClipCancel = false;
+        }
+
+        private void ReadClipboard()
+        {
+            TurnTuningClipboard.ReadResult r = TurnTuningClipboard.Read(_file.values);
+            if (!string.IsNullOrEmpty(r.Error))
+            {
+                _clipOpen = false;
+                _clipData = null;
+                SetStatus(r.Error);
+                return;
+            }
+            var lines = new List<string>();
+            TurnTuningHistory.Diff(_file.values, r.Data, lines);
+            if (lines.Count == 0 && r.Ignored.Count == 0)
+            {
+                _clipOpen = false;
+                _clipData = null;
+                SetStatus("剪贴板里的数值和当前面板完全相同");
+                return;
+            }
+            _clipCount = lines.Count;
+            _clipData = lines.Count > 0 ? r.Data : null;
+            string text = "来源：" + r.Source;
+            if (lines.Count > 0) text += "\n" + TurnTuningHistory.Join(lines, TurnTuningHistory.MaxDetailLines);
+            if (r.Ignored.Count > 0) text += "\n\n跳过 " + r.Ignored.Count + " 项（不会载入）：\n" + TurnTuningHistory.Join(r.Ignored, 20);
+            _clipText = text;
+            _clipScroll = Vector2.zero;
+            _clipOpen = true;
+        }
+
+        private void DrawClipboardPreview()
+        {
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label(_clipCount > 0 ? "剪贴板数值：会改 " + _clipCount + " 项（载入后还要点保存才生效）" : "剪贴板数值：和当前面板没有差别", _label);
+            _clipScroll = GUILayout.BeginScrollView(_clipScroll, GUILayout.Height(170f));
+            GUILayout.Label(_clipText, _wrap);
+            GUILayout.EndScrollView();
+            GUILayout.BeginHorizontal();
+            if (_clipCount > 0 && GUILayout.Button("载入到面板", GUILayout.Height(24f))) _pendingClipApply = true;
+            if (GUILayout.Button(_clipCount > 0 ? "取消" : "关闭", GUILayout.Height(24f))) _pendingClipCancel = true;
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
         }
 
         // ================================================================
@@ -392,6 +503,23 @@ namespace Turn.View
                 c.shadowLength = F("cam.shLen", "剪影长度（× 角色高度）", c.shadowLength, 0f, 3f);
                 c.shadowAlpha = F("cam.shAlpha", "剪影浓度", c.shadowAlpha, 0f, 1f);
                 GUILayout.Label("提示：玩法判定不变（伤害范围、拾取、碰撞都还是地面上的圆）。默认照搬《通神榜》：透视 42°、俯角 45°、距离 10；视角 40° / 距离 20 ≈ 原来的正交 7。", _wrap);
+            }
+            if (Section("playerArt", "主角外观（手绘帧，只影响画面；面板打开时实时预览）"))
+            {
+                if (d.playerArt == null || d.playerArt.version <= 0) d.playerArt = new PlayerArtSettings();
+                PlayerArtSettings pa = d.playerArt;
+                pa.useArt = Toggle("使用手绘主角（关 = 白模圆形）", pa.useArt);
+                pa.height = F("pa.h", "画布高度（世界单位，碰撞直径 0.7）", pa.height, 0.3f, 5f);
+                pa.sideFps = F("pa.side", "侧走帧率（10 帧）", pa.sideFps, 0f, 40f);
+                pa.front34Fps = F("pa.f34", "3/4 正面走帧率（5 帧）", pa.front34Fps, 0f, 40f);
+                pa.backFps = F("pa.back", "背走帧率（7 帧）", pa.backFps, 0f, 40f);
+                pa.back34Fps = F("pa.b34", "3/4 背面走帧率（6 帧）", pa.back34Fps, 0f, 40f);
+                pa.backY = F("pa.backY", "方向 y ≥ 此值用背走", pa.backY, 0f, 1f);
+                pa.back34Y = F("pa.b34Y", "方向 y ≥ 此值用 3/4 背面", pa.back34Y, 0f, 1f);
+                pa.front34Y = F("pa.f34Y", "方向 y ≤ 此值用 3/4 正面", pa.front34Y, -1f, 0f);
+                pa.breathe = F("pa.breathe", "待机呼吸幅度", pa.breathe, 0f, 0.1f);
+                pa.paperTurnOnFlip = Toggle("左右转向播放纸片转身（关 = 直接翻面）", pa.paperTurnOnFlip);
+                pa.walkSpeed = F("pa.walkSpeed", "走路动画播放倍率", pa.walkSpeed, 0.1f, 4f);
             }
             if (Section("level", "关卡 / 波次"))
             {
@@ -771,6 +899,7 @@ namespace Turn.View
                     k.Xp = I(prefix + ".xp", "掉落经验", k.Xp, 0, 200);
                     k.DebutWave = I(prefix + ".debut", "第几波出现", k.DebutWave, 1, 100);
                     k.Weight = F(prefix + ".weight", "刷新权重", k.Weight, 0f, 20f);
+                    k.Scale = F(prefix + ".scale", "体型倍率（碰撞 + 贴图）", k.Scale, 0.25f, 4f);
                 }
             }
             if (Section("elite", "精英 / Boss"))

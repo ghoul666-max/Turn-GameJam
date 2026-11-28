@@ -69,7 +69,7 @@ namespace Turn.Systems
             int waves = Math.Max(0, Wave - Math.Max(1, k.DebutWave));
             float hp = k.MaxHp * (1f + _horde.HpPerWave * waves);
             float damage = 1f + _horde.DamagePerWave * waves;
-            float radius = MathF.Max(0.1f, _horde.Radius);
+            float radius = MathF.Max(0.1f, _horde.Radius) * (k.Scale > 0f ? k.Scale : 1f); // 按种类的体型倍率
             int xp = Math.Max(0, k.Xp);
             if (rank == 1)
             {

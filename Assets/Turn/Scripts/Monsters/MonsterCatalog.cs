@@ -32,21 +32,21 @@ namespace Turn.Monsters
         {
             return new[]
             {
-                //        生命  移速   伤害  间隔  蓄力  距离  经验 首波 权重
-                Horde(30f, 2f,    5f,  .5f, 0f,   0f,  5,  1,  5f),   // 游荡尸：80 px/s，碰撞 5，1 次 / 0.5 秒
-                Horde(50f, 1f,    3f,  3f,  0f,   0f,  8,  3,  2f),   // 弹幕孢：40 px/s，弹幕 3 / 发，每 3 秒朝玩家发一枚
-                Horde(80f, 1.5f,  15f, 4f,  .8f,  6f,  12, 5,  1.5f), // 疾冲兽：60 px/s，冲锋 15，蓄力 0.8，冷却 4
+                //        生命  移速   伤害  间隔  蓄力  距离  经验 首波 权重  体型
+                Horde(30f, 2f,    5f,  .5f, 0f,   0f,  5,  1,  5f),          // 游荡尸：80 px/s，碰撞 5，1 次 / 0.5 秒
+                Horde(50f, 1f,    3f,  3f,  0f,   0f,  8,  3,  2f,   1.25f), // 弹幕孢：40 px/s，弹幕 3 / 发，每 3 秒朝玩家发一枚；体型 ×1.25（11/28）
+                Horde(80f, 1.5f,  15f, 4f,  .8f,  6f,  12, 5,  1.5f, 1.5f),  // 疾冲兽：60 px/s，冲锋 15，蓄力 0.8，冷却 4；体型 ×1.5（11/28）
                 Horde(60f, 1.75f, 4f,  .5f, 0f,   0f,  10, 7,  1.5f), // 毒腐体：70 px/s，碰撞 4
                 Horde(70f, 1.25f, 20f, 5f,  1.5f, 9f,  15, 10, 1f),   // 狙击械：50 px/s，激光 20，蓄力 1.5，间隔 5
             };
         }
 
-        private static HordeKindConfig Horde(float hp, float speed, float damage, float interval, float windup, float range, int xp, int debut, float weight)
+        private static HordeKindConfig Horde(float hp, float speed, float damage, float interval, float windup, float range, int xp, int debut, float weight, float scale = 1f)
         {
             return new HordeKindConfig
             {
                 MaxHp = hp, Speed = speed, Damage = damage, AttackInterval = interval, Windup = windup,
-                Range = range, Xp = xp, DebutWave = debut, Weight = weight,
+                Range = range, Xp = xp, DebutWave = debut, Weight = weight, Scale = scale,
             };
         }
 

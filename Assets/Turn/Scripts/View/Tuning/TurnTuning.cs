@@ -90,6 +90,8 @@ namespace Turn.View
         public BuildConfig builds = new BuildConfig();
         /// <summary>相机 / 2.5D 视角（只影响画面）。旧存档没有这一组时 version = 0，面板 / 开局会换成默认值（= 原来的正俯视）。</summary>
         public CameraRigSettings camera = new CameraRigSettings();
+        /// <summary>主角手绘外观（只影响画面，程序A）。旧存档没有这一组时 version = 0，换成默认值。</summary>
+        public PlayerArtSettings playerArt = new PlayerArtSettings();
 
         /// <summary>当前战斗分组的数据版本（2 = 新策划案）。</summary>
         public const int CombatVersion = 2;
@@ -105,6 +107,7 @@ namespace Turn.View
         {
             var d = new TurnTuningData();
             if (camera != null && camera.Settings != null) d.camera = camera.Settings.Clone();
+            if (player != null && player.Art != null) d.playerArt = player.Art.Clone();
             if (player != null)
             {
                 d.player = Copy(player.Settings);
@@ -263,6 +266,10 @@ namespace Turn.View
     public sealed class TurnTuningFile
     {
         public int version = 1;
+        [Tooltip("编辑器每次保存时写入的版本戳（UTC Ticks）。打包进去的 Resources/TurnTuning 靠它判断比本地存档新不新")]
+        public long revision;
+        [Tooltip("这份存档基于哪个版本戳改出来的。打包后的本地存档只有和包里的 revision 一致才会被使用")]
+        public long baseRevision;
         [Tooltip("true：开局用面板数值覆盖 Inspector；false：完全使用 Inspector 数值")]
         public bool useTuning = true;
         public TurnTuningData values = new TurnTuningData();
@@ -273,6 +280,9 @@ namespace Turn.View
     /// 数值面板的读写。
     ///   编辑器：Assets/Turn/Resources/TurnTuning.json（在工程里，可以直接看 / 提交版本库）；
     ///   打包后：先读 persistentDataPath/TurnTuning.json（面板保存的位置），没有就读打包进去的 Resources/TurnTuning。
+    ///   版本戳（11/28 修）：编辑器每次保存都写入新的 revision；打包后的本地存档记下它基于的包内 revision（baseRevision）。
+    ///   换了新包（包内 revision 变了）或本地存档是旧格式（baseRevision = 0）时，本地存档作废，改用包里的数值——
+    ///   否则旧包跑过一次留下的本地存档会永远挡住新包的数值。
     /// </summary>
     public static class TurnTuningStore
     {
@@ -306,6 +316,25 @@ namespace Turn.View
             {
                 Debug.LogWarning("[Turn] 读取数值面板存档失败：" + e.Message);
             }
+#if !UNITY_EDITOR
+            // 打包后：本地存档必须基于当前包内的数值版本，否则作废（见类注释）
+            if (!string.IsNullOrEmpty(json))
+            {
+                long bundled = BundledRevision();
+                long based = 0;
+                try
+                {
+                    TurnTuningFile local = JsonUtility.FromJson<TurnTuningFile>(json);
+                    if (local != null) based = local.baseRevision;
+                }
+                catch (Exception) { based = 0; }
+                if (based == 0 || based != bundled)
+                {
+                    Debug.Log("[Turn] 本地数值存档基于旧版本（" + based + "，包内 " + bundled + "），已改用包里的数值：" + SavePath);
+                    json = null;
+                }
+            }
+#endif
             if (string.IsNullOrEmpty(json))
             {
                 var asset = Resources.Load<TextAsset>(ResourceName);
@@ -328,9 +357,38 @@ namespace Turn.View
             }
         }
 
+        private static long _bundledRevision = -1;
+
+        /// <summary>打包进去的 Resources/TurnTuning 的版本戳（没有 / 旧格式为 0）。</summary>
+        public static long BundledRevision()
+        {
+            if (_bundledRevision >= 0) return _bundledRevision;
+            _bundledRevision = 0;
+            try
+            {
+                var asset = Resources.Load<TextAsset>(ResourceName);
+                if (asset != null)
+                {
+                    TurnTuningFile f = JsonUtility.FromJson<TurnTuningFile>(asset.text);
+                    if (f != null) _bundledRevision = f.revision;
+                }
+            }
+            catch (Exception) { _bundledRevision = 0; }
+            return _bundledRevision;
+        }
+
         public static bool Save(TurnTuningFile file)
         {
             if (file == null) return false;
+#if UNITY_EDITOR
+            // 编辑器保存 = 新的一版数值：打包后会让玩家机器上的旧本地存档作废
+            file.revision = DateTime.UtcNow.Ticks;
+            file.baseRevision = file.revision;
+#else
+            // 打包后保存：记下基于哪个包内版本，换新包时自动作废
+            file.baseRevision = BundledRevision();
+            if (file.revision == 0) file.revision = file.baseRevision;
+#endif
             try
             {
                 string path = SavePath;

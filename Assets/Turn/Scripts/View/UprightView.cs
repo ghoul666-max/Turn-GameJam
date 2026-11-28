@@ -139,6 +139,17 @@ namespace Turn.View
             }
         }
 
+        /// <summary>同 <see cref="SetFacing(Vector2)"/>；snap = true 时立刻转到位（翻滚这类很快的动作用）。</summary>
+        public void SetFacing(Vector2 dir, bool snap)
+        {
+            SetFacing(dir);
+            if (snap)
+            {
+                _yaw = _targetYaw;
+                _hasFacing = true;
+            }
+        }
+
         private void EnsurePivot()
         {
             if (_pivot == null)
