@@ -49,7 +49,7 @@ namespace Turn.View
 
         private void EnsureSafeLayout()
         {
-            if (!MobilePlatform.IsTouchUI || _safeContent != null || panel == null || !(panel.transform is RectTransform)) return;
+            if (_safeContent != null || panel == null || !(panel.transform is RectTransform)) return;
             // The serialized Window is the full-screen raycast blocker: leave it untouched.
             var safe = new GameObject("UpgradeSafeContent", typeof(RectTransform));
             safe.transform.SetParent(panel.transform, false);
@@ -107,8 +107,12 @@ namespace Turn.View
         private void LateUpdate()
         {
             if (_fittedContent == null || _safeContent == null) return;
-            float scale = Mathf.Min(1.25f, Mathf.Min(_safeContent.rect.width / 1000f, _safeContent.rect.height / 600f));
-            _fittedContent.localScale = Vector3.one * Mathf.Max(.01f, scale);
+            // Desktop keeps the authored 280 × 300 cards and 300-unit spacing at its
+            // 1280 × 720 reference size. Only shrink when the whole 1000 × 600 group
+            // would clip; the mobile enlargement remains unchanged.
+            float maxScale = MobilePlatform.IsTouchUI ? 1.25f : 1f;
+            float scale = Mathf.Min(maxScale, Mathf.Min(_safeContent.rect.width / 1000f, _safeContent.rect.height / 600f));
+            _fittedContent.localScale = Vector3.one * Mathf.Max(0f, scale);
         }
 
         public void Unbind()

@@ -57,6 +57,13 @@ namespace Turn.View
         public void Bind(ITurnContext ctx)
         {
             Unbind();
+            Canvas canvas = GetComponentInParent<Canvas>();
+            CanvasScaler scaler = canvas != null ? canvas.GetComponent<CanvasScaler>() : null;
+            if (scaler != null)
+            {
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
+            }
             EnsureSafeContent();
             _ctx = ctx;
             ctx.Events.Subscribe<RollRejectedEvent>(OnRollRejected);

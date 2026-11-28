@@ -309,6 +309,7 @@ namespace Turn.View
             var scaler = go.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(RefW, RefH);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
             scaler.matchWidthOrHeight = 0.5f;
             _canvasRt = (RectTransform)go.transform;
         }

@@ -1160,10 +1160,10 @@ namespace Turn.View
             return rt;
         }
 
-        // Keep dimmers full-screen; only their interactive content lives inside the safe area.
+        // Fit the same authored design on desktop and mobile. Dimmers remain full-screen;
+        // only interactive content is scaled, so resizing cannot expose gameplay clicks.
         private RectTransform SafeDesign(RectTransform parent)
         {
-            if (!MobilePlatform.IsTouchUI) return parent;
             var safe = new GameObject("SafeContent", typeof(RectTransform));
             safe.transform.SetParent(parent, false);
             var safeRect = (RectTransform)safe.transform;
@@ -1185,7 +1185,7 @@ namespace Turn.View
                 RectTransform rt = _fitRoots[i];
                 if (rt == null || !(rt.parent is RectTransform parent)) continue;
                 float fit = Mathf.Min(parent.rect.width / 1920f, parent.rect.height / 1080f);
-                rt.localScale = Vector3.one * Mathf.Max(.01f, fit);
+                rt.localScale = Vector3.one * Mathf.Max(0f, fit);
             }
         }
 
