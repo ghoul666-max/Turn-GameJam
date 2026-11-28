@@ -35,6 +35,7 @@ namespace Turn.View
         [SerializeField] private Text defeatText;
 
         private ITurnContext _ctx;
+        private RectTransform _safeContent;
         private Color _flashColor;
         private float _flashTimer;
         private float _rejectTimer;
@@ -50,11 +51,13 @@ namespace Turn.View
         private void Awake()
         {
             UIFont.Apply(gameObject);
+            EnsureSafeContent();
         }
 
         public void Bind(ITurnContext ctx)
         {
             Unbind();
+            EnsureSafeContent();
             _ctx = ctx;
             ctx.Events.Subscribe<RollRejectedEvent>(OnRollRejected);
             ctx.Events.Subscribe<PlayerDamagedEvent>(OnPlayerDamaged);
@@ -67,6 +70,64 @@ namespace Turn.View
             SetPaused(false);
             if (defeatPanel != null) defeatPanel.SetActive(false);
             if (screenFlash != null) screenFlash.color = new Color(0f, 0f, 0f, 0f);
+        }
+
+        private void EnsureSafeContent()
+        {
+            if (!MobilePlatform.IsTouchUI || _safeContent != null || !(transform is RectTransform)) return;
+            var safe = new GameObject("HudSafeContent", typeof(RectTransform));
+            safe.transform.SetParent(transform, false);
+            _safeContent = (RectTransform)safe.transform;
+            _safeContent.anchorMin = Vector2.zero;
+            _safeContent.anchorMax = Vector2.one;
+            _safeContent.offsetMin = _safeContent.offsetMax = Vector2.zero;
+            MobileSafeArea.Attach(_safeContent);
+            _safeContent.SetAsFirstSibling(); // Fullscreen effects and upgrade/pause blockers stay above HUD.
+            Component[] items = { healthText, healthFill, ammoText, ammoWarning, xpFill, levelText,
+                mapText, rollFill, rollText, terrainText, statsText };
+            for (int i = 0; i < items.Length; i++)
+            {
+                if (items[i] == null || items[i].transform.IsChildOf(_safeContent)) continue;
+                Transform group = items[i].transform;
+                while (group.parent != null && group.parent != transform) group = group.parent;
+                if (group.parent == transform && group != _safeContent) group.SetParent(_safeContent, false);
+            }
+            if (!MobilePlatform.IsTouchUI) return;
+            Graphic[] passive = _safeContent.GetComponentsInChildren<Graphic>(true);
+            for (int i = 0; i < passive.Length; i++) passive[i].raycastTarget = false;
+            if (ammoWarning != null)
+            {
+                ammoWarning.text = "弹匣已空！点击翻滚装填";
+                RectTransform rt = ammoWarning.rectTransform;
+                rt.anchorMin = rt.anchorMax = new Vector2(.5f, 0f);
+                rt.anchoredPosition = new Vector2(0f, 155f);
+                rt.sizeDelta = new Vector2(660f, 46f);
+            }
+            // Avoid top-left ammo and top-right map text colliding on 4:3 tablets.
+            if (ammoText != null)
+            {
+                ammoText.resizeTextForBestFit = true;
+                ammoText.resizeTextMinSize = 16;
+                ammoText.resizeTextMaxSize = Mathf.Max(20, ammoText.fontSize);
+                ammoText.horizontalOverflow = HorizontalWrapMode.Wrap;
+                ammoText.verticalOverflow = VerticalWrapMode.Truncate;
+            }
+            if (mapText != null)
+            {
+                Transform mapGroup = mapText.transform;
+                while (mapGroup.parent != null && mapGroup.parent != _safeContent) mapGroup = mapGroup.parent;
+                if (mapGroup.parent == _safeContent && mapGroup is RectTransform mapRect)
+                    mapRect.anchoredPosition = new Vector2(-16f, -110f);
+                mapText.resizeTextForBestFit = true;
+                mapText.resizeTextMinSize = 16;
+                mapText.resizeTextMaxSize = Mathf.Max(22, mapText.fontSize);
+                mapText.verticalOverflow = VerticalWrapMode.Truncate;
+            }
+            if (statsText != null)
+            {
+                statsText.rectTransform.anchorMin = statsText.rectTransform.anchorMax = new Vector2(.5f, 1f);
+                statsText.rectTransform.anchoredPosition = new Vector2(0f, -110f);
+            }
         }
 
         public void Unbind()
@@ -238,7 +299,7 @@ namespace Turn.View
                 else if (sub.Kind == SubWeaponKind.Magnet || sub.Kind == SubWeaponKind.GravityWell)
                     sb.Append("   黑洞 ").Append(sub.Anchors.Count).Append(sub.Anchors.Count == 2 ? "（合并中）" : "");
                 else if (sub.Kind == SubWeaponKind.Cursor) sb.Append(sub.Trail.Count > 0 ? "   光标绘制中（下次翻滚打击）" : "   光标：下次翻滚开始绘制");
-                ammoText.text = sb.ToString();
+                ammoText.text = MobilePlatform.IsTouchUI ? WeaponKinds.DisplayName(w.Current) + "  " + w.Ammo + "/" + w.Capacity : sb.ToString();
                 ammoText.color = ViewMath.WeaponColor(w.Current);
             }
             if (ammoWarning != null)
@@ -266,7 +327,7 @@ namespace Turn.View
                     weapon = "   主武器：" + WeaponKinds.DisplayName(loadout.Equipped) + "   副武器：" +
                              (loadout.Sub == SubWeaponKind.None ? "无" : SubWeaponKinds.DisplayName(loadout.Sub));
                 string switched = _switchTimer > 0f ? "   已切换！" : "";
-                mapText.text = wave + weapon + switched + (mechanics ? "   " + PlaneIds.DisplayName(map) + PlaneStatus(map) : "");
+                mapText.text = MobilePlatform.IsTouchUI ? wave + switched : wave + weapon + switched + (mechanics ? "   " + PlaneIds.DisplayName(map) + PlaneStatus(map) : "");
                 mapText.color = _switchTimer > 0f ? ViewMath.WeaponColor(loadout.Equipped) : (mechanics ? ViewMath.MapColor(map) : Color.white);
             }
             float ready;
@@ -292,7 +353,7 @@ namespace Turn.View
             {
                 if (p.InSubspace) rollText.text = "亚空间 " + p.SubspaceLeft.ToString("0.0") + "s";
                 else if (p.RollCooldownLeft > 0f) rollText.text = "翻滚冷却 " + p.RollCooldownLeft.ToString("0.0") + "s";
-                else rollText.text = "翻滚就绪 [Space]  → 亚空间爆发 + 补满弹药";
+                else rollText.text = MobilePlatform.IsTouchUI ? "翻滚就绪 → 点击翻滚爆发并装填" : "翻滚就绪 [Space]  → 亚空间爆发 + 补满弹药";
             }
             if (terrainText != null) terrainText.text = mechanics ? "脚下：" + TerrainName(p.Terrain) : "";
             if (_switchTimer > 0f) _switchTimer -= dt;

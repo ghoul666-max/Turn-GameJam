@@ -153,6 +153,12 @@ namespace Turn.View
         private readonly Text[] _selectTitles = new Text[MaxSelectCards];
         private readonly Text[] _selectBodies = new Text[MaxSelectCards];
         private readonly SelectCard[] _selectData = new SelectCard[MaxSelectCards];
+        private readonly System.Collections.Generic.List<RectTransform> _fitRoots = new System.Collections.Generic.List<RectTransform>();
+        private ScrollRect _selectScroll;
+        private RectTransform _selectContent;
+        private Action _onSelectBack;
+        public void SetSelectBack(Action callback) { _onSelectBack = callback; }
+
         private int _selectCount;
         private int _selectHighlight;
 
@@ -223,7 +229,7 @@ namespace Turn.View
             HideResult();
             _selectCount = cards != null ? Mathf.Min(cards.Length, MaxSelectCards) : 0;
             if (_selectHeader != null) _selectHeader.text = header;
-            if (_selectHint != null) _selectHint.text = hint;
+            if (_selectHint != null) _selectHint.text = MobilePlatform.IsTouchUI ? "左右滑动浏览 · 点击卡片选择" : hint;
             const float left = 0.04f, right = 0.96f, gap = 0.02f;
             int rows = _selectCount > 5 ? 2 : 1;
             int perRow = rows == 2 ? (_selectCount + 1) / 2 : Mathf.Max(1, _selectCount);
@@ -240,17 +246,36 @@ namespace Turn.View
                 // 一行：0.14–0.80；两行：上 0.48–0.80，下 0.12–0.45
                 float y0 = rows == 1 ? 0.14f : (row == 0 ? 0.48f : 0.12f);
                 float y1 = rows == 1 ? 0.8f : (row == 0 ? 0.8f : 0.45f);
-                Stretch(_selectCards[i].rectTransform, new Vector2(x0, y0), new Vector2(x0 + width, y1), Vector2.zero);
+                if (MobilePlatform.IsTouchUI)
+                {
+                    RectTransform rt = _selectCards[i].rectTransform;
+                    rt.anchorMin = rt.anchorMax = new Vector2(0f, 0.5f);
+                    rt.pivot = new Vector2(0f, 0.5f);
+                    rt.sizeDelta = new Vector2(500f, 640f);
+                    rt.anchoredPosition = new Vector2(24f + i * 528f, 0f);
+                }
+                else Stretch(_selectCards[i].rectTransform, new Vector2(x0, y0), new Vector2(x0 + width, y1), Vector2.zero);
                 _selectTitles[i].text = card.Enabled ? card.Title : card.Title + "\n<size=24>（开发中）</size>";
                 _selectBodies[i].text = card.Body;
                 _selectBodies[i].fontSize = rows == 2 ? 15 : (_selectCount >= 5 ? 21 : (_selectCount >= 4 ? 23 : 26));
                 _selectTitles[i].fontSize = rows == 2 ? 30 : (_selectCount >= 4 ? 42 : 52);
+                if (MobilePlatform.IsTouchUI)
+                {
+                    _selectBodies[i].fontSize = 28;
+                    _selectBodies[i].resizeTextForBestFit = true;
+                    _selectBodies[i].resizeTextMinSize = 22;
+                    _selectBodies[i].resizeTextMaxSize = 28;
+                    _selectBodies[i].verticalOverflow = VerticalWrapMode.Truncate;
+                    _selectTitles[i].fontSize = 38;
+                }
                 _selectStripes[i].color = card.Enabled ? card.Color : new Color(0.6f, 0.6f, 0.6f, 1f);
                 _selectButtons[i].interactable = card.Enabled;
                 Color ink = card.Enabled ? InkColor : new Color(InkColor.r, InkColor.g, InkColor.b, 0.45f);
                 _selectTitles[i].color = ink;
                 _selectBodies[i].color = ink;
             }
+            if (_selectContent != null) _selectContent.sizeDelta = new Vector2(Mathf.Max(1, _selectCount) * 528f + 24f, 0f);
+            if (_selectScroll != null) _selectScroll.horizontalNormalizedPosition = 0f;
             _select.SetActive(true);
             _select.transform.SetAsLastSibling();
             HighlightCard(highlight, 1);
@@ -275,7 +300,7 @@ namespace Turn.View
                 bool on = k == _selectHighlight && _selectData[k].Enabled;
                 Color baseColor = _selectData[k].Enabled ? PaperColor : new Color(0.78f, 0.76f, 0.72f, 1f);
                 _selectCards[k].color = on ? Color.Lerp(PaperColor, _selectData[k].Color, 0.28f) : baseColor;
-                _selectCards[k].rectTransform.localScale = on ? new Vector3(1.04f, 1.04f, 1f) : Vector3.one;
+                _selectCards[k].rectTransform.localScale = on && !MobilePlatform.IsTouchUI ? new Vector3(1.04f, 1.04f, 1f) : Vector3.one;
             }
         }
 
@@ -648,7 +673,9 @@ namespace Turn.View
             _resultVictory = victory;
             _resultTitle.text = title;
             _resultBody.text = body;
-            _resultPrimaryLabel.text = victory ? "从第一关开始（R）" : "再来一局（R）";
+            _resultPrimaryLabel.text = MobilePlatform.IsTouchUI
+                ? (victory ? "从第一关开始" : "再来一局")
+                : (victory ? "从第一关开始（R）" : "再来一局（R）");
             _result.SetActive(true);
         }
 
@@ -678,6 +705,7 @@ namespace Turn.View
 
         private void EnsureUI()
         {
+            MobilePlatform.EnsureEventSystem();
             if (_canvas != null) return;
 
             var root = new GameObject("FlowUI", typeof(RectTransform));
@@ -720,7 +748,7 @@ namespace Turn.View
                 label.alignment = TextAnchor.MiddleLeft;
                 Stretch(label.rectTransform, new Vector2(0.07f, y - 0.05f), new Vector2(0.27f, y + 0.05f), Vector2.zero);
 
-                Slider slider = MakeSlider("Slider" + i, card, new Vector2(0.28f, y - 0.022f), new Vector2(0.8f, y + 0.022f));
+                Slider slider = MakeSlider("Slider" + i, card, new Vector2(0.28f, y - (MobilePlatform.IsTouchUI ? 0.05f : 0.022f)), new Vector2(0.8f, y + (MobilePlatform.IsTouchUI ? 0.05f : 0.022f)));
                 slider.onValueChanged.AddListener(v => OnVolumeSlider(index, v));
                 _volumeSliders[i] = slider;
 
@@ -735,7 +763,7 @@ namespace Turn.View
             MakeButton("Reset", card, "恢复默认", new Vector2(0.5f, 0.17f), new Vector2(230f, 68f), ResetVolume);
             MakeButton("Back", card, "返回（Esc）", new Vector2(0.8f, 0.17f), new Vector2(230f, 68f), HideVolume);
 
-            Text hint = MakeText("Hint", card, "↑↓ 选择 · ←→ 调节（每次 5%） · 拖动滑条也可以 · Esc 返回 · 设置自动保存", 22, FontStyle.Normal);
+            Text hint = MakeText("Hint", card, MobilePlatform.IsTouchUI ? "拖动滑条调节 · 点击返回 · 设置自动保存" : "↑↓ 选择 · ←→ 调节（每次 5%） · 拖动滑条也可以 · Esc 返回 · 设置自动保存", 22, FontStyle.Normal);
             hint.color = new Color(InkColor.r, InkColor.g, InkColor.b, 0.6f);
             Stretch(hint.rectTransform, new Vector2(0f, 0.02f), new Vector2(1f, 0.08f), Vector2.zero);
             _volume.SetActive(false);
@@ -923,7 +951,7 @@ namespace Turn.View
             Image handle = MakeImage("Handle", handleArea.transform, new Color(0.5f, 0.32f, 0.2f, 1f), true);
             handle.rectTransform.anchorMin = new Vector2(0f, 0f);
             handle.rectTransform.anchorMax = new Vector2(0f, 1f);
-            handle.rectTransform.sizeDelta = new Vector2(26f, 26f); // 比底槽高出一截，好抓
+            handle.rectTransform.sizeDelta = new Vector2(MobilePlatform.IsTouchUI ? 52f : 26f, 26f); // 比底槽高出一截，好抓
             handle.rectTransform.anchoredPosition = Vector2.zero;
 
             var slider = track.gameObject.AddComponent<Slider>();
@@ -945,19 +973,41 @@ namespace Turn.View
             Image dim = MakeImage("WeaponSelect", parent, new Color(0.12f, 0.08f, 0.06f, 0.92f), true);
             Stretch(dim.rectTransform, Vector2.zero, Vector2.one, Vector2.zero);
             _select = dim.gameObject;
+            RectTransform contentParent = SafeDesign(dim.rectTransform);
 
-            _selectHeader = MakeText("Header", dim.rectTransform, "选择出战方案", 64, FontStyle.Bold);
+            _selectHeader = MakeText("Header", contentParent, "选择出战方案", 64, FontStyle.Bold);
             _selectHeader.color = PaperColor;
-            Stretch(_selectHeader.rectTransform, new Vector2(0f, 0.84f), new Vector2(1f, 0.96f), Vector2.zero);
+            Stretch(_selectHeader.rectTransform, new Vector2(MobilePlatform.IsTouchUI ? .18f : 0f, 0.84f), new Vector2(1f, 0.96f), Vector2.zero);
 
-            _selectHint = MakeText("Hint", dim.rectTransform, "", 26, FontStyle.Normal);
+            _selectHint = MakeText("Hint", contentParent, "", 26, FontStyle.Normal);
             _selectHint.color = new Color(PaperColor.r, PaperColor.g, PaperColor.b, 0.7f);
             Stretch(_selectHint.rectTransform, new Vector2(0f, 0.04f), new Vector2(1f, 0.1f), Vector2.zero);
 
+            Transform cardParent = contentParent;
+            if (MobilePlatform.IsTouchUI)
+            {
+                Image viewport = MakeImage("CardViewport", contentParent, Color.clear, true);
+                Stretch(viewport.rectTransform, new Vector2(.03f, .16f), new Vector2(.97f, .8f), Vector2.zero);
+                viewport.gameObject.AddComponent<RectMask2D>();
+                var content = new GameObject("Cards", typeof(RectTransform));
+                content.transform.SetParent(viewport.transform, false);
+                _selectContent = (RectTransform)content.transform;
+                _selectContent.anchorMin = new Vector2(0f, 0f);
+                _selectContent.anchorMax = new Vector2(0f, 1f);
+                _selectContent.pivot = new Vector2(0f, .5f);
+                _selectScroll = viewport.gameObject.AddComponent<ScrollRect>();
+                _selectScroll.viewport = viewport.rectTransform;
+                _selectScroll.content = _selectContent;
+                _selectScroll.horizontal = true;
+                _selectScroll.vertical = false;
+                _selectScroll.movementType = ScrollRect.MovementType.Clamped;
+                cardParent = _selectContent;
+                MakeButton("Back", contentParent, "返回", new Vector2(.09f, .91f), new Vector2(200f, 80f), () => Call(_onSelectBack));
+            }
             for (int i = 0; i < MaxSelectCards; i++)
             {
                 int index = i;
-                Image card = MakeImage("Card" + i, dim.rectTransform, PaperColor, true);
+                Image card = MakeImage("Card" + i, cardParent, PaperColor, true);
                 _selectCards[i] = card;
                 var button = card.gameObject.AddComponent<Button>();
                 ColorBlock colors = button.colors;
@@ -992,14 +1042,14 @@ namespace Turn.View
             _title = cover.rectTransform;
             Stretch(_title, Vector2.zero, Vector2.one, Vector2.zero);
 
-            Image page = MakeImage("Page", _title, PaperColor, false);
+            Image page = MakeImage("Page", SafeDesign(_title), PaperColor, false);
             Stretch(page.rectTransform, Vector2.zero, Vector2.one, new Vector2(48f, 48f));
 
             Text title = MakeText("GameTitle", page.rectTransform, gameTitle, 160, FontStyle.Bold);
             Stretch(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.85f), Vector2.zero);
             Text sub = MakeText("Subtitle", page.rectTransform, subtitle, 40, FontStyle.Normal);
             Stretch(sub.rectTransform, new Vector2(0f, 0.4f), new Vector2(1f, 0.5f), Vector2.zero);
-            Text hint = MakeText("Hint", page.rectTransform, startHint, 26, FontStyle.Normal);
+            Text hint = MakeText("Hint", page.rectTransform, MobilePlatform.IsTouchUI ? "点击开始游戏 · 左侧摇杆移动 · 右侧按钮翻滚" : startHint, 26, FontStyle.Normal);
             hint.color = new Color(InkColor.r, InkColor.g, InkColor.b, 0.7f);
             Stretch(hint.rectTransform, new Vector2(0f, 0.08f), new Vector2(1f, 0.15f), Vector2.zero);
             Text credit = MakeText("Credits", page.rectTransform, credits, 20, FontStyle.Normal);
@@ -1007,10 +1057,12 @@ namespace Turn.View
             Stretch(credit.rectTransform, new Vector2(0f, 0.015f), new Vector2(1f, 0.06f), Vector2.zero);
 
             MakeButton("StartButton", page.rectTransform, "开始游戏（Space）", new Vector2(0.5f, 0.27f), new Vector2(400f, 84f), StartFromTitle);
-            MakeButton("VolumeButton", page.rectTransform, "音量设置（V）", new Vector2(0.26f, 0.19f), new Vector2(260f, 60f), ShowVolume);
-            MakeButton("DisplayButton", page.rectTransform, "窗口设置（O）", new Vector2(0.42f, 0.19f), new Vector2(260f, 60f), ShowDisplay);
-            MakeButton("HudButton", page.rectTransform, "界面设置（H）", new Vector2(0.58f, 0.19f), new Vector2(260f, 60f), ShowHudSettings);
-            MakeButton("QuitButton", page.rectTransform, "退出游戏（Esc）", new Vector2(0.74f, 0.19f), new Vector2(260f, 60f), ShowQuit);
+            bool touch = MobilePlatform.IsTouchUI;
+            MakeButton("VolumeButton", page.rectTransform, "音量设置（V）", new Vector2(touch ? 0.28f : 0.26f, 0.19f), new Vector2(260f, touch ? 80f : 60f), ShowVolume);
+            if (!touch) MakeButton("DisplayButton", page.rectTransform, "窗口设置（O）", new Vector2(0.42f, 0.19f), new Vector2(260f, 60f), ShowDisplay);
+            MakeButton("HudButton", page.rectTransform, "界面设置（H）", new Vector2(touch ? 0.5f : 0.58f, 0.19f), new Vector2(260f, touch ? 80f : 60f), ShowHudSettings);
+            if (Application.platform != RuntimePlatform.IPhonePlayer)
+                MakeButton("QuitButton", page.rectTransform, "退出游戏（Esc）", new Vector2(touch ? 0.72f : 0.74f, 0.19f), new Vector2(260f, touch ? 80f : 60f), ShowQuit);
             _title.gameObject.SetActive(false);
         }
 
@@ -1020,12 +1072,12 @@ namespace Turn.View
             Text title = MakeText("Title", card, "暂停", 64, FontStyle.Bold);
             Stretch(title.rectTransform, new Vector2(0f, 0.72f), new Vector2(1f, 0.95f), Vector2.zero);
             MakeButton("Resume", card, "继续（Esc）", new Vector2(0.5f, 0.6f), new Vector2(420f, 70f), () => Call(_onResume));
-            MakeButton("Volume", card, "音量设置（V）", new Vector2(0.2f, 0.445f), new Vector2(250f, 70f), ShowVolume);
-            MakeButton("Display", card, "窗口设置（O）", new Vector2(0.5f, 0.445f), new Vector2(250f, 70f), ShowDisplay);
-            MakeButton("Hud", card, "界面设置（H）", new Vector2(0.8f, 0.445f), new Vector2(250f, 70f), ShowHudSettings);
+            MakeButton("Volume", card, "音量设置（V）", new Vector2(MobilePlatform.IsTouchUI ? 0.3f : 0.2f, 0.445f), new Vector2(250f, 70f), ShowVolume);
+            if (!MobilePlatform.IsTouchUI) MakeButton("Display", card, "窗口设置（O）", new Vector2(0.5f, 0.445f), new Vector2(250f, 70f), ShowDisplay);
+            MakeButton("Hud", card, "界面设置（H）", new Vector2(MobilePlatform.IsTouchUI ? 0.7f : 0.8f, 0.445f), new Vector2(250f, 70f), ShowHudSettings);
             MakeButton("Restart", card, "重打本关（R）", new Vector2(0.5f, 0.29f), new Vector2(420f, 70f), () => Call(_onRestartLevel));
             MakeButton("Title", card, "回到标题（T）", new Vector2(0.5f, 0.135f), new Vector2(420f, 70f), () => Call(_onTitle));
-            BuildBuildList(_pause.transform);
+            BuildBuildList(card.parent);
             _pause.SetActive(false);
         }
 
@@ -1093,19 +1145,55 @@ namespace Turn.View
         }
 
         /// <summary>半透明遮罩 + 居中的纸片卡片。</summary>
-        private static RectTransform BuildCard(Transform parent, string name, out GameObject root)
+        private RectTransform BuildCard(Transform parent, string name, out GameObject root)
         {
             Image dim = MakeImage(name, parent, new Color(0f, 0f, 0f, 0.55f), true);
             Stretch(dim.rectTransform, Vector2.zero, Vector2.one, Vector2.zero);
             root = dim.gameObject;
 
-            Image card = MakeImage("Card", dim.rectTransform, PaperColor, true);
+            Image card = MakeImage("Card", SafeDesign(dim.rectTransform), PaperColor, true);
             RectTransform rt = card.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(900f, 560f);
+            rt.sizeDelta = MobilePlatform.IsTouchUI ? new Vector2(1100f, 720f) : new Vector2(900f, 560f);
             rt.anchoredPosition = Vector2.zero;
             return rt;
+        }
+
+        // Keep dimmers full-screen; only their interactive content lives inside the safe area.
+        private RectTransform SafeDesign(RectTransform parent)
+        {
+            if (!MobilePlatform.IsTouchUI) return parent;
+            var safe = new GameObject("SafeContent", typeof(RectTransform));
+            safe.transform.SetParent(parent, false);
+            var safeRect = (RectTransform)safe.transform;
+            Stretch(safeRect, Vector2.zero, Vector2.one, Vector2.zero);
+            MobileSafeArea.Attach(safeRect);
+            var design = new GameObject("FittedContent", typeof(RectTransform));
+            design.transform.SetParent(safeRect, false);
+            var rt = (RectTransform)design.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(.5f, .5f);
+            rt.sizeDelta = new Vector2(1920f, 1080f);
+            _fitRoots.Add(rt);
+            return rt;
+        }
+
+        private void LateUpdate()
+        {
+            for (int i = 0; i < _fitRoots.Count; i++)
+            {
+                RectTransform rt = _fitRoots[i];
+                if (rt == null || !(rt.parent is RectTransform parent)) continue;
+                float fit = Mathf.Min(parent.rect.width / 1920f, parent.rect.height / 1080f);
+                rt.localScale = Vector3.one * Mathf.Max(.01f, fit);
+            }
+        }
+
+        private static string TouchLabel(string label)
+        {
+            if (!MobilePlatform.IsTouchUI || string.IsNullOrEmpty(label)) return label;
+            int shortcut = label.LastIndexOf('（');
+            return shortcut >= 0 && label.EndsWith("）") ? label.Substring(0, shortcut) : label;
         }
 
         private static Image MakeImage(string name, Transform parent, Color color, bool raycast)
@@ -1151,7 +1239,7 @@ namespace Turn.View
             button.colors = colors;
             button.onClick.AddListener(() => { if (onClick != null) onClick(); });
 
-            Text text = MakeText("Label", rt, label, 32, FontStyle.Bold);
+            Text text = MakeText("Label", rt, TouchLabel(label), 32, FontStyle.Bold);
             text.color = ButtonTextColor;
             Stretch(text.rectTransform, Vector2.zero, Vector2.one, Vector2.zero);
             return button;

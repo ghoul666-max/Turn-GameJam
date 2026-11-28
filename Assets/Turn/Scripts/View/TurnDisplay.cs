@@ -77,7 +77,7 @@ namespace Turn.View
 
         private static void Apply(Mode mode)
         {
-            if (Application.isEditor) return;
+            if (Application.isEditor || Application.isMobilePlatform) return;
             int nativeW = Display.main != null ? Display.main.systemWidth : Screen.currentResolution.width;
             int nativeH = Display.main != null ? Display.main.systemHeight : Screen.currentResolution.height;
             switch (mode)
@@ -109,7 +109,7 @@ namespace Turn.View
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Init()
         {
-            if (Application.isEditor) return;
+            if (Application.isEditor || Application.isMobilePlatform) return;
             if (PlayerPrefs.HasKey(KeyMode) && Current != Saved) Apply(Saved);
             Application.quitting += () =>
             {

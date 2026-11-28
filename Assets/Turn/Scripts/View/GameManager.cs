@@ -76,6 +76,8 @@ namespace Turn.View
         private EntityViewSync _views;
         private float _accumulator;
         private bool _paused;
+        private MobileControls _mobile;
+        private bool _mobileSuspended;
         private TurnTuningPanel _tuning;
         private BuildPickerPanel _buildPicker;
         private EnvironmentView _environmentView;
@@ -118,6 +120,7 @@ namespace Turn.View
                 return;
             }
             Instance = this;
+            if (GetComponent<MobileRuntimeSettings>() == null) gameObject.AddComponent<MobileRuntimeSettings>();
 
             // 游戏内数值面板（F1）：没有手动挂就自动挂一个
             _tuning = GetComponent<TurnTuningPanel>();
@@ -151,6 +154,12 @@ namespace Turn.View
             _flow.Setup(OnTitleOpened, ResumeFromPause, RestartLevel, RestartFromFirstLevel, ReturnToTitle,
                 weaponSelect ? OpenWeaponSelect : (Action)null, OnSelectCard);
             if (hud != null) hud.UseBuiltInPanels = false;
+            _flow.SetSelectBack(OnSelectBack);
+            MobilePlatform.EnsureEventSystem();
+            _mobile = GetComponent<MobileControls>();
+            if (_mobile == null) _mobile = gameObject.AddComponent<MobileControls>();
+            _mobile.Setup(CanUseMobileGameplay, PauseFromMobile);
+            TurnInput.SetMobileControls(_mobile);
 
             // 绘本纸片 HUD：没有手动挂就自动挂一个（运行时自己搭 UI）
             _paperHud = GetComponent<PaperHud>();
@@ -170,7 +179,7 @@ namespace Turn.View
 
         private void OnDestroy()
         {
-            if (Instance == this) Instance = null;
+            if (Instance == this) { Instance = null; TurnInput.SetMobileControls(null); }
             if (_views != null) _views.Dispose();
             Time.timeScale = 1f;
         }
@@ -746,6 +755,7 @@ namespace Turn.View
             _unlockMessage = "";
             int seed = randomSeed != 0 ? randomSeed : System.Environment.TickCount;
             _ctx = TurnFactory.Create(config, seed);
+            if (_mobile != null) { _mobile.ResetInput(); _mobile.Bind(_ctx); }
 
             if (mapManager != null) mapManager.Bind(_ctx);
             if (_subspaceView != null) _subspaceView.Bind(_ctx, cameraFollow != null ? cameraFollow.GetComponent<Camera>() : Camera.main);
@@ -810,11 +820,53 @@ namespace Turn.View
             if (_ctx != null) _ctx.Session.TryChooseUpgrade(index);
         }
 
+        private bool CanUseMobileGameplay()
+        {
+            return !_mobileSuspended && _ctx != null && !_paused && !PanelOpen &&
+                _ctx.Session.Phase == RunPhase.Playing &&
+                (_pageTurn == null || !_pageTurn.IsPlaying) &&
+                (_flow == null || (!_flow.IsTitleOpen && !_flow.IsSelectOpen && !_flow.IsQuitOpen &&
+                    !_flow.IsVolumeOpen && !_flow.IsDisplayOpen));
+        }
+
+        private void PauseFromMobile()
+        {
+            if (_ctx == null || _ctx.Session.Phase != RunPhase.Playing || _paused) return;
+            _paused = true;
+            _accumulator = 0f;
+            _ctx.Player.SetMoveInput(Vec2.Zero);
+            TurnInput.ResetMobileInput();
+            RefreshPauseBuilds();
+            if (_flow != null) _flow.SetPause(true);
+            if (hud != null) hud.SetPaused(true);
+        }
+
+        private void OnApplicationPause(bool paused)
+        {
+            if (!MobilePlatform.IsTouchUI) return;
+            _mobileSuspended = paused;
+            TurnInput.ResetMobileInput();
+            if (paused) PauseFromMobile();
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!MobilePlatform.IsTouchUI) return;
+            TurnInput.ResetMobileInput();
+            if (!focused) PauseFromMobile();
+        }
+
         // ---------------- 每帧 ----------------
 
         private void Update()
         {
             if (_ctx == null) return;
+            if (_mobileSuspended)
+            {
+                _ctx.Player.SetMoveInput(Vec2.Zero);
+                _accumulator = 0f;
+                return;
+            }
 
             if (TurnInput.ObstacleDebugPressed) Obstacle.ShowDebug = !Obstacle.ShowDebug;
             if (debugShortcuts) HandleDebugKeys();
@@ -982,7 +1034,7 @@ namespace Turn.View
                 if (choice >= 0) OnChooseUpgrade(choice);
             }
 
-            _ctx.Player.SetMoveInput(ViewMath.ToVec2(TurnInput.Move));
+            _ctx.Player.SetMoveInput(_paused || session.Phase != RunPhase.Playing ? Vec2.Zero : ViewMath.ToVec2(TurnInput.Move));
 
             if (_paused || session.Phase != RunPhase.Playing)
             {

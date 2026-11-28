@@ -9,10 +9,14 @@ namespace Turn.View
     /// </summary>
     public static class TurnInput
     {
+        private static MobileControls _mobile;
+        public static void SetMobileControls(MobileControls controls) { _mobile = controls; }
+        public static void ResetMobileInput() { if (_mobile != null) _mobile.ResetInput(); }
         public static Vector2 Move
         {
             get
             {
+                if (_mobile != null && _mobile.Move.sqrMagnitude > 0f) return _mobile.Move;
 #if ENABLE_INPUT_SYSTEM
                 Vector2 v = Vector2.zero;
                 UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
@@ -84,6 +88,7 @@ namespace Turn.View
         {
             get
             {
+                if (_mobile != null && _mobile.ConsumeRoll()) return true;
 #if ENABLE_INPUT_SYSTEM
                 UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
                 return kb != null && kb.spaceKey.wasPressedThisFrame;

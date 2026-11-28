@@ -27,6 +27,8 @@ namespace Turn.View
         private ITurnContext _ctx;
         private Action<int> _onChoose;
         private bool _wired;
+        private RectTransform _safeContent;
+        private RectTransform _fittedContent;
 
         private void Awake()
         {
@@ -38,9 +40,75 @@ namespace Turn.View
             Unbind();
             _ctx = ctx;
             _onChoose = onChoose;
+            MobilePlatform.EnsureEventSystem();
+            EnsureSafeLayout();
             Wire();
             ctx.Events.Subscribe<PhaseChangedEvent>(OnPhaseChanged);
             Show(false);
+        }
+
+        private void EnsureSafeLayout()
+        {
+            if (!MobilePlatform.IsTouchUI || _safeContent != null || panel == null || !(panel.transform is RectTransform)) return;
+            // The serialized Window is the full-screen raycast blocker: leave it untouched.
+            var safe = new GameObject("UpgradeSafeContent", typeof(RectTransform));
+            safe.transform.SetParent(panel.transform, false);
+            _safeContent = (RectTransform)safe.transform;
+            _safeContent.anchorMin = Vector2.zero;
+            _safeContent.anchorMax = Vector2.one;
+            _safeContent.offsetMin = _safeContent.offsetMax = Vector2.zero;
+            MobileSafeArea.Attach(_safeContent);
+            var fitted = new GameObject("FittedOptions", typeof(RectTransform));
+            fitted.transform.SetParent(_safeContent, false);
+            _fittedContent = (RectTransform)fitted.transform;
+            _fittedContent.anchorMin = _fittedContent.anchorMax = _fittedContent.pivot = new Vector2(.5f, .5f);
+            _fittedContent.sizeDelta = new Vector2(1000f, 600f);
+            if (header != null) header.transform.SetParent(_fittedContent, false);
+            for (int i = 0; i < options.Length; i++)
+            {
+                if (options[i] == null || options[i].button == null) continue;
+                options[i].button.transform.SetParent(_fittedContent, false);
+                if (MobilePlatform.IsTouchUI)
+                {
+                    RectTransform rt = options[i].button.GetComponent<RectTransform>();
+                    rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(.5f, .5f);
+                    rt.anchoredPosition = new Vector2((i - 1) * 320f, 0f);
+                    rt.sizeDelta = new Vector2(300f, 340f);
+                    if (options[i].title != null)
+                    {
+                        Text title = options[i].title;
+                        title.fontSize = 24;
+                        title.resizeTextForBestFit = true;
+                        title.resizeTextMinSize = 20;
+                        title.resizeTextMaxSize = 24;
+                        title.verticalOverflow = VerticalWrapMode.Truncate;
+                        title.rectTransform.anchorMin = title.rectTransform.anchorMax = new Vector2(.5f, 1f);
+                        title.rectTransform.pivot = new Vector2(.5f, 1f);
+                        title.rectTransform.anchoredPosition = new Vector2(0f, -16f);
+                        title.rectTransform.sizeDelta = new Vector2(270f, 78f);
+                    }
+                    if (options[i].description != null)
+                    {
+                        Text description = options[i].description;
+                        description.fontSize = 22;
+                        description.resizeTextForBestFit = true;
+                        description.resizeTextMinSize = 18;
+                        description.resizeTextMaxSize = 22;
+                        description.verticalOverflow = VerticalWrapMode.Truncate;
+                        description.rectTransform.anchorMin = description.rectTransform.anchorMax = new Vector2(.5f, 1f);
+                        description.rectTransform.pivot = new Vector2(.5f, 1f);
+                        description.rectTransform.anchoredPosition = new Vector2(0f, -104f);
+                        description.rectTransform.sizeDelta = new Vector2(270f, 220f);
+                    }
+                }
+            }
+        }
+
+        private void LateUpdate()
+        {
+            if (_fittedContent == null || _safeContent == null) return;
+            float scale = Mathf.Min(1.25f, Mathf.Min(_safeContent.rect.width / 1000f, _safeContent.rect.height / 600f));
+            _fittedContent.localScale = Vector3.one * Mathf.Max(.01f, scale);
         }
 
         public void Unbind()
@@ -95,8 +163,8 @@ namespace Turn.View
                 : WeaponKinds.DisplayName(l.Equipped) + (l.Sub != SubWeaponKind.None ? " + " + SubWeaponKinds.DisplayName(l.Sub) : "");
             if (header != null)
                 header.text = _ctx.Progression.OptionsFromChest
-                    ? "宝箱！ " + weapon + "   选择一项（1 / 2 / 3）—— 有的选项带代价"
-                    : "升级！ Lv " + _ctx.Progression.Level + " · " + weapon + "   选择一项（1 / 2 / 3）";
+                    ? "宝箱！ " + weapon + (MobilePlatform.IsTouchUI ? "   点击选择一项——有的选项带代价" : "   选择一项（1 / 2 / 3）—— 有的选项带代价")
+                    : "升级！ Lv " + _ctx.Progression.Level + " · " + weapon + (MobilePlatform.IsTouchUI ? "   点击选择一项" : "   选择一项（1 / 2 / 3）");
             for (int i = 0; i < options.Length; i++)
             {
                 OptionView view = options[i];
