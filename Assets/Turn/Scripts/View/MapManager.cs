@@ -176,11 +176,23 @@ namespace Turn.View
         [Tooltip("岩浆随后淡出消失的时间（秒，纯表现）")]
         [SerializeField] private float lavaFadeTime = 0.5f;
 
+        [Header("纸面风格（11/28）")]
+        [Tooltip("勾选：运行时把地面改成和 Figma 预设 HUD 一样的绘本纸面（奶油纸地面 #E8D9BA + 牛皮纸笔触 / 淡色晕斑），" +
+                 "边框、装饰、相机背景一起换色。只改运行时，不改场景；取消勾选就是原来的白模颜色。遮挡物颜色不动")]
+        [SerializeField] private bool paperStyle = true;
+
         [Header("运行时只读")]
         [SerializeField] private PlaneId activeMap;
 
         private ITurnContext _ctx;
         private float _lavaShowTimer = -1f;
+        private SpriteRenderer _paperStrokes;
+
+        // 纸面配色（和 HUD 设计稿一致）
+        private static readonly Color PaperGround = new Color(0.910f, 0.851f, 0.729f, 1f);  // #E8D9BA 地面
+        private static readonly Color PaperDecor = new Color(0.863f, 0.788f, 0.643f, 0.55f); // #DCC9A4 淡色晕斑（原装饰圆点 / 菱形）
+        private static readonly Color PaperBorder = new Color(0.612f, 0.478f, 0.333f, 1f);  // #9C7A55 地图边框
+        private static readonly Color PaperTable = new Color(0.788f, 0.647f, 0.486f, 1f);   // #C9A57C 地图外（相机背景，像垫在纸下面的牛皮纸）
 
         public EnvironmentSettings Environment { get { return environment; } }
         public LevelSettings Level { get { return level; } }
@@ -305,6 +317,7 @@ namespace Turn.View
             Unbind();
             _ctx = ctx;
             AlignRoots();
+            if (paperStyle) ApplyPaperStyle();
             if (worldBounds != null && worldBounds.DebugLineMaterial != null) Obstacle.DebugMaterial = worldBounds.DebugLineMaterial;
             ctx.Events.Subscribe<PlaneSwitchedEvent>(OnMapSwitched);
             ctx.Events.Subscribe<LavaEruptedEvent>(OnLavaErupted);
@@ -367,6 +380,58 @@ namespace Turn.View
                 if (root != null && root != target) root.SetActive(false);
             }
             if (target != null) target.SetActive(true);
+        }
+
+        // ---------------- 纸面风格（11/28） ----------------
+
+        /// <summary>
+        /// 所有位面的地面改成纸色，边框 / 装饰换成牛皮纸色，相机背景换成牛皮纸；再在地面上铺一层可平铺的笔触贴图
+        /// （Resources/Map/ground_strokes，6×6 世界单位一块，排在地面之上、地形网格之下）。可以重复调用。
+        /// </summary>
+        private void ApplyPaperStyle()
+        {
+            for (int i = 0; i < PlaneIds.Count; i++)
+            {
+                var plane = (PlaneId)i;
+                SpriteRenderer ground = GetGround(plane);
+                if (ground != null) ground.color = PaperGround;
+                GameObject root = GetRoot(plane);
+                if (root == null) continue;
+                SpriteRenderer[] renderers = root.GetComponentsInChildren<SpriteRenderer>(true);
+                for (int k = 0; k < renderers.Length; k++)
+                {
+                    SpriteRenderer r = renderers[k];
+                    if (r == null || r == ground) continue;
+                    string n = r.gameObject.name;
+                    if (n.StartsWith("Border", StringComparison.Ordinal)) r.color = PaperBorder;
+                    else if (n.StartsWith("Decor", StringComparison.Ordinal)) r.color = PaperDecor;
+                }
+            }
+
+            Camera cam = Camera.main;
+            if (cam != null) cam.backgroundColor = PaperTable;
+
+            if (_paperStrokes == null)
+            {
+                Sprite strokes = Resources.Load<Sprite>("Map/ground_strokes");
+                if (strokes != null)
+                {
+                    var go = new GameObject("PaperGroundStrokes");
+                    go.transform.SetParent(transform, false);
+                    _paperStrokes = go.AddComponent<SpriteRenderer>();
+                    _paperStrokes.sprite = strokes;
+                    _paperStrokes.drawMode = SpriteDrawMode.Tiled;
+                    _paperStrokes.tileMode = SpriteTileMode.Continuous;
+                    _paperStrokes.sortingOrder = ViewMath.GroundOrder + 1;
+                }
+            }
+            if (_paperStrokes != null && worldBounds != null)
+            {
+                _paperStrokes.transform.position = new Vector3(worldBounds.Center.x, worldBounds.Center.y, 0f);
+                _paperStrokes.transform.rotation = Quaternion.identity;
+                _paperStrokes.transform.localScale = Vector3.one;
+                _paperStrokes.size = new Vector2(worldBounds.Size.x, worldBounds.Size.y);
+            }
         }
 
         // ---------------- 同空间对齐 ----------------

@@ -81,6 +81,8 @@ namespace Turn.View
         private EnvironmentView _environmentView;
         private PageTurnView _pageTurn;
         private FlowUI _flow;
+        /// <summary>绘本纸片 HUD（11/28）：A / B / C 三种布局，在「界面设置（H）」里切换；选「原版白模」时用 hud（HudUI）的文字 HUD。</summary>
+        private PaperHud _paperHud;
         private TurnAudio _audio;
         private SubspaceView _subspaceView;
         private CombatFxView _combatFx;
@@ -149,6 +151,10 @@ namespace Turn.View
             _flow.Setup(OnTitleOpened, ResumeFromPause, RestartLevel, RestartFromFirstLevel, ReturnToTitle,
                 weaponSelect ? OpenWeaponSelect : (Action)null, OnSelectCard);
             if (hud != null) hud.UseBuiltInPanels = false;
+
+            // 绘本纸片 HUD：没有手动挂就自动挂一个（运行时自己搭 UI）
+            _paperHud = GetComponent<PaperHud>();
+            if (_paperHud == null) _paperHud = gameObject.AddComponent<PaperHud>();
 
             // 音效：没有手动挂就自动挂一个（自动挂的没有音频，要配音效请在编辑器里给 GameManager 加上 TurnAudio 组件）
             _audio = GetComponent<TurnAudio>();
@@ -755,6 +761,12 @@ namespace Turn.View
             if (weapon != null) weapon.Bind(_ctx);
             if (terrainDetector != null) terrainDetector.Bind(_ctx);
             if (hud != null) hud.Bind(_ctx);
+            if (_paperHud != null)
+            {
+                _paperHud.Bind(_ctx, hud, player != null ? player.transform : null,
+                    cameraFollow != null ? cameraFollow.GetComponent<Camera>() : Camera.main,
+                    worldBounds != null ? worldBounds.DebugLineMaterial : null);
+            }
             if (upgradeUI != null) upgradeUI.Bind(_ctx, OnChooseUpgrade);
             if (vfx != null) vfx.Bind(_ctx);
 
@@ -818,6 +830,20 @@ namespace Turn.View
                 return;
             }
 
+            // 界面设置（11/28）：盖在标题页 / 暂停菜单上；↑↓ 切换行，←→ 选择（立刻生效），Esc / H 返回，模拟不推进
+            if (_flow != null && _flow.IsHudSettingsOpen)
+            {
+                _ctx.Player.SetMoveInput(Vec2.Zero);
+                _accumulator = 0f;
+                if (PanelOpen) return;
+                int hudRow = TurnInput.VerticalStepPressed;
+                int hudStep = TurnInput.SelectStepPressed;
+                if (hudRow != 0) _flow.HudSettingsMoveRow(hudRow);
+                if (hudStep != 0) _flow.HudSettingsStep(hudStep);
+                if (TurnInput.PausePressed || TurnInput.HudSettingsPressed) _flow.HideHudSettings();
+                return;
+            }
+
             // 窗口设置（11/27）：盖在标题页 / 暂停菜单上；打开时只处理 ↑↓←→ / Space / Enter / Esc，模拟不推进
             if (_flow != null && _flow.IsDisplayOpen)
             {
@@ -868,6 +894,7 @@ namespace Turn.View
                 _accumulator = 0f;
                 if (!PanelOpen && TurnInput.VolumePressed) _flow.ShowVolume();
                 else if (!PanelOpen && TurnInput.DisplayPressed) _flow.ShowDisplay();
+                else if (!PanelOpen && TurnInput.HudSettingsPressed) _flow.ShowHudSettings();
                 else if (!PanelOpen && TurnInput.EscapePressed) _flow.ShowQuit();
                 else if (!PanelOpen && (TurnInput.RollPressed || TurnInput.RestartPressed)) _flow.StartFromTitle();
                 return;
@@ -930,6 +957,11 @@ namespace Turn.View
                 if (TurnInput.DisplayPressed && _flow != null)
                 {
                     _flow.ShowDisplay();
+                    return;
+                }
+                if (TurnInput.HudSettingsPressed && _flow != null)
+                {
+                    _flow.ShowHudSettings();
                     return;
                 }
                 if (TurnInput.TitlePressed)

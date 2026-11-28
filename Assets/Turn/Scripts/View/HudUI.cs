@@ -95,6 +95,35 @@ namespace Turn.View
             if (pausePanel != null) pausePanel.SetActive(paused && UseBuiltInPanels);
         }
 
+        /// <summary>
+        /// 显示 / 隐藏原版文字 HUD（生命、弹药、经验、地图 / 翻滚、统计）。选了纸片 HUD（PaperHud，11/28）时隐藏；
+        /// 屏幕闪色、升级三选一、暂停 / 结算面板不受影响。
+        /// </summary>
+        public void SetClassicWidgetsVisible(bool visible)
+        {
+            SetWidget(healthText, visible);
+            SetWidget(healthFill, visible);
+            SetWidget(ammoText, visible);
+            SetWidget(ammoWarning, visible);
+            SetWidget(xpFill, visible);
+            SetWidget(levelText, visible);
+            SetWidget(mapText, visible);
+            SetWidget(rollFill, visible);
+            SetWidget(rollText, visible);
+            SetWidget(terrainText, visible);
+            SetWidget(statsText, visible);
+        }
+
+        /// <summary>隐藏控件所在的那一组（向上找到 Canvas 根下面的第一层；控件本身就在第一层时只隐藏它自己）。</summary>
+        private void SetWidget(Component widget, bool visible)
+        {
+            if (widget == null) return;
+            Transform t = widget.transform;
+            while (t.parent != null && t.parent != transform) t = t.parent;
+            if (t.parent != transform) return; // 不在本 Canvas 下，不动
+            if (t.gameObject.activeSelf != visible) t.gameObject.SetActive(visible);
+        }
+
         /// <summary>地图切换特效：全屏闪一下新地图的主题色。</summary>
         public void FlashScreen(Color color)
         {

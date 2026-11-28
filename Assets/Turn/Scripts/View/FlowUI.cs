@@ -28,7 +28,7 @@ namespace Turn.View
         [Header("标题页文字")]
         [SerializeField] private string gameTitle = "TURN";
         [SerializeField] private string subtitle = "翻滚进入亚空间，让铺垫一起爆发";
-        [SerializeField, TextArea] private string startHint = "Space / Enter 开始游戏 · V 音量设置 · O 窗口设置 · Esc 退出游戏\n<size=22>调试：F1 数值面板 · F2 遮挡物 · F4 无敌 · F5 加速 · F6 切武器</size>";
+        [SerializeField, TextArea] private string startHint = "Space / Enter 开始游戏 · V 音量设置 · O 窗口设置 · H 界面设置 · Esc 退出游戏\n<size=22>调试：F1 数值面板 · F2 遮挡物 · F4 无敌 · F5 加速 · F6 切武器</size>";
         [Tooltip("音乐署名：Incompetech 的曲子是 CC BY 4.0，必须署名（见 docs/AUDIO-HANDOFF.md）。标题页底部和胜利结算都会显示。")]
         [SerializeField] private string credits = "Music by Kevin MacLeod (incompetech.com), licensed under CC BY 4.0.";
 
@@ -86,6 +86,21 @@ namespace Turn.View
 
         /// <summary>窗口设置界面是否打开（打开时 GameManager 只把 ↑↓ / Space / Enter / Esc 交给它）。</summary>
         public bool IsDisplayOpen { get { return _display != null && _display.activeSelf; } }
+
+        // 界面设置（11/28）：HUD 布局 + 图标风格
+        private GameObject _hudPanel;
+        private readonly Image[] _hudLayoutTiles = new Image[HudPrefs.LayoutCount];
+        private readonly Image[] _hudLayoutCursors = new Image[HudPrefs.LayoutCount];
+        private readonly Text[] _hudLayoutNames = new Text[HudPrefs.LayoutCount];
+        private readonly Text[] _hudLayoutDescs = new Text[HudPrefs.LayoutCount];
+        private readonly Image[] _hudIconTiles = new Image[HudPrefs.IconSetCount];
+        private readonly Image[] _hudIconCursors = new Image[HudPrefs.IconSetCount];
+        private readonly Text[] _hudIconNames = new Text[HudPrefs.IconSetCount];
+        private Text[] _hudRowLabels = new Text[2];
+        private int _hudRow;
+
+        /// <summary>界面设置是否打开（打开时 GameManager 只把 ↑↓←→ / Esc / H 交给它）。</summary>
+        public bool IsHudSettingsOpen { get { return _hudPanel != null && _hudPanel.activeSelf; } }
 
         // 退出确认（11/27）
         private GameObject _quit;
@@ -172,6 +187,7 @@ namespace Turn.View
             HideResult();
             HideWeaponSelect();
             HideVolume();
+            HideHudSettings();
             SetCover(0f, 1f);
             _title.gameObject.SetActive(true);
             IsTitleOpen = true;
@@ -456,6 +472,89 @@ namespace Turn.View
             }
         }
 
+        // ---------------- 界面设置（11/28） ----------------
+
+        public void ShowHudSettings()
+        {
+            EnsureUI();
+            _hudPanel.SetActive(true);
+            _hudPanel.transform.SetAsLastSibling();
+            _hudRow = 0;
+            RefreshHudSettings();
+        }
+
+        public void HideHudSettings()
+        {
+            if (_hudPanel != null) _hudPanel.SetActive(false);
+        }
+
+        /// <summary>↑↓：在「HUD 布局」和「图标风格」两行之间切换。</summary>
+        public void HudSettingsMoveRow(int step)
+        {
+            if (!IsHudSettingsOpen || step == 0) return;
+            _hudRow = 1 - _hudRow;
+            RefreshHudSettings();
+        }
+
+        /// <summary>←→：当前行换到上一个 / 下一个选项，立刻生效（自动保存）。</summary>
+        public void HudSettingsStep(int step)
+        {
+            if (!IsHudSettingsOpen || step == 0) return;
+            if (_hudRow == 0)
+            {
+                int n = HudPrefs.LayoutCount;
+                ChooseHudLayout((((int)HudPrefs.Layout + step) % n + n) % n);
+            }
+            else
+            {
+                int n = HudPrefs.IconSetCount;
+                ChooseHudIcons((((int)HudPrefs.Icons + step) % n + n) % n);
+            }
+        }
+
+        private void ChooseHudLayout(int index)
+        {
+            if (index < 0 || index >= HudPrefs.LayoutCount) return;
+            _hudRow = 0;
+            HudPrefs.Layout = (HudLayout)index;
+            RefreshHudSettings();
+        }
+
+        private void ChooseHudIcons(int index)
+        {
+            if (index < 0 || index >= HudPrefs.IconSetCount) return;
+            _hudRow = 1;
+            HudPrefs.Icons = (HudIconSet)index;
+            RefreshHudSettings();
+        }
+
+        private void RefreshHudSettings()
+        {
+            int layout = (int)HudPrefs.Layout;
+            int icons = (int)HudPrefs.Icons;
+            for (int i = 0; i < HudPrefs.LayoutCount; i++)
+            {
+                bool on = i == layout;
+                if (_hudLayoutTiles[i] != null) _hudLayoutTiles[i].color = on ? ButtonColor : new Color(InkColor.r, InkColor.g, InkColor.b, 0.08f);
+                if (_hudLayoutNames[i] != null) _hudLayoutNames[i].color = on ? ButtonTextColor : InkColor;
+                if (_hudLayoutDescs[i] != null) _hudLayoutDescs[i].color = on ? new Color(ButtonTextColor.r, ButtonTextColor.g, ButtonTextColor.b, 0.85f) : new Color(InkColor.r, InkColor.g, InkColor.b, 0.7f);
+                if (_hudLayoutCursors[i] != null) _hudLayoutCursors[i].color = on && _hudRow == 0 ? new Color(0.92f, 0.7f, 0.25f, 0.9f) : new Color(0f, 0f, 0f, 0f);
+            }
+            for (int i = 0; i < HudPrefs.IconSetCount; i++)
+            {
+                bool on = i == icons;
+                if (_hudIconTiles[i] != null) _hudIconTiles[i].color = on ? ButtonColor : new Color(InkColor.r, InkColor.g, InkColor.b, 0.08f);
+                if (_hudIconNames[i] != null) _hudIconNames[i].color = on ? ButtonTextColor : InkColor;
+                if (_hudIconCursors[i] != null) _hudIconCursors[i].color = on && _hudRow == 1 ? new Color(0.92f, 0.7f, 0.25f, 0.9f) : new Color(0f, 0f, 0f, 0f);
+            }
+            for (int r = 0; r < _hudRowLabels.Length; r++)
+            {
+                if (_hudRowLabels[r] == null) continue;
+                _hudRowLabels[r].color = r == _hudRow ? InkColor : new Color(InkColor.r, InkColor.g, InkColor.b, 0.55f);
+                _hudRowLabels[r].text = (r == _hudRow ? "▶ " : "   ") + (r == 0 ? "HUD 布局" : "图标风格");
+            }
+        }
+
         // ---------------- 退出游戏 ----------------
 
         /// <summary>标题页「退出游戏」/ Esc：先弹确认框。</summary>
@@ -598,6 +697,7 @@ namespace Turn.View
             BuildWeaponSelect(root.transform);
             BuildVolume(root.transform);
             BuildDisplay(root.transform);
+            BuildHudSettings(root.transform);
             BuildQuit(root.transform);
         }
 
@@ -692,6 +792,101 @@ namespace Turn.View
             hint.color = new Color(InkColor.r, InkColor.g, InkColor.b, 0.6f);
             Stretch(hint.rectTransform, new Vector2(0f, 0.02f), new Vector2(1f, 0.08f), Vector2.zero);
             _display.SetActive(false);
+        }
+
+        /// <summary>界面设置：上排 4 种 HUD 布局（带预览图），下排 3 种图标风格（带图标示例）。</summary>
+        private void BuildHudSettings(Transform parent)
+        {
+            RectTransform card = BuildCard(parent, "HudSettings", out _hudPanel);
+            card.sizeDelta = new Vector2(1500f, 840f);
+            Text title = MakeText("Title", card, "界面设置", 56, FontStyle.Bold);
+            PlaceCenter(title.rectTransform, 0f, 360f, 1400f, 80f);
+
+            _hudRowLabels[0] = MakeText("LayoutLabel", card, "HUD 布局", 30, FontStyle.Bold);
+            _hudRowLabels[0].alignment = TextAnchor.MiddleLeft;
+            PlaceCenter(_hudRowLabels[0].rectTransform, -440f, 296f, 520f, 40f);
+            float[] lx = { -540f, -180f, 180f, 540f };
+            for (int i = 0; i < HudPrefs.LayoutCount; i++)
+            {
+                int index = i;
+                var layout = (HudLayout)i;
+                Image cursor = MakeImage("LayoutCursor" + i, card, new Color(0f, 0f, 0f, 0f), false);
+                PlaceCenter(cursor.rectTransform, lx[i], 130f, 346f, 266f);
+                _hudLayoutCursors[i] = cursor;
+                Image tile = MakeImage("Layout" + i, card, ButtonColor, true);
+                PlaceCenter(tile.rectTransform, lx[i], 130f, 330f, 250f);
+                AddClick(tile, () => ChooseHudLayout(index));
+                _hudLayoutTiles[i] = tile;
+                Image preview = MakeImage("Preview", tile.rectTransform, Color.white, false);
+                preview.sprite = Resources.Load<Sprite>("HUD/Preview/" + HudPrefs.PreviewName(layout));
+                preview.preserveAspect = true;
+                PlaceCenter(preview.rectTransform, 0f, 30f, 304f, 171f);
+                Text name = MakeText("Name", tile.rectTransform, HudPrefs.DisplayName(layout), 24, FontStyle.Bold);
+                PlaceCenter(name.rectTransform, 0f, -78f, 320f, 32f);
+                _hudLayoutNames[i] = name;
+                Text desc = MakeText("Desc", tile.rectTransform, HudPrefs.Describe(layout), 16, FontStyle.Normal);
+                PlaceCenter(desc.rectTransform, 0f, -106f, 320f, 24f);
+                _hudLayoutDescs[i] = desc;
+            }
+
+            _hudRowLabels[1] = MakeText("IconLabel", card, "图标风格", 30, FontStyle.Bold);
+            _hudRowLabels[1].alignment = TextAnchor.MiddleLeft;
+            PlaceCenter(_hudRowLabels[1].rectTransform, -440f, -44f, 520f, 40f);
+            float[] ix = { -480f, 0f, 480f };
+            string[] keys = { "roll", "hp", "kill", "gun" };
+            for (int i = 0; i < HudPrefs.IconSetCount; i++)
+            {
+                int index = i;
+                var set = (HudIconSet)i;
+                Image cursor = MakeImage("IconCursor" + i, card, new Color(0f, 0f, 0f, 0f), false);
+                PlaceCenter(cursor.rectTransform, ix[i], -160f, 456f, 166f);
+                _hudIconCursors[i] = cursor;
+                Image tile = MakeImage("Icons" + i, card, ButtonColor, true);
+                PlaceCenter(tile.rectTransform, ix[i], -160f, 440f, 150f);
+                AddClick(tile, () => ChooseHudIcons(index));
+                _hudIconTiles[i] = tile;
+                // 图标放在一块纸色底上，选中（深色底）时也看得清
+                Image strip = MakeImage("Strip", tile.rectTransform, PaperColor, false);
+                PlaceCenter(strip.rectTransform, 0f, 20f, 400f, 84f);
+                for (int k = 0; k < keys.Length; k++)
+                {
+                    Image icon = MakeImage(keys[k], strip.rectTransform, Color.white, false);
+                    icon.sprite = PaperHud.IconSprite(set, keys[k]);
+                    icon.preserveAspect = true;
+                    PlaceCenter(icon.rectTransform, -138f + 92f * k, 0f, 76f, 76f);
+                }
+                Text name = MakeText("Name", tile.rectTransform, HudPrefs.DisplayName(set), 26, FontStyle.Bold);
+                PlaceCenter(name.rectTransform, 0f, -50f, 400f, 36f);
+                _hudIconNames[i] = name;
+            }
+
+            MakeButton("Back", card, "返回（Esc）", new Vector2(0.5f, 0.1f), new Vector2(260f, 64f), HideHudSettings);
+            Text hint = MakeText("Hint", card, "↑↓ 切换行 · ←→ 选择（立刻生效、自动保存） · 也可以直接点 · Esc / H 返回", 22, FontStyle.Normal);
+            hint.color = new Color(InkColor.r, InkColor.g, InkColor.b, 0.6f);
+            Stretch(hint.rectTransform, new Vector2(0f, 0.005f), new Vector2(1f, 0.05f), Vector2.zero);
+            _hudPanel.SetActive(false);
+        }
+
+        /// <summary>以父物体中心为原点摆放（y 向上）。</summary>
+        private static void PlaceCenter(RectTransform rt, float x, float y, float w, float h)
+        {
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(w, h);
+            rt.anchoredPosition = new Vector2(x, y);
+        }
+
+        private static void AddClick(Image target, Action onClick)
+        {
+            var button = target.gameObject.AddComponent<Button>();
+            ColorBlock colors = button.colors;
+            colors.highlightedColor = new Color(1.25f, 1.2f, 1.15f, 1f);
+            colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+            button.colors = colors;
+            Navigation nav = button.navigation;
+            nav.mode = Navigation.Mode.None; // 方向键由 GameManager 统一处理
+            button.navigation = nav;
+            button.onClick.AddListener(() => { if (onClick != null) onClick(); });
         }
 
         private void BuildQuit(Transform parent)
@@ -812,9 +1007,10 @@ namespace Turn.View
             Stretch(credit.rectTransform, new Vector2(0f, 0.015f), new Vector2(1f, 0.06f), Vector2.zero);
 
             MakeButton("StartButton", page.rectTransform, "开始游戏（Space）", new Vector2(0.5f, 0.27f), new Vector2(400f, 84f), StartFromTitle);
-            MakeButton("VolumeButton", page.rectTransform, "音量设置（V）", new Vector2(0.34f, 0.19f), new Vector2(260f, 60f), ShowVolume);
-            MakeButton("DisplayButton", page.rectTransform, "窗口设置（O）", new Vector2(0.5f, 0.19f), new Vector2(260f, 60f), ShowDisplay);
-            MakeButton("QuitButton", page.rectTransform, "退出游戏（Esc）", new Vector2(0.66f, 0.19f), new Vector2(260f, 60f), ShowQuit);
+            MakeButton("VolumeButton", page.rectTransform, "音量设置（V）", new Vector2(0.26f, 0.19f), new Vector2(260f, 60f), ShowVolume);
+            MakeButton("DisplayButton", page.rectTransform, "窗口设置（O）", new Vector2(0.42f, 0.19f), new Vector2(260f, 60f), ShowDisplay);
+            MakeButton("HudButton", page.rectTransform, "界面设置（H）", new Vector2(0.58f, 0.19f), new Vector2(260f, 60f), ShowHudSettings);
+            MakeButton("QuitButton", page.rectTransform, "退出游戏（Esc）", new Vector2(0.74f, 0.19f), new Vector2(260f, 60f), ShowQuit);
             _title.gameObject.SetActive(false);
         }
 
@@ -824,8 +1020,9 @@ namespace Turn.View
             Text title = MakeText("Title", card, "暂停", 64, FontStyle.Bold);
             Stretch(title.rectTransform, new Vector2(0f, 0.72f), new Vector2(1f, 0.95f), Vector2.zero);
             MakeButton("Resume", card, "继续（Esc）", new Vector2(0.5f, 0.6f), new Vector2(420f, 70f), () => Call(_onResume));
-            MakeButton("Volume", card, "音量设置（V）", new Vector2(0.29f, 0.445f), new Vector2(330f, 70f), ShowVolume);
-            MakeButton("Display", card, "窗口设置（O）", new Vector2(0.71f, 0.445f), new Vector2(330f, 70f), ShowDisplay);
+            MakeButton("Volume", card, "音量设置（V）", new Vector2(0.2f, 0.445f), new Vector2(250f, 70f), ShowVolume);
+            MakeButton("Display", card, "窗口设置（O）", new Vector2(0.5f, 0.445f), new Vector2(250f, 70f), ShowDisplay);
+            MakeButton("Hud", card, "界面设置（H）", new Vector2(0.8f, 0.445f), new Vector2(250f, 70f), ShowHudSettings);
             MakeButton("Restart", card, "重打本关（R）", new Vector2(0.5f, 0.29f), new Vector2(420f, 70f), () => Call(_onRestartLevel));
             MakeButton("Title", card, "回到标题（T）", new Vector2(0.5f, 0.135f), new Vector2(420f, 70f), () => Call(_onTitle));
             BuildBuildList(_pause.transform);

@@ -195,6 +195,20 @@ namespace Turn.View
             }
         }
 
+        /// <summary>H：打开界面设置（HUD 布局 / 图标风格，标题页 / 暂停菜单里，11/28）。</summary>
+        public static bool HudSettingsPressed
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                UnityEngine.InputSystem.Keyboard kb = UnityEngine.InputSystem.Keyboard.current;
+                return kb != null && kb.hKey.wasPressedThisFrame;
+#else
+                return Input.GetKeyDown(KeyCode.H);
+#endif
+            }
+        }
+
         /// <summary>↑ / W = -1（上一行），↓ / S = +1（下一行），否则 0。菜单里用。</summary>
         public static int VerticalStepPressed
         {
